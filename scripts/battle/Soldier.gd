@@ -338,7 +338,10 @@ func _draw() -> void:
 # -------------------------------------------------------
 func _move_towards(point: Vector2, delta: float) -> void:
 	var direction = (point - global_position).normalized()
-	global_position += direction * current_move_speed * delta
+	var speed = current_move_speed
+	if team == GameConstants.TEAM_ENEMY:
+		speed *= Building.slow_mult_at(global_position)   # стены игрока замедляют
+	global_position += direction * speed * delta
 	_face(direction)
 	_play_animation("walk")
 

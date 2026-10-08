@@ -46,6 +46,7 @@ func _ready() -> void:
 
 	_spawn_citadel()
 	_place_enemy_squads()
+	_place_player_buildings()
 	_place_player_squads()
 	_update_synergy_preview()
 	_update_expansion()
@@ -58,6 +59,26 @@ func _spawn_citadel() -> void:
 	citadel.position = iso_grid.tile_to_screen(iso_grid.citadel_tile)
 	units_container.add_child(citadel)
 	BattleManager.citadel = citadel
+
+# -------------------------------------------------------
+# ЗДАНИЯ — стоят на своих клетках между раундами
+# -------------------------------------------------------
+func _place_player_buildings() -> void:
+	BattleManager.buildings.clear()
+	for card in BattleManager.player_buildings:
+		var tile: Vector2i = BattleManager.player_buildings[card]
+		if iso_grid.is_valid_tile(tile) and not _is_tile_occupied(tile):
+			_spawn_building(card, tile)
+
+func _spawn_building(card: CardData, tile: Vector2i) -> void:
+	var building = Building.new()
+	building.setup(card, tile)
+	building.position = iso_grid.tile_to_screen(tile)
+	units_container.add_child(building)
+	BattleManager.buildings.append(building)
+	var renderer = grid_renderer.get_child(0) as IsoGridRenderer
+	if renderer:
+		renderer.set_occupied(tile, true)
 
 # Область экрана под сетки: между HUD сверху и скамейкой снизу
 const PLAY_AREA_MARGIN: float = 40.0
@@ -203,6 +224,12 @@ func _on_start_pressed() -> void:
 	_show_synergies()
 
 	player_soldiers_at_start = my_soldiers.size()
+	# Стены дают цитадели щит на этот бой
+	var shield: float = 0.0
+	for b in BattleManager.buildings:
+		shield += b.get_citadel_shield()
+	BattleManager.citadel_shield = shield
+	BattleManager.emit_signal("citadel_hp_changed", BattleManager.citadel_hp)
 	BattleManager.start_battle()
 
 # Командир (Chapter Master): +урон всем союзникам, один раз перед боем.
@@ -342,6 +369,8 @@ func _update_requisition(amount: int) -> void:
 
 func _update_citadel_label(hp: float) -> void:
 	citadel_label.text = "Цитадель %d/%d" % [ceili(hp), int(BattleManager.CITADEL_MAX_HP)]
+	if BattleManager.citadel_shield > 0.0:
+		citadel_label.text += " +%d щит" % ceili(BattleManager.citadel_shield)
 	citadel_label.add_theme_color_override("font_color",
 		UITheme.RED_BRIGHT if hp <= BattleManager.CITADEL_MAX_HP / 4 else UITheme.GOLD_BRIGHT)
 
@@ -425,7 +454,10 @@ func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
 			if _is_tile_occupied(tile):
 				_show_message("Тайл занят")
 				return
-			_show_message("Здания пока не реализованы")
+			_spawn_building(card, tile)
+			BattleManager.player_buildings[card] = tile
+			_consume_bench_card(card)
+			_show_message("Построено: %s" % card.title)
 
 # -------------------------------------------------------
 # КАРТА ОТРЯДА НА ТАКОЙ ЖЕ ОТРЯД: УЛУЧШЕНИЕ / ЛЕЧЕНИЕ

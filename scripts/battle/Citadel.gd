@@ -21,6 +21,8 @@ const BLOCKS = [
 ]
 const HP_BAR_SIZE = Vector2(90, 7)
 const HP_BAR_GAP: float = 14.0
+const SHIELD_BAR_HEIGHT: float = 4.0
+const SHIELD_COLOR = Color(0.45, 0.7, 1.0)
 # Враг атакует цитадель, когда до её центра не больше его дальности + HIT_RADIUS
 const HIT_RADIUS: float = 50.0
 const FLASH_COLOR = Color(1.0, 0.45, 0.4)
@@ -75,6 +77,12 @@ func _draw_hp_bar() -> void:
 	draw_rect(rect.grow(1.5), Color(0, 0, 0, 0.8))
 	var ratio = clampf(float(BattleManager.citadel_hp) / BattleManager.CITADEL_MAX_HP, 0.0, 1.0)
 	draw_rect(Rect2(rect.position, Vector2(rect.size.x * ratio, rect.size.y)), UITheme.GOLD)
+	# Щит от стен — синяя полоска над HP (доля от максимального HP)
+	if BattleManager.citadel_shield > 0.0:
+		var srect = Rect2(rect.position - Vector2(0, SHIELD_BAR_HEIGHT + 3.0), Vector2(rect.size.x, SHIELD_BAR_HEIGHT))
+		draw_rect(srect.grow(1.0), Color(0, 0, 0, 0.8))
+		var sratio = clampf(BattleManager.citadel_shield / BattleManager.CITADEL_MAX_HP, 0.0, 1.0)
+		draw_rect(Rect2(srect.position, Vector2(srect.size.x * sratio, srect.size.y)), SHIELD_COLOR)
 
 # -------------------------------------------------------
 # БОЙ (штурм)

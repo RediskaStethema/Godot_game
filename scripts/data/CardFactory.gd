@@ -172,17 +172,16 @@ static func bolter_turret() -> CardData:
 	var c = CardData.new()
 	c.id = "bolter_turret"
 	c.title = "Bolter Turret"
-	c.description = "Автоматическая турель. Атакует ближайшего врага."
+	c.description = "Турель: стреляет в ближайшего врага. Стоит между раундами."
 	c.faction = "space_marines"
-	c.cost = 2
+	c.cost = 7   # в TDD турели нет — Rare по шкале цен TDD
 	c.rarity = "rare"
 	c.card_type = "building"
 	c.building_type = "tower"
 	c.building_stats = {
-		"hp": 200.0,
 		"damage": 15.0,
 		"attack_speed": 1.5,
-		"attack_range": 300.0
+		"attack_range": 300.0,
 	}
 	return c
 
@@ -190,14 +189,17 @@ static func fortress_wall() -> CardData:
 	var c = CardData.new()
 	c.id = "fortress_wall"
 	c.title = "Fortress Wall"
-	c.description = "Замедляет врагов. Принимает урон вместо цитадели."
+	c.description = "Щит цитадели +200 в каждом бою. Замедляет врагов рядом на 40%."
 	c.faction = "space_marines"
-	c.cost = 15
+	c.cost = 5   # TDD: Common 3–5
 	c.rarity = "common"
 	c.card_type = "building"
 	c.building_type = "wall"
+	# TDD: «+20 HP базе» при базе 100 → у нас 20% от HP цитадели (1000), щитом на каждый бой
 	c.building_stats = {
-		"hp": 500.0,
+		"shield": 200.0,
+		"slow_mult": 0.6,
+		"slow_radius": 130.0,
 	}
 	return c
 
@@ -240,21 +242,22 @@ static func battle_fury() -> CardData:
 # Карты с большим весом появляются чаще.
 
 # Веса по TDD: common 60% (18), rare 30% (9), epic 10% (3) — из 30 копий.
-# Здания не кладём в пул, пока их drop на тайл не реализован (BattleScene: building → pass).
 static func build_pool() -> Array:
 	var pool = []
 	# Common — 18 копий
 	for i in range(6): pool.append(tactical_squad())
 	for i in range(4): pool.append(assault_squad())
-	for i in range(5): pool.append(scout_squad())
-	for i in range(3): pool.append(chaos_warband())
+	for i in range(4): pool.append(scout_squad())
+	for i in range(2): pool.append(chaos_warband())
+	for i in range(2): pool.append(fortress_wall())
 	# Rare — 9 копий
-	for i in range(2): pool.append(devastator_squad())
+	pool.append(devastator_squad())
 	pool.append(terminator_squad())
 	pool.append(apothecary_card())
 	pool.append(librarian_card())
 	pool.append(chaplain_card())
 	pool.append(land_speeder_card())
+	pool.append(bolter_turret())
 	pool.append(blessed_armour())
 	pool.append(battle_fury())
 	# Epic — 3 копии

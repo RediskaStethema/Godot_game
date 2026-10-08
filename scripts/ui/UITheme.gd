@@ -126,6 +126,10 @@ static func card_style(rarity: String, highlighted: bool = false) -> StyleBoxFla
 
 # Портрет для карты отряда — первый кадр idle юнита (null для зданий/улучшений)
 static func card_portrait(card: CardData) -> Texture2D:
+	if card.card_type == "building":
+		# Своих спрайтов у зданий нет — блок тайлсета, из которого здание собрано
+		var blocks = Building.BLOCKS.get(card.building_type, [])
+		return TerrainTiles.tile(blocks[-1][0]) if not blocks.is_empty() else null
 	if card.card_type != "squad":
 		return null
 	var unit = UnitFactory.create(card.unit_factory_id)

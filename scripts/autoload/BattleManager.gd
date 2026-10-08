@@ -31,6 +31,12 @@ const CITADEL_MAX_HP: float = 1000.0
 var citadel_hp: float = CITADEL_MAX_HP
 var citadel: Node2D = null          # цитадель текущего боя (ставит BattleScene)
 var siege_started: bool = false     # армия игрока пала, враги штурмуют цитадель
+# Щит цитадели на текущий бой (Fortress Wall): урон штурма сначала снимает его
+var citadel_shield: float = 0.0
+
+# Здания: стоят между раундами на своих клетках (CardData → Vector2i)
+var player_buildings: Dictionary = {}
+var buildings: Array = []           # узлы Building текущего боя (ставит BattleScene)
 
 signal citadel_hp_changed(hp: float)
 signal citadel_destroyed
@@ -95,6 +101,9 @@ func _battle_tick() -> void:
 	var squads = SquadRegistry.get_all_alive_squads()
 	for squad in squads:
 		squad.tick(FIXED_TICK)
+	for b in buildings:
+		if is_instance_valid(b):
+			b.tick(FIXED_TICK)
 	if siege_started and has_citadel():
 		citadel.tick(FIXED_TICK)
 	_check_battle_end()
@@ -154,7 +163,9 @@ func has_citadel() -> bool:
 func damage_citadel(amount: float) -> void:
 	if citadel_hp <= 0.0:
 		return
-	citadel_hp = maxf(citadel_hp - amount, 0.0)
+	var absorbed = minf(citadel_shield, amount)
+	citadel_shield -= absorbed
+	citadel_hp = maxf(citadel_hp - (amount - absorbed), 0.0)
 	emit_signal("citadel_hp_changed", citadel_hp)
 	if citadel_hp <= 0.0:
 		print("BattleManager: цитадель пала")
@@ -164,7 +175,9 @@ func damage_citadel(amount: float) -> void:
 func reset_run() -> void:
 	citadel_hp = CITADEL_MAX_HP
 	emit_signal("citadel_hp_changed", citadel_hp)
+	citadel_shield = 0.0
 	reset_kingdom()
+	player_buildings.clear()
 	player_units.clear()
 	player_placements.clear()
 	pending_cards.clear()

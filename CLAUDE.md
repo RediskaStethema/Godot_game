@@ -30,6 +30,7 @@ scripts/
 	IsoGrid.gd          — раскладка как в 9 Kings: королевство (открытые клетки `unlocked` в рамке 4×4, сверху слева) и зона врага на одной изометрической оси col, между ними gap_tiles «ничьей земли»; setup(screen, play_area) центрирует всю раскладку
 	IsoGridRenderer.gd  — платформа из блоков лунного тайлсета (кэш в дочернем узле, перерисовка refresh_floor()), техно-плиты королевства, тёмные плиты зоны врага, декор; подсветка клеток; occupied_tiles_player/enemy
 	TerrainTiles.gd     — тайлсет assets/sprites/map_sprite (32×32 пиксель-арт, масштаб 128/30, TEXTURE_FILTER_NEAREST): draw_block / draw_decoration, списки Slice по назначению
+	Building.gd         — здание на клетке королевства: вид из блоков (BLOCKS по building_type), турель (tick), аура замедления стены
 	Citadel.gd          — цитадель: крепость из блоков в полклетки на IsoGrid.citadel_tile (0,5), HP-бар, орудие для штурма (tick / take_hit)
 	Soldier.gd          — FSM юнита (9 состояний, transition_to / apply_stun / apply_knockback)
 	Squad.gd            — контейнер солдат на одном тайле
@@ -37,7 +38,7 @@ scripts/
 	UnitData.gd         — Resource: hp, damage, speed, tags, faction...
 	CardData.gd         — Resource: card_type, unit_count, unit_factory_id...
 	UnitFactory.gd      — фабрика: create(id) + tactical/assault/scout/devastator/terminator/apothecary/librarian/chaplain/land_speeder/dreadnought/chapter_master/chaos_marine
-	CardFactory.gd      — карты и пул магазина (здания из пула убраны, пока не реализованы)
+	CardFactory.gd      — карты и пул магазина (30 копий: common 18 / rare 9 / epic 3)
   ui/
 	UITheme.gd          — палитра, Theme, стили карт по редкости, портреты юнитов, фон
   utils/
@@ -85,7 +86,7 @@ ShopScene → (купить карты, drag на скамейку) → BattleSc
 - Юниты: ✅ 10/10 Marines из TDD + Apothecary (не из TDD); у всех кроме Tactical/Assault placeholder-спрайты (тинт)
 - Способности — данными в UnitData: `on_hit_stun`, `on_hit_knockback` (в `Soldier._apply_on_hit_effects`), аура `aura_damage_bonus/radius/tag` (считается в момент удара, `Soldier.get_aura_damage_bonus`), `commander_damage_bonus` (`BattleScene._apply_commander_bonus` перед боем); ауры и командиры не суммируются — берётся максимум
 - Экономика: ✅ формула TDD, продажа карт (1/3), рука ≤ 10; Salvage без источников (P1); нет элитных врагов
-- Здания: bolter_turret, fortress_wall — pass в коде
+- Здания: ✅ `Building.gd` (агент `agents/agent-buildings.md`). Занимают клетку королевства, неуязвимы, стоят между раундами (`BattleManager.player_buildings`: CardData → Vector2i), тикают от BattleManager. Bolter Turret (Rare 7, в TDD нет) — 15 урона, 1.5/с, 300 px. Fortress Wall (Common 5) — щит цитадели +200 на каждый бой (`BattleManager.citadel_shield`, TDD «+20 HP базе» ×10) и замедление врагов ×0.6 в 130 px (`Building.slow_mult_at` в `Soldier._move_towards`). Plasma Generatorium — нет
 - Цитадель: ✅ HP 1000 на весь забег (`BattleManager.citadel_hp`, float). Армия пала → `siege_started` → штурм: бой цитадели с врагами. Враги идут к ней и бьют обычными атаками в ATTACK (`Soldier._is_sieging / _attack_citadel`, дальность + `Citadel.HIT_RADIUS`); цитадель тикает от BattleManager и бьёт по площади ближайшего врага (`Citadel.DAMAGE/ATTACK_SPEED/ATTACK_RANGE/SPLASH_RADIUS`). Враги перебиты → победа («Цитадель выстояла», доход за победу); HP 0 → `BattleManager.reset_run()` и новый забег. Catch-up бонус TDD — нет
 - Синергии: ✅ 3 MVP из TDD (frontline/backline позиции — нет)
 - Карты: 16 из 20 MVP (12 squad, 2 building, 2 upgrade); пул магазина 30 копий: common 18 / rare 9 / epic 3

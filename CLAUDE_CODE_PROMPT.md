@@ -11,7 +11,7 @@
 - Экономика по TDD: `10 + wave×2 + min(bonuses, 8)`, старт 12 Req
 - Юниты: все 10 Marines из TDD (Tactical, Assault, Scout, Devastator, Terminator, Librarian, Chaplain, Land Speeder, Dreadnought, Chapter Master) + Apothecary (не из TDD) + Chaos Marine; UnitFactory.create(id)
 - Способности данными в UnitData: on_hit_stun (Librarian), on_hit_knockback (Dreadnought), aura_* (Chaplain), commander_damage_bonus (Chapter Master)
-- CardFactory: 16 карт, в пуле магазина 14 (здания убраны из пула, пока не реализованы)
+- CardFactory: 16 карт, все в пуле магазина; здания — Building.gd (турель, стена)
 - SynergyManager: 3 MVP синергии, income_bonus, epic_discount_pending
 - Salvage API (без источников — P1)
 - Поле как в 9 Kings: общая платформа, королевство сверху слева, враг приходит по диагонали снизу справа; отряды стоят шеренгами вдоль осей изометрии и маршируют строем (MOVE держит formation_offset)
@@ -122,7 +122,7 @@ TODO/pass в коде: [список]
 | Приоритет | Задача | Агент |
 |---|---|---|
 | ~~1~~ | ~~Добавить 5 оставшихся юнитов TDD (Librarian, Chaplain, Land Speeder, Dreadnought, Chapter Master)~~ ✅ | agent-units.md |
-| 2 | Реализовать bolter_turret (стреляет в ближайшего врага); после — вернуть здания в `CardFactory.build_pool()` и заменить `"building": pass` в `BattleScene._on_card_dropped` | создать agent-buildings.md |
+| ~~2~~ | ~~Реализовать bolter_turret; вернуть здания в `build_pool()`~~ ✅ (+ Fortress Wall) | agent-buildings.md |
 | ~~3~~ | ~~Реализовать Цитадель с HP (враги атакуют если нет игрока)~~ ✅ | — |
 | ~~4~~ | ~~Продажа карт за 1/3 цены, рука до 10 карт, карты не пропадают после боя~~ ✅ | agent-economy.md |
 | 5 | Карта забега (node-граф: бой/магазин/событие), 5 волн + босс на 5-й | создать agent-runmap.md |
@@ -229,7 +229,7 @@ print("Активные синергии: ", SynergyManager.get_active_synergy_n
 | Продажа карт | стоимость × 0.5 Requisition | ✅ 1/3 цены (решение пользователя), рука ≤ 10 карт |
 | Salvage | P1: Tier 3 и реликвии | API есть, источников нет (P1 — не MVP) |
 | Синергии | TDD MVP пороги | ✅ 3 базовых |
-| Здания | bolter_turret, fortress_wall | ❌ pass |
+| Здания | Fortress Wall, Plasma Generatorium, Apothecarion | ✅ Fortress Wall (щит цитадели + замедление), Bolter Turret (не из TDD); нет Plasma Generatorium |
 | Цитадель | База с HP | ✅ HP 1000, при гибели армии — бой цитадели с врагами, 0 HP — новый забег |
 | Карта забега | Node-граф | ❌ |
 | Карты | 20 MVP карт | 16 (12 squad, 2 building, 2 upgrade); Epic: Dreadnought, Chapter Master |

@@ -48,6 +48,8 @@ func setup(data: CardData, index: int) -> void:
 			text = "×%d   HP %d   УРН %d   ДАЛ %d\n%s" % [data.unit_count, u.hp, u.damage, u.attack_range, data.description]
 		"upgrade":
 			text = "%s\n(перетащите на свой отряд в бою)" % data.description
+		"building":
+			text = "%s\n(ставится на клетку королевства)" % data.description
 	card_desc.text = text
 	card_desc.theme_type_variation = "SmallLabel"
 	card_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
