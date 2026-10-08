@@ -8,10 +8,6 @@ extends Control
 
 const SHOP_SLOT_SCENE = preload("res://scenes/shop/ShopSlot.tscn")
 
-# Лимит юнитов на поле: 9 + (round/3)*3, максимум 18
-const BASE_MAX_UNITS: int = 9
-const CAP_MAX_UNITS: int = 18
-
 # Высоты нижних панелей магазина
 const BOTTOM_BAR_HEIGHT: float = 92.0
 const HAND_PANEL_HEIGHT: float = 150.0
@@ -63,16 +59,10 @@ func _on_purchase_requested(slot_index: int) -> void:
 		return
 	var card_preview = ShopManager.current_offers[slot_index]
 
-	# Проверяем лимиты ДО покупки — деньги не списываем вообще
+	# Проверяем лимит руки ДО покупки — деньги не списываем вообще
 	if _is_hand_full():
 		_show_message("Рука полна (%d/%d) — продайте лишние карты" % [purchased_cards.size(), BattleManager.MAX_HAND_SIZE])
 		return
-	if card_preview.card_type == "squad":
-		var current_count = _count_units()
-		var max_units = _get_max_units()
-		if current_count + card_preview.unit_count > max_units:
-			_show_message("Превышен лимит армии (%d/%d)" % [current_count, max_units])
-			return
 
 	# Скидка синергии (elite x2) на Epic карту — списываем цену со скидкой,
 	# а в карте оставляем изначальную (от неё считается цена продажи)
@@ -175,19 +165,17 @@ func _count_units() -> int:
 
 func _update_army_label() -> void:
 	var count = _count_units()
-	army_label.text = "Армия: %d / %d" % [count, _get_max_units()]
-	army_label.add_theme_color_override("font_color",
-		UITheme.RED_BRIGHT if count >= _get_max_units() else UITheme.GOLD_BRIGHT)
+	# Лимита армии нет — ограничена только рука (MAX_HAND_SIZE)
+	army_label.text = "Армия: %d бойцов" % count
+	army_label.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT)
 	if army_details:
 		var parts: Array[String] = []
 		for unit in surviving_units:
 			var ups = " [%s]" % ", ".join(unit.applied_upgrades) if not unit.applied_upgrades.is_empty() else ""
-			parts.append("%s ×%d%s" % [unit.unit_name, unit.saved_hp.size(), ups])
+			var lvl = " ур.%d" % unit.squad_level if unit.squad_level > 0 else ""
+			parts.append("%s ×%d%s%s" % [unit.unit_name, unit.saved_hp.size(), lvl, ups])
 		army_details.text = ("Ветераны: " + "   ·   ".join(parts)) if not parts.is_empty() \
 			else "Ветеранов нет — купите отряды и выложите их в бою"
-
-func _get_max_units() -> int:
-	return min(BASE_MAX_UNITS + (EconomyManager.round_number / 3) * 3, CAP_MAX_UNITS)
 
 func _update_requisition_label(amount: int) -> void:
 	requisition_label.text = "%d Req" % amount

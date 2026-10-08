@@ -13,6 +13,16 @@ var player_placements: Dictionary = {}
 const MAX_HAND_SIZE: int = 10
 const FIXED_TICK: float = GameConstants.FIXED_TICK
 var pending_cards: Array[CardData] = []
+
+# Королевство: открытые клетки для расстановки. Живут весь забег.
+# Каждую EXPANSION_EVERY-ю волну (3, 6, 9…) во время расстановки можно
+# докупать соседние клетки; цена растёт с каждой купленной.
+const START_KINGDOM_SIZE = Vector2i(3, 3)
+const EXPANSION_EVERY: int = 3
+const TILE_BASE_COST: int = 6
+const TILE_COST_STEP: int = 2
+var kingdom_tiles: Array[Vector2i] = []
+var tiles_bought: int = 0
 # нам нужно различать "ещё не начался" и "уже закончился"
 enum BattlePhase { IDLE, RUNNING, FINISHED }
 var player_units: Array[UnitData] = []
@@ -100,3 +110,34 @@ func _check_battle_end() -> void:
 
 func set_player_units(units: Array[UnitData]) -> void:
 	player_units = units
+
+# -------------------------------------------------------
+# КОРОЛЕВСТВО
+# -------------------------------------------------------
+func _ready() -> void:
+	reset_kingdom()
+
+func reset_kingdom() -> void:
+	kingdom_tiles.clear()
+	tiles_bought = 0
+	for row in range(START_KINGDOM_SIZE.y):
+		for col in range(START_KINGDOM_SIZE.x):
+			kingdom_tiles.append(Vector2i(col, row))
+
+# Волна, в которой можно расширять королевство
+func can_expand_kingdom() -> bool:
+	return EconomyManager.round_number % EXPANSION_EVERY == 0
+
+func get_tile_cost() -> int:
+	return TILE_BASE_COST + tiles_bought * TILE_COST_STEP
+
+# Списывает Requisition и открывает клетку. Соседство и рамку проверяет вызывающий.
+func try_buy_tile(tile: Vector2i) -> bool:
+	if not can_expand_kingdom() or kingdom_tiles.has(tile):
+		return false
+	if not EconomyManager.try_spend(get_tile_cost()):
+		return false
+	kingdom_tiles.append(tile)
+	tiles_bought += 1
+	print("BattleManager: куплена клетка %s, всего %d" % [tile, kingdom_tiles.size()])
+	return true

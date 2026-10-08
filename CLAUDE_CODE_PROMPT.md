@@ -9,14 +9,17 @@
 **Что уже работает:**
 - FSM солдата: все 9 состояний (IDLE/MOVE/CHASE/ATTACK/CASTING/STUNNED/KNOCKBACK/RETREATING/DEAD)
 - Экономика по TDD: `10 + wave×2 + min(bonuses, 8)`, старт 12 Req
-- Юниты: Tactical, Assault, Scout, Devastator, Terminator, Apothecary (не из TDD) + Chaos Marine; UnitFactory.create(id)
-- CardFactory: 11 карт, в пуле магазина 9 (здания убраны из пула, пока не реализованы)
+- Юниты: все 10 Marines из TDD (Tactical, Assault, Scout, Devastator, Terminator, Librarian, Chaplain, Land Speeder, Dreadnought, Chapter Master) + Apothecary (не из TDD) + Chaos Marine; UnitFactory.create(id)
+- Способности данными в UnitData: on_hit_stun (Librarian), on_hit_knockback (Dreadnought), aura_* (Chaplain), commander_damage_bonus (Chapter Master)
+- CardFactory: 16 карт, в пуле магазина 14 (здания убраны из пула, пока не реализованы)
 - SynergyManager: 3 MVP синергии, income_bonus, epic_discount_pending
 - Salvage API (без источников — P1)
 - Поле как в 9 Kings: общая платформа, королевство сверху слева, враг приходит по диагонали снизу справа; отряды стоят шеренгами вдоль осей изометрии и маршируют строем (MOVE держит formation_offset)
 - UI: тема `scripts/ui/UITheme.gd`, вёрстка кодом, stretch canvas_items; спрайты нормализованы по высоте, HP-бары, y-sort
 - occupied_tiles_player / occupied_tiles_enemy (раздельные словари)
-- Лимит юнитов: 9 + (round/3)*3, максимум 18
+- Лимита армии нет, только рука ≤ 10 карт
+- Королевство 3×3 → 4×4: каждую 3-ю волну при расстановке соседние клетки покупаются кликом (6 + 2×куплено Req); BattleManager.kingdom_tiles
+- Враги скрыты до «В БОЙ»
 
 **Критические правила кода:**
 1. Боевая логика — только через `tick(delta)` из BattleManager (FIXED_TICK=0.1), НЕ в `_process`
@@ -116,7 +119,7 @@ TODO/pass в коде: [список]
 
 | Приоритет | Задача | Агент |
 |---|---|---|
-| 1 | Добавить 5 оставшихся юнитов TDD (Librarian, Chaplain, Land Speeder, Dreadnought, Chapter Master) | agent-units.md |
+| ~~1~~ | ~~Добавить 5 оставшихся юнитов TDD (Librarian, Chaplain, Land Speeder, Dreadnought, Chapter Master)~~ ✅ | agent-units.md |
 | 2 | Реализовать bolter_turret (стреляет в ближайшего врага); после — вернуть здания в `CardFactory.build_pool()` и заменить `"building": pass` в `BattleScene._on_card_dropped` | создать agent-buildings.md |
 | 3 | Реализовать Цитадель с HP (враги атакуют если нет игрока) | создать agent-citadel.md |
 | ~~4~~ | ~~Продажа карт за 1/3 цены, рука до 10 карт, карты не пропадают после боя~~ ✅ | agent-economy.md |
@@ -218,7 +221,7 @@ print("Активные синергии: ", SynergyManager.get_active_synergy_n
 | Система | TDD цель | Статус |
 |---|---|---|
 | FSM | 9 состояний | ✅ |
-| Юниты Marines | 10 типов | 5/10 по TDD + Apothecary (нет Librarian, Chaplain, Land Speeder, Dreadnought, Chapter Master); у новых юнитов placeholder-спрайты |
+| Юниты Marines | 10 типов | ✅ 10/10 + Apothecary; у новых юнитов placeholder-спрайты |
 | Юниты Chaos | Chaos Marine + variants | только базовый |
 | Экономика | 10+wave×2+bonuses | ✅ |
 | Продажа карт | стоимость × 0.5 Requisition | ✅ 1/3 цены (решение пользователя), рука ≤ 10 карт |
@@ -227,12 +230,12 @@ print("Активные синергии: ", SynergyManager.get_active_synergy_n
 | Здания | bolter_turret, fortress_wall | ❌ pass |
 | Цитадель | База с HP | ❌ |
 | Карта забега | Node-граф | ❌ |
-| Карты | 20 MVP карт | 11 (7 squad, 2 building, 2 upgrade); Epic-карт нет |
+| Карты | 20 MVP карт | 16 (12 squad, 2 building, 2 upgrade); Epic: Dreadnought, Chapter Master |
 | Драфт | 3 карты → выбрать 1 | 4 оффера, покупка любых |
-| Grid | 8×4 слота | 3×3 → 4×4 по этапам |
+| Grid | 8×4 слота | 3×3 → 4×4 покупкой клеток каждую 3-ю волну |
 | Волны | 5 + босс на 5-й | бесконечные |
 
 ## ИЗВЕСТНЫЕ БАГИ
 
-- CASTING / STUNNED / KNOCKBACK реализованы, но их никто не вызывает — нет способностей
+- Свои спрайты есть только у space_marine и chaos — остальные юниты различаются тинтом/размером
 - Агенты `agent-fsm.md`, `agent-grid-fix.md`, `agent-synergy.md` — выполнены, использовать только как справку

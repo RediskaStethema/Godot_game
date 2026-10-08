@@ -43,14 +43,24 @@ func _spawn_soldiers(count: int, hp_list: Array[float]) -> void:
 	var offsets = _get_formation_offsets(count)
 
 	for i in range(count):
-		var soldier = SOLDIER_SCENE.instantiate()
-		add_child(soldier)
 		var hp_ratio: float = hp_list[i] if i < hp_list.size() else 1.0
-		soldier.setup(data, team, self, offsets[i], hp_ratio)
-		soldier.position = offsets[i]
-		soldier.died.connect(_on_soldier_died)
-		soldiers.append(soldier)
-		SoldierRegistry.register(soldier)
+		_add_soldier(offsets[i], hp_ratio)
+
+func _add_soldier(offset: Vector2, hp_ratio: float) -> void:
+	var soldier = SOLDIER_SCENE.instantiate()
+	add_child(soldier)
+	soldier.setup(data, team, self, offset, hp_ratio)
+	soldier.position = offset
+	soldier.died.connect(_on_soldier_died)
+	soldiers.append(soldier)
+	SoldierRegistry.register(soldier)
+
+# Перестроить строй под текущее число бойцов (после возвращения павших)
+func _reform() -> void:
+	var offsets = _get_formation_offsets(soldiers.size())
+	for i in range(soldiers.size()):
+		soldiers[i].formation_offset = offsets[i]
+		soldiers[i].position = offsets[i]
 
 # Строй как в 9 Kings: шеренги вдоль осей изометрии, фронт смотрит на врага.
 # Шеренга (до FORMATION_MAX_RANK бойцов) — вдоль оси row, ряды уходят в тыл
@@ -124,6 +134,39 @@ func apply_upgrade(card: CardData) -> bool:
 	for soldier in soldiers:
 		soldier.refresh_stats_from_data()
 	return true
+
+# Карта того же отряда → улучшение (до UnitFactory.MAX_SQUAD_LEVEL раз)
+func merge_upgrade() -> bool:
+	if not data.can_merge_upgrade():
+		return false
+	data.apply_merge_upgrade()
+	for soldier in soldiers:
+		soldier.refresh_stats_from_data()
+	return true
+
+# Карта того же отряда → лечение: каждому живому бойцу доля его максимального HP,
+# павшие (до полного состава data.squad_size) возвращаются с той же долей HP.
+# Возвращает, сколько бойцов вернулось.
+func heal_by_ratio(ratio: float) -> int:
+	for soldier in soldiers:
+		soldier.heal(soldier.max_hp * ratio)
+	var missing = get_missing_count()
+	for i in range(missing):
+		_add_soldier(Vector2.ZERO, ratio)
+	if missing > 0:
+		_reform()
+	return missing
+
+func get_missing_count() -> int:
+	return max(data.squad_size - soldiers.size(), 0)
+
+func is_wounded() -> bool:
+	if get_missing_count() > 0:
+		return true
+	for soldier in soldiers:
+		if soldier.current_hp < soldier.max_hp:
+			return true
+	return false
 
 # -------------------------------------------------------
 # СМЕРТЬ БОЙЦОВ

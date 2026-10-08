@@ -61,7 +61,6 @@
 - Карта каждого юнита: drop на тайл → отряд с нужным числом бойцов.
 - Librarian: цель после удара в STUNNED. Dreadnought: цель в KNOCKBACK.
 - Бой с новыми юнитами заканчивается (нет вечного боя); Dreadnought/Chapter Master не отступают.
-- Лимит юнитов в магазине учитывает новые карты.
 - Тест удобно гонять: `Godot_v4.6.2-stable_win64_console.exe --path . -s res://_test.gd` (скрипт `extends SceneTree`, autoload'ы брать через `root.get_node("...")`, тестовый файл удалить после). Для проверок с сеткой — без `--headless` (в headless окно 64×64).
 
 ## Что НЕ трогать

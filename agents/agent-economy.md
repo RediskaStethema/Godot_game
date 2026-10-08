@@ -38,13 +38,13 @@ add_salvage(amount)                      # кап 5; Salvage — P1, источ�
 ## Файлы для чтения
 1. `scripts/autoload/EconomyManager.gd`
 2. `scripts/autoload/ShopManager.gd` — `try_purchase(slot)`, `current_offers`
-3. `scenes/shop/ShopScene.gd` — рука, продажа, лимиты руки и армии
+3. `scenes/shop/ShopScene.gd` — рука, продажа, лимит руки (лимита армии нет)
 4. `scenes/battle/BattleScene.gd` — `_on_battle_ended`, `_calculate_victory_bonuses`
 
 ## Проверка
 - Доход после победы в 1-й волне = `12 + min(бонусы, 8)`.
 - `round_number` растёт ровно на 1 за бой.
-- Лимит руки 10 и лимит армии не обходятся (купил → продал → купил).
+- Лимит руки 10 не обходится (купил → продал → купил).
 - Продажа: Tactical (5) → +1, Terminator (10) → +3.
 
 ## Что НЕ трогать

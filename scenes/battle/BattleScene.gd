@@ -15,6 +15,7 @@ var player_soldiers_at_start: int = 0   # для бонуса «победа б�
 var synergy_label: Label = null
 var hud: PanelContainer = null
 var requisition_label: Label = null
+var merge_menu: PanelContainer = null   # выбор «улучшить / вылечить» отряд его картой
 
 # -------------------------------------------------------
 # ИНИЦИАЛИЗАЦИЯ
@@ -30,7 +31,7 @@ func _ready() -> void:
 	bench.card_dropped_on_tile.connect(_on_card_dropped)
 	_build_ui()
 
-	iso_grid.expand_grid(1)
+	iso_grid.set_unlocked_tiles(BattleManager.kingdom_tiles)
 	iso_grid.setup(get_viewport_rect().size, _get_play_area())
 
 	var renderer = IsoGridRenderer.new()
@@ -45,6 +46,9 @@ func _ready() -> void:
 	_place_enemy_squads()
 	_place_player_squads()
 	_update_synergy_preview()
+	_update_expansion()
+	if BattleManager.can_expand_kingdom() and not iso_grid.get_expansion_tiles().is_empty():
+		_show_message("Можно расширить королевство — кликните по зелёной клетке")
 
 # Область экрана под сетки: между HUD сверху и скамейкой снизу
 const PLAY_AREA_MARGIN: float = 40.0
@@ -87,7 +91,7 @@ func _place_player_squads() -> void:
 # -------------------------------------------------------
 func _place_enemy_squads() -> void:
 	var round = EconomyManager.round_number
-	var squad_count = min(round + 1, iso_grid.grid_width * iso_grid.grid_height)
+	var squad_count = min(round + 1, iso_grid.enemy_width * iso_grid.enemy_height)
 	var stat_mult = 1.0 + (round - 1) * 0.15
 	var soldiers_per_squad = min(round + 1, 6)
 
@@ -110,6 +114,9 @@ func _spawn_squad(unit_data: UnitData, team: int, tile: Vector2i, count: int, hp
 	squad.setup(unit_data, team, tile, count, hp_list)
 	squad.global_position = iso_grid.tile_to_screen(tile, team == GameConstants.TEAM_ENEMY)
 	SquadRegistry.register(squad)
+	# Враг скрыт до начала боя — игрок расставляется вслепую
+	if team == GameConstants.TEAM_ENEMY and is_placement_phase:
+		squad.visible = false
 
 	var renderer = grid_renderer.get_child(0) as IsoGridRenderer
 	if renderer:
@@ -131,13 +138,38 @@ func _is_tile_occupied(tile: Vector2i) -> bool:
 # ВВОД — подсветка тайлов
 # -------------------------------------------------------
 func _input(event: InputEvent) -> void:
-	if not is_placement_phase:
+	if not is_placement_phase or merge_menu:
 		return
 	if event is InputEventMouseMotion:
 		var tile = iso_grid.screen_to_tile(event.position, false)
 		var renderer = grid_renderer.get_child(0) as IsoGridRenderer
 		if renderer:
 			renderer.update_hover(tile)
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_try_buy_tile(iso_grid.screen_to_tile(event.position, false))
+
+# -------------------------------------------------------
+# РАСШИРЕНИЕ КОРОЛЕВСТВА (каждая 3-я волна)
+# -------------------------------------------------------
+func _update_expansion() -> void:
+	var renderer = grid_renderer.get_child(0) as IsoGridRenderer
+	if not renderer:
+		return
+	var tiles: Array[Vector2i] = []
+	if is_placement_phase and BattleManager.can_expand_kingdom():
+		tiles = iso_grid.get_expansion_tiles()
+	renderer.set_expansion(tiles, BattleManager.get_tile_cost())
+
+func _try_buy_tile(tile: Vector2i) -> void:
+	if not BattleManager.can_expand_kingdom() or not iso_grid.get_expansion_tiles().has(tile):
+		return
+	var cost = BattleManager.get_tile_cost()
+	if not BattleManager.try_buy_tile(tile):
+		_show_message("Не хватает Requisition: клетка стоит %d" % cost)
+		return
+	iso_grid.set_unlocked_tiles(BattleManager.kingdom_tiles)
+	_update_expansion()
+	_show_message("Королевство расширено (−%d Req), клеток: %d" % [cost, BattleManager.kingdom_tiles.size()])
 
 # -------------------------------------------------------
 # БОЙ
@@ -145,7 +177,11 @@ func _input(event: InputEvent) -> void:
 func _on_start_pressed() -> void:
 	is_placement_phase = false
 	start_button.disabled = true
+	_close_merge_menu()
 	result_label.text = "Бой идёт..."
+	_update_expansion()
+	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_ENEMY):
+		squad.visible = true
 
 	for squad in SquadRegistry.get_all_alive_squads():
 		squad.start_march()
@@ -154,10 +190,23 @@ func _on_start_pressed() -> void:
 	var my_soldiers = SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER)
 	SynergyManager.calculate_synergies(my_soldiers)
 	SynergyManager.apply_synergies_to_soldiers(my_soldiers)
+	_apply_commander_bonus(my_soldiers)
 	_show_synergies()
 
 	player_soldiers_at_start = my_soldiers.size()
 	BattleManager.start_battle()
+
+# Командир (Chapter Master): +урон всем союзникам, один раз перед боем.
+# Несколько командиров не суммируются — берётся самый сильный бонус.
+func _apply_commander_bonus(soldiers: Array) -> void:
+	var bonus: float = 0.0
+	for s in soldiers:
+		bonus = max(bonus, s.data.commander_damage_bonus)
+	if bonus <= 0.0:
+		return
+	for s in soldiers:
+		s.current_damage *= 1.0 + bonus
+	print("BattleScene: командир — +%d%% урона армии" % int(round(bonus * 100.0)))
 
 # -------------------------------------------------------
 # КОНЕЦ БОЯ
@@ -304,6 +353,7 @@ func _save_survivors() -> void:
 func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
 	if not is_placement_phase:
 		return
+	_close_merge_menu()
 	var tile = iso_grid.screen_to_tile(screen_pos, false)
 
 	if not iso_grid.is_valid_tile(tile):
@@ -312,10 +362,16 @@ func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
 
 	match card.card_type:
 		"squad":
+			# Карта на свой отряд того же типа — улучшить или вылечить
+			var own = _get_player_squad_at(tile)
+			if own and own.data.factory_id == card.unit_factory_id:
+				_open_merge_menu(card, own)
+				return
 			if _is_tile_occupied(tile):
 				_show_message("Тайл занят")
 				return
 			var unit_data = _create_unit_from_card(card)
+			unit_data.squad_size = card.unit_count
 			_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, card.unit_count)
 			_consume_bench_card(card)
 		"upgrade":
@@ -334,6 +390,78 @@ func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
 				_show_message("Тайл занят")
 				return
 			_show_message("Здания пока не реализованы")
+
+# -------------------------------------------------------
+# КАРТА ОТРЯДА НА ТАКОЙ ЖЕ ОТРЯД: УЛУЧШЕНИЕ / ЛЕЧЕНИЕ
+# -------------------------------------------------------
+func _open_merge_menu(card: CardData, squad: Squad) -> void:
+	var can_upgrade = squad.data.can_merge_upgrade()
+	var wounded = squad.is_wounded()
+	if not can_upgrade and not wounded:
+		_show_message("%s: максимальный уровень, отряд здоров" % squad.data.unit_name)
+		return
+	var b = UnitFactory.get_merge_bonuses(squad.data.faction)
+
+	merge_menu = PanelContainer.new()
+	merge_menu.theme = UITheme.get_theme()
+	merge_menu.theme_type_variation = "HudPanel"
+	$UI.add_child(merge_menu)
+	var col = VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	merge_menu.add_child(col)
+	col.add_child(UITheme.make_label("%s — уровень %d/%d" % [squad.data.unit_name,
+		squad.data.squad_level, UnitFactory.MAX_SQUAD_LEVEL], "HeaderLabel"))
+
+	var up = Button.new()
+	up.text = "Улучшить: +%d%% урона, +%d%% HP, +%d%% скорострельности" % [
+		roundi(b["damage"] * 100), roundi(b["hp"] * 100), roundi(b["attack_speed"] * 100)]
+	if not can_upgrade:
+		up.text = "Улучшить: достигнут максимум"
+	up.disabled = not can_upgrade
+	up.pressed.connect(_on_merge_chosen.bind(card, squad, true))
+	col.add_child(up)
+
+	var heal = Button.new()
+	heal.text = "Вылечить: +%d%% HP каждому бойцу" % roundi(b["heal"] * 100)
+	if squad.get_missing_count() > 0:
+		heal.text += ", вернуть павших: %d" % squad.get_missing_count()
+	if not wounded:
+		heal.text = "Вылечить: отряд здоров"
+	heal.disabled = not wounded
+	heal.pressed.connect(_on_merge_chosen.bind(card, squad, false))
+	col.add_child(heal)
+
+	var cancel = Button.new()
+	cancel.text = "Отмена"
+	cancel.pressed.connect(_close_merge_menu)
+	col.add_child(cancel)
+
+	# Рядом с отрядом, но в пределах экрана
+	merge_menu.reset_size()
+	var pos = squad.global_position + Vector2(-merge_menu.size.x / 2.0, 20)
+	var screen = get_viewport_rect().size
+	merge_menu.position = pos.clamp(Vector2.ZERO, screen - merge_menu.size)
+
+func _on_merge_chosen(card: CardData, squad: Squad, upgrade: bool) -> void:
+	_close_merge_menu()
+	if not is_instance_valid(squad) or not bench.bench_cards.has(card):
+		return
+	if upgrade:
+		if not squad.merge_upgrade():
+			return
+		_show_message("%s улучшен до уровня %d/%d" % [squad.data.unit_name,
+			squad.data.squad_level, UnitFactory.MAX_SQUAD_LEVEL])
+	else:
+		var revived = squad.heal_by_ratio(UnitFactory.get_merge_bonuses(squad.data.faction)["heal"])
+		var extra = ", вернулось бойцов: %d" % revived if revived > 0 else ""
+		_show_message("%s вылечен%s" % [squad.data.unit_name, extra])
+		_update_synergy_preview()
+	_consume_bench_card(card)
+
+func _close_merge_menu() -> void:
+	if merge_menu:
+		merge_menu.queue_free()
+		merge_menu = null
 
 func _consume_bench_card(card: CardData) -> void:
 	bench.bench_cards.erase(card)

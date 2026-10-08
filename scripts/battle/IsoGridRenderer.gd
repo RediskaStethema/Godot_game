@@ -13,6 +13,12 @@ const COLOR_HOVER    = Color(0.94, 0.83, 0.55, 0.45)   # светлое золо
 const COLOR_OCCUPIED = Color(0.79, 0.63, 0.29, 0.30)   # золото
 const LINE_PLAYER    = Color(0.79, 0.63, 0.29, 0.45)
 const BORDER_PLAYER  = Color(0.79, 0.63, 0.29, 0.95)
+# --- Закрытые клетки рамки королевства ---
+const LINE_LOCKED    = Color(0.79, 0.63, 0.29, 0.12)
+const COLOR_BUYABLE  = Color(0.30, 0.55, 0.30, 0.18)   # можно купить
+const COLOR_BUYABLE_HOVER = Color(0.45, 0.80, 0.45, 0.40)
+const LINE_BUYABLE   = Color(0.55, 0.85, 0.55, 0.70)
+const PRICE_FONT_SIZE: int = 15
 # --- Зона врага ---
 const COLOR_ENEMY    = Color(0.56, 0.15, 0.13, 0.07)
 const BORDER_ENEMY   = Color(0.78, 0.27, 0.23, 0.30)
@@ -32,6 +38,9 @@ const PATCH_CHANCE: int = 7             # % клеток-«плит» потем
 var hovered_tile: Vector2i = Vector2i(-1, -1)
 var occupied_tiles_player: Dictionary = {}
 var occupied_tiles_enemy: Dictionary = {}
+# Клетки, которые сейчас можно купить, и их цена (пусто — расширение недоступно)
+var expansion_tiles: Array[Vector2i] = []
+var expansion_cost: int = 0
 
 var _floor: Node2D = null   # пол рисуется один раз, отдельно от подсветки плотов
 
@@ -55,8 +64,8 @@ func _draw() -> void:
 func _floor_bounds() -> Rect2:
 	var u0 = -0.5 - FLOOR_PAD_TILES
 	var v0 = -0.5 - FLOOR_PAD_TILES
-	var u1 = grid.grid_width * 2 + grid.gap_tiles - 0.5 + FLOOR_PAD_TILES
-	var v1 = grid.grid_height - 0.5 + FLOOR_PAD_TILES
+	var u1 = grid.get_layout_cols() - 0.5 + FLOOR_PAD_TILES
+	var v1 = grid.get_layout_rows() - 0.5 + FLOOR_PAD_TILES
 	return Rect2(u0, v0, u1 - u0, v1 - v0)
 
 func _draw_floor() -> void:
@@ -113,6 +122,13 @@ func _hash(i: int, j: int) -> int:
 # КОРОЛЕВСТВО И ЗОНА ВРАГА
 # -------------------------------------------------------
 func _draw_kingdom() -> void:
+	# Закрытые клетки рамки — едва заметный контур: видно, куда можно расти
+	for row in range(grid.grid_height):
+		for col in range(grid.grid_width):
+			var t = Vector2i(col, row)
+			if not grid.is_valid_tile(t) and not expansion_tiles.has(t):
+				_draw_diamond(grid.tile_to_screen(t, false), Color(0, 0, 0, 0), LINE_LOCKED)
+
 	for tile in grid.get_all_tiles():
 		var color = COLOR_NORMAL
 		if tile == hovered_tile:
@@ -120,7 +136,44 @@ func _draw_kingdom() -> void:
 		elif occupied_tiles_player.has(tile):
 			color = COLOR_OCCUPIED
 		_draw_diamond(grid.tile_to_screen(tile, false), color, LINE_PLAYER)
-	_draw_border(false, BORDER_PLAYER, 3.0)
+	_draw_kingdom_border(BORDER_PLAYER, 3.0)
+
+	var font = ThemeDB.fallback_font
+	for tile in expansion_tiles:
+		var center = grid.tile_to_screen(tile, false)
+		var color = COLOR_BUYABLE_HOVER if tile == hovered_tile else COLOR_BUYABLE
+		_draw_diamond(center, color, LINE_BUYABLE)
+		var text = "+ %d Req" % expansion_cost
+		var w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, PRICE_FONT_SIZE).x
+		draw_string_outline(font, center + Vector2(-w / 2.0, PRICE_FONT_SIZE * 0.35), text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, PRICE_FONT_SIZE, 4, Color(0, 0, 0, 0.85))
+		draw_string(font, center + Vector2(-w / 2.0, PRICE_FONT_SIZE * 0.35), text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, PRICE_FONT_SIZE, LINE_BUYABLE)
+
+# Контур королевства — только внешние рёбра открытых клеток
+# (после покупки клеток королевство может быть не прямоугольным)
+func _draw_kingdom_border(color: Color, width: float) -> void:
+	var hw = IsoGrid.TILE_WIDTH / 2.0
+	var hh = IsoGrid.TILE_HEIGHT / 2.0
+	var top = Vector2(0, -hh); var right = Vector2(hw, 0)
+	var bottom = Vector2(0, hh); var left = Vector2(-hw, 0)
+	# Сосед → ребро ромба, которое с ним граничит
+	var edges = {
+		Vector2i(0, -1): [top, right],    # row - 1
+		Vector2i(1, 0):  [right, bottom], # col + 1
+		Vector2i(0, 1):  [bottom, left],  # row + 1
+		Vector2i(-1, 0): [left, top],     # col - 1
+	}
+	for tile in grid.get_all_tiles():
+		var c = grid.tile_to_screen(tile, false)
+		for n in edges:
+			if not grid.is_valid_tile(tile + n):
+				draw_line(c + edges[n][0], c + edges[n][1], color, width, true)
+
+func set_expansion(tiles: Array[Vector2i], cost: int) -> void:
+	expansion_tiles = tiles
+	expansion_cost = cost
+	queue_redraw()
 
 func _draw_enemy_zone() -> void:
 	var pts = _border_points(true)
@@ -131,20 +184,14 @@ func _draw_enemy_zone() -> void:
 func _border_points(is_enemy: bool) -> PackedVector2Array:
 	var hw = IsoGrid.TILE_WIDTH / 2.0
 	var hh = IsoGrid.TILE_HEIGHT / 2.0
-	var w = grid.grid_width - 1
-	var h = grid.grid_height - 1
+	var w = (grid.enemy_width if is_enemy else grid.grid_width) - 1
+	var h = (grid.enemy_height if is_enemy else grid.grid_height) - 1
 	return PackedVector2Array([
 		grid.tile_to_screen(Vector2i(0, 0), is_enemy) + Vector2(0, -hh),
 		grid.tile_to_screen(Vector2i(w, 0), is_enemy) + Vector2(hw, 0),
 		grid.tile_to_screen(Vector2i(w, h), is_enemy) + Vector2(0, hh),
 		grid.tile_to_screen(Vector2i(0, h), is_enemy) + Vector2(-hw, 0),
 	])
-
-# Толстый контур всей сетки — по крайним углам угловых тайлов
-func _draw_border(is_enemy: bool, color: Color, width: float) -> void:
-	var pts = _border_points(is_enemy)
-	pts.append(pts[0])
-	draw_polyline(pts, color, width, true)
 
 func _draw_diamond(center: Vector2, color: Color, line_color: Color) -> void:
 	var hw = IsoGrid.TILE_WIDTH / 2

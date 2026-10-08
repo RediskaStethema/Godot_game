@@ -27,14 +27,14 @@ scripts/
 	SoldierRegistry.gd  — реестр всех Soldier на сцене
 	SynergyManager.gd   — синергии по тегам (TDD MVP: marine x3/x6, elite x2), доход +2 за 3 marine
   battle/
-	IsoGrid.gd          — раскладка как в 9 Kings: королевство (сверху слева) и зона врага на одной изометрической оси col, между ними gap_tiles «ничьей земли»; setup(screen, play_area) центрирует всю раскладку
+	IsoGrid.gd          — раскладка как в 9 Kings: королевство (открытые клетки `unlocked` в рамке 4×4, сверху слева) и зона врага на одной изометрической оси col, между ними gap_tiles «ничьей земли»; setup(screen, play_area) центрирует всю раскладку
 	IsoGridRenderer.gd  — общая платформа (мелкая сетка 1/4 тайла, кэш в дочернем узле), плоты королевства, едва заметная зона врага; occupied_tiles_player/enemy
 	Soldier.gd          — FSM юнита (9 состояний, transition_to / apply_stun / apply_knockback)
 	Squad.gd            — контейнер солдат на одном тайле
   data/
 	UnitData.gd         — Resource: hp, damage, speed, tags, faction...
 	CardData.gd         — Resource: card_type, unit_count, unit_factory_id...
-	UnitFactory.gd      — фабрика: create(id) + tactical/assault/scout/devastator/terminator/apothecary/chaos_marine
+	UnitFactory.gd      — фабрика: create(id) + tactical/assault/scout/devastator/terminator/apothecary/librarian/chaplain/land_speeder/dreadnought/chapter_master/chaos_marine
 	CardFactory.gd      — карты и пул магазина (здания из пула убраны, пока не реализованы)
   ui/
 	UITheme.gd          — палитра, Theme, стили карт по редкости, портреты юнитов, фон
@@ -67,7 +67,9 @@ ShopScene → (купить карты, drag на скамейку) → BattleSc
 - Рука: `BattleManager.pending_cards`, максимум `BattleManager.MAX_HAND_SIZE = 10`; переносится между раундами (после боя не очищается)
 - Продажа карт в магазине: `EconomyManager.sell_card()` = `cost / 3` (округление вниз) — решение пользователя, в TDD было ×0.5. Цена Epic со скидкой не меняет `card.cost`
 - Salvage: API есть (`add_salvage`, кап 5, `try_spend(req, sal)`), источников нет — P1 по TDD
-- Лимит юнитов: `9 + (round/3)*3`, максимум 18 — **ОК**
+- Лимита армии нет — ограничена только рука (`MAX_HAND_SIZE = 10`)
+- Королевство: `BattleManager.kingdom_tiles` (старт 3×3, рамка `IsoGrid.MAX_KINGDOM_SIZE` 4×4), живёт весь забег. Каждую 3-ю волну (`round_number % 3 == 0`) во время расстановки соседние клетки продаются кликом: `6 + 2×куплено` Req. `IsoGrid.is_valid_tile` = клетка открыта; зона врага — отдельно `enemy_width/height` 3×3
+- Враги скрыты (`squad.visible = false`) до нажатия «В БОЙ»
 
 ## Критические правила кодирования
 1. Всегда использовать `FIXED_TICK = 0.1` — не `delta` в боевой логике
@@ -77,18 +79,20 @@ ShopScene → (купить карты, drag на скамейку) → BattleSc
 5. `SquadRegistry.clear()` и `SoldierRegistry.clear()` вызывать в конце каждого боя
 
 ## TDD compliance gaps (текущие)
-- FSM: ✅ 9 состояний (CASTING/STUNNED/KNOCKBACK пока никто не вызывает — нет способностей)
-- Юниты: 6 Marines из 10 (нет Librarian, Chaplain, Land Speeder, Dreadnought, Chapter Master); Apothecary — не из TDD; у новых юнитов placeholder-спрайты (тинт)
+- FSM: ✅ 9 состояний; CASTING — Librarian, STUNNED — его попадание, KNOCKBACK — удар Dreadnought
+- Юниты: ✅ 10/10 Marines из TDD + Apothecary (не из TDD); у всех кроме Tactical/Assault placeholder-спрайты (тинт)
+- Способности — данными в UnitData: `on_hit_stun`, `on_hit_knockback` (в `Soldier._apply_on_hit_effects`), аура `aura_damage_bonus/radius/tag` (считается в момент удара, `Soldier.get_aura_damage_bonus`), `commander_damage_bonus` (`BattleScene._apply_commander_bonus` перед боем); ауры и командиры не суммируются — берётся максимум
 - Экономика: ✅ формула TDD, продажа карт (1/3), рука ≤ 10; Salvage без источников (P1); нет элитных врагов
 - Здания: bolter_turret, fortress_wall — pass в коде
 - Цитадель: не реализована
 - Синергии: ✅ 3 MVP из TDD (frontline/backline позиции — нет)
-- Карты: 4-5 видов вместо 20 MVP карт
+- Карты: 16 из 20 MVP (12 squad, 2 building, 2 upgrade); пул магазина 30 копий: common 18 / rare 9 / epic 3
 - Карта забега (run map): не реализована
 
 ## Правила данных юнитов
 - `UnitData` — шаблон; в бою меняются только runtime-поля Soldier: `max_hp`, `current_damage`, `current_move_speed`, `current_attack_range`, `current_attack_speed`, `current_heal_per_second`
 - Карты-улучшения (upgrade) лежат на скамейке; игрок бросает карту НА свой отряд → `Squad.apply_upgrade(card)` → `UnitData.apply_upgrade()` (множители `hp_multiplier` / `damage_multiplier` этого отряда, живут с отрядом между раундами) + `Soldier.refresh_stats_from_data()`; тег отряда должен совпадать с `affects_tag`
+- Карта отряда, брошенная на свой отряд того же типа (`UnitData.factory_id == CardData.unit_factory_id`) → меню в BattleScene: **улучшить** (`Squad.merge_upgrade()`, до `UnitFactory.MAX_SQUAD_LEVEL = 3`, уровень — `UnitData.squad_level`, множители hp/damage/attack_speed копятся умножением) или **вылечить** (`Squad.heal_by_ratio`, без лимита: живым +доля max HP, павшие до полного состава `UnitData.squad_size` возвращаются с той же долей HP). Бонусы по фракциям — `UnitFactory.SQUAD_MERGE_BONUSES` (space_marines: +20% урона, +20% HP, +15% скорострельности; лечение 35% max HP)
 - Множители `UnitData` — только улучшения отряда и масштабирование врагов по волнам; синергии — только runtime-поля Soldier
 - Один UnitData = один отряд; `saved_hp` — **доли** HP (0..1] выживших бойцов между раундами (не абсолют — иначе баффы обрезаются)
 - Дальности и скорости — в пикселях (melee ≈ 60, ranged 200–320)

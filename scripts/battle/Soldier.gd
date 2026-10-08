@@ -15,6 +15,9 @@ const KNOCKBACK_STOP_SPEED: float = 5.0
 const TARGET_SPRITE_HEIGHT: float = 62.0
 const HP_BAR_SIZE = Vector2(26, 4)
 const HP_BAR_GAP: float = 6.0
+const LEVEL_PIP_R: float = 3.0
+const LEVEL_PIP_STEP: float = 8.0
+const LEVEL_PIP_GAP: float = 5.0
 # Таймеры уменьшаются на 0.1 — из-за погрешности float 1.0 - 10*0.1 != 0
 const TIMER_EPSILON: float = 0.001
 
@@ -63,7 +66,7 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 	current_hp = max_hp * clampf(start_hp_ratio, 0.01, 1.0)
 	current_move_speed = data.move_speed
 	current_attack_range = data.attack_range
-	current_attack_speed = data.attack_speed
+	current_attack_speed = data.get_attack_speed()
 	current_heal_per_second = data.heal_per_second
 	formation_offset = offset
 	attack_timer = 0.0
@@ -265,6 +268,7 @@ func refresh_stats_from_data() -> void:
 	max_hp = data.get_max_hp()
 	current_hp = max_hp * ratio
 	current_damage = data.get_damage()
+	current_attack_speed = data.get_attack_speed()
 	queue_redraw()
 
 func heal(amount: float) -> void:
@@ -285,6 +289,11 @@ func _draw() -> void:
 	var ratio = clampf(current_hp / max_hp, 0.0, 1.0)
 	var color = UITheme.GREEN if team == GameConstants.TEAM_PLAYER else UITheme.RED_BRIGHT
 	draw_rect(Rect2(rect.position, Vector2(rect.size.x * ratio, rect.size.y)), color)
+	# Уровень отряда — золотые ромбики над полоской HP
+	for i in data.squad_level:
+		var c = Vector2((i - (data.squad_level - 1) / 2.0) * LEVEL_PIP_STEP, top - LEVEL_PIP_GAP)
+		draw_colored_polygon(PackedVector2Array([c + Vector2(0, -LEVEL_PIP_R), c + Vector2(LEVEL_PIP_R, 0),
+			c + Vector2(0, LEVEL_PIP_R), c + Vector2(-LEVEL_PIP_R, 0)]), UITheme.GOLD_BRIGHT)
 
 # -------------------------------------------------------
 # ДВИЖЕНИЕ
@@ -331,14 +340,39 @@ func apply_knockback(direction: Vector2, force: float) -> void:
 # -------------------------------------------------------
 func _do_attack() -> void:
 	if is_instance_valid(target):
-		var variance = current_damage * data.damage_variance
+		var damage = current_damage * (1.0 + get_aura_damage_bonus())
+		var variance = damage * data.damage_variance
 		var actual_damage = randf_range(
-			current_damage - variance,
-			current_damage + variance
+			damage - variance,
+			damage + variance
 		)
 		target.take_damage(actual_damage)
+		_apply_on_hit_effects()
 		sprite.stop()
 		sprite.play("attack")
+
+# Эффекты попадания из данных юнита (Librarian — стан, Dreadnought — отбрасывание)
+func _apply_on_hit_effects() -> void:
+	if not _has_valid_target():
+		return
+	if data.on_hit_stun > 0.0:
+		target.apply_stun(data.on_hit_stun)
+	if data.on_hit_knockback > 0.0:
+		target.apply_knockback(target.global_position - global_position, data.on_hit_knockback)
+
+# Бонус урона от аур союзников рядом (Chaplain). Считается в момент удара —
+# runtime-поля не меняются, поэтому аура пропадает, как только отошли из радиуса.
+func get_aura_damage_bonus() -> float:
+	var best: float = 0.0
+	for ally in SoldierRegistry.get_alive_soldiers_of_team(team):
+		var a: UnitData = ally.data
+		if a.aura_damage_bonus <= best:
+			continue
+		if a.aura_tag != "" and not (a.aura_tag in data.tags):
+			continue
+		if global_position.distance_to(ally.global_position) <= a.aura_radius:
+			best = a.aura_damage_bonus
+	return best
 
 func take_damage(amount: float) -> void:
 	if current_state == State.DEAD:

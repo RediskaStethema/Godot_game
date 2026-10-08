@@ -99,4 +99,4 @@ func _on_card_dropped(card, screen_pos):
 ## Что НЕ трогать
 - TILE_WIDTH и TILE_HEIGHT — 128/64 это стандарт
 - occupied_tiles_player / occupied_tiles_enemy — не трогать
-- expand_grid(stage) — логику размеров не менять
+- Королевство — `unlocked` клетки в рамке `MAX_KINGDOM_SIZE` (expand_grid удалён, клетки покупаются — см. BattleManager.kingdom_tiles)
