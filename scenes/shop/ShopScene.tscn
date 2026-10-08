@@ -1,0 +1,72 @@
+[gd_scene format=3 uid="uid://b4b13vxi38gy3"]
+
+[ext_resource type="Script" uid="uid://cxw4i6wn3k5gg" path="res://scenes/shop/ShopScene.gd" id="1_1t8pr"]
+
+[node name="ShopScene" type="Control" unique_id=1614535664]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_1t8pr")
+
+[node name="Background" type="ColorRect" parent="." unique_id=1458262676]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.101960786, 0.101960786, 0.18039216, 1)
+
+[node name="TopBar" type="HBoxContainer" parent="." unique_id=950015887]
+layout_mode = 0
+offset_left = 4.0
+offset_top = 176.0
+offset_right = 1153.0
+offset_bottom = 291.0
+alignment = 1
+
+[node name="RoundLabel" type="Label" parent="TopBar" unique_id=405213094]
+layout_mode = 2
+text = "Раунд 1"
+
+[node name="RequisitionLabel" type="Label" parent="TopBar" unique_id=892061976]
+layout_mode = 2
+text = " ⚙ 10 Req"
+
+[node name="ShopPanel" type="VBoxContainer" parent="." unique_id=138911702]
+layout_mode = 0
+offset_left = 1.0
+offset_top = 328.0
+offset_right = 1147.0
+offset_bottom = 452.0
+
+[node name="ShopTitle" type="Label" parent="ShopPanel" unique_id=74765758]
+layout_mode = 2
+text = "Магазин"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ShopSlots" type="HBoxContainer" parent="ShopPanel" unique_id=1397544167]
+layout_mode = 2
+alignment = 1
+
+[node name="ArmyPanel" type="VBoxContainer" parent="." unique_id=150081023]
+layout_mode = 0
+offset_left = 1.0
+offset_top = 359.0
+offset_right = 1147.0
+offset_bottom = 359.0
+
+[node name="ArmyLabel" type="Label" parent="ArmyPanel" unique_id=1785395402]
+layout_mode = 2
+
+[node name="BattleButton" type="Button" parent="." unique_id=1627938163]
+layout_mode = 0
+offset_left = 991.0
+offset_top = 4.0
+offset_right = 1151.0
+offset_bottom = 61.0
+text = " \"В БОЙ!\""

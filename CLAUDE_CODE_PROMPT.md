@@ -1,0 +1,238 @@
+# Claude Code Prompt — WH40KINGS продолжение
+
+---
+
+## КОНТЕКСТ ПРОЕКТА
+
+**WH40KINGS** — 2D изометрический roguelite auto-battler, Godot 4, сеттинг Warhammer 40K.
+
+**Что уже работает:**
+- FSM солдата: все 9 состояний (IDLE/MOVE/CHASE/ATTACK/CASTING/STUNNED/KNOCKBACK/RETREATING/DEAD)
+- Экономика по TDD: `10 + wave×2 + min(bonuses, 8)`, старт 12 Req
+- Юниты: Tactical, Assault, Scout, Devastator, Terminator, Apothecary (не из TDD) + Chaos Marine; UnitFactory.create(id)
+- CardFactory: 11 карт, в пуле магазина 9 (здания убраны из пула, пока не реализованы)
+- SynergyManager: 3 MVP синергии, income_bonus, epic_discount_pending
+- Salvage API (без источников — P1)
+- Поле как в 9 Kings: общая платформа, королевство сверху слева, враг приходит по диагонали снизу справа; отряды стоят шеренгами вдоль осей изометрии и маршируют строем (MOVE держит formation_offset)
+- UI: тема `scripts/ui/UITheme.gd`, вёрстка кодом, stretch canvas_items; спрайты нормализованы по высоте, HP-бары, y-sort
+- occupied_tiles_player / occupied_tiles_enemy (раздельные словари)
+- Лимит юнитов: 9 + (round/3)*3, максимум 18
+
+**Критические правила кода:**
+1. Боевая логика — только через `tick(delta)` из BattleManager (FIXED_TICK=0.1), НЕ в `_process`
+2. IsoGridRenderer: `occupied_tiles_player` и `occupied_tiles_enemy` — не `occupied_tiles`
+3. `_is_tile_occupied()` проверяет только `occupied_tiles_player`
+4. Спавн: сначала `_place_enemy_squads()`, потом `_place_player_squads()`
+5. В конце боя: `SquadRegistry.clear()` и `SoldierRegistry.clear()`
+6. Runtime-поля солдата: `max_hp`, `current_damage`, `current_move_speed`, `current_attack_range`, `current_attack_speed`, `current_heal_per_second` — не трогать `data.*` напрямую
+7. При расхождении агента с TDD (`WH40K_TDD.docx`) — приоритет у TDD; дальности и скорости в пикселях, не в тайлах
+
+---
+
+## ШАГ 0 — АНАЛИЗ ПРОЕКТА (выполнить ПЕРВЫМ в каждой сессии)
+
+Прочитай CLAUDE.md и ключевые файлы:
+
+```
+CLAUDE.md                               ← начни здесь
+scripts/autoload/BattleManager.gd
+scripts/autoload/EconomyManager.gd
+scripts/autoload/SynergyManager.gd
+scripts/battle/Soldier.gd
+scripts/data/UnitFactory.gd
+scripts/data/CardFactory.gd
+scenes/battle/BattleScene.gd
+scenes/shop/ShopScene.gd
+```
+
+Выведи отчёт:
+
+```
+=== АНАЛИЗ ПРОЕКТА ===
+FSM состояния: [enum State из Soldier.gd]
+Юниты в UnitFactory: [список create() ID]
+Карты в CardFactory: [список]
+EconomyManager.give_round_income: [формула]
+Salvage источники: [есть / нет]
+Синергии в SynergyManager: [список]
+agents/ в проекте: [список файлов]
+TODO/pass в коде: [список]
+Известные баги: [список]
+```
+
+---
+
+## ШАГ 1 — ВЫБОР АГЕНТА
+
+Посмотри папку `agents/` — там суб-агенты для каждой системы.
+
+### Правила
+
+```
+Задача совпадает с агентом     → читай agents/<agent>.md и следуй его шагам
+Задача частично совпадает      → читай ближайшего агента, дополни под задачу
+Задача не совпадает ни с кем   → создай новый agents/agent-<тема>.md (шаблон ниже)
+```
+
+### Когда создавать нового агента
+
+Создавай если задача:
+- затрагивает 3+ файла
+- может повториться в будущих сессиях
+- изолирована и не ломает другие системы напрямую
+
+НЕ создавай для hotfix одной строки, переименования, изменения одной константы.
+
+### Шаблон нового агента
+
+```markdown
+# SUB-AGENT: <Название>
+
+## Роль
+Одно предложение — что делает этот агент.
+
+## Контекст
+Игра WH40KINGS, Godot 4. Что важно знать для этой задачи.
+
+## Файлы для чтения
+1. путь/к/файлу.gd — зачем читать
+
+## Шаги
+1. Конкретное действие
+2. Конкретное действие с примером кода если нужно
+
+## Проверка
+- Что проверить после выполнения
+
+## Что НЕ трогать
+- Список файлов/API которые нельзя менять
+```
+
+---
+
+## ЗАДАЧА НА ЭТУ СЕССИЮ
+
+Если нет конкретной задачи от пользователя — выбери первую незакрытую по приоритету:
+
+| Приоритет | Задача | Агент |
+|---|---|---|
+| 1 | Добавить 5 оставшихся юнитов TDD (Librarian, Chaplain, Land Speeder, Dreadnought, Chapter Master) | agent-units.md |
+| 2 | Реализовать bolter_turret (стреляет в ближайшего врага); после — вернуть здания в `CardFactory.build_pool()` и заменить `"building": pass` в `BattleScene._on_card_dropped` | создать agent-buildings.md |
+| 3 | Реализовать Цитадель с HP (враги атакуют если нет игрока) | создать agent-citadel.md |
+| ~~4~~ | ~~Продажа карт за 1/3 цены, рука до 10 карт, карты не пропадают после боя~~ ✅ | agent-economy.md |
+| 5 | Карта забега (node-граф: бой/магазин/событие), 5 волн + босс на 5-й | создать agent-runmap.md |
+| 6 | Расширить карты до 20 MVP (10 Unit + 5 Buff + 3 Building + 2 Event) | agent-units.md |
+| 7 | Драфт по TDD: 3 карты → выбрать 1 (сейчас 4 оффера, покупка любых) | создать agent-draft.md |
+
+---
+
+## ШАГ 2 — ТЕСТИРОВАНИЕ (после каждого изменения)
+
+### Статический анализ
+
+```
+[ ] Нет обращения к occupied_tiles (старое имя)
+[ ] Нет боевой логики в _process / _physics_process
+[ ] transition_to() защищён: if current_state == new_state: return
+[ ] Нет прямых изменений data.hp / data.damage — только runtime-поля
+[ ] BattleManager.player_placements очищается при поражении и ничьей
+[ ] SquadRegistry.clear() и SoldierRegistry.clear() в конце боя
+[ ] Все новые сигналы объявлены через signal до использования
+[ ] Таймеры сравниваются через TIMER_EPSILON, не == 0
+```
+
+### Регрессионный чеклист
+
+```
+[ ] Игра запускается без ошибок в консоли
+[ ] Карту можно купить в магазине
+[ ] Карту можно перетащить на тайл
+[ ] Бой запускается и заканчивается без зависания
+[ ] После боя — переход в ShopScene
+[ ] Выжившие на своих тайлах в следующем раунде
+[ ] Нет дублирования отрядов на одном тайле
+[ ] Нет бесконечного боя
+[ ] Доход после победы = 10 + wave×2 + бонусы (проверь в консоли)
+```
+
+### Сценарий: первый раунд
+
+```
+1. Запуск → ShopScene, баланс 12 Req
+2. Купить Tactical Squad (5 Req) + Scout Squad (3 Req) → обе на bench
+   (одной карты на 1-ю волну не хватает: 0/5 побед; две карты — 5/5)
+3. Drag на тайл → отряд заспавнен, тайл занят
+4. Drag на тот же тайл → "тайл занят", нет дублирования
+5. Start Battle → солдаты двигаются (MOVE → CHASE → ATTACK)
+6. Победа → доход = 12 + min(бонусы, 8)
+   бонусы: +5 без потерь, +2 за каждые 3 marine (Tactical 3 + Scout 4 = 7 marine → +4)
+   пример: Tactical + Scout без потерь → 12 + min(5+4, 8) = 20 Req
+   только Tactical (3 marine) без потерь → 12 + 5 + 2 = 19 Req
+7. ShopScene → выжившие на тайлах
+```
+
+### Сценарий: FSM переходы
+
+```
+1. Солдат создан → IDLE
+2. start_march() → MOVE
+3. Враг в зоне видимости → CHASE
+4. Враг в дальности атаки → ATTACK
+5. Враг убит → CHASE или MOVE
+6. apply_stun(1.0) → STUNNED → через 1с → previous_state
+7. HP < 15% → RETREATING (один раз за бой)
+8. HP = 0 → DEAD, сигнал died ровно один раз
+```
+
+### Отладочные принты
+
+```gdscript
+# Drop карты:
+print("Drop: ", screen_pos, " → тайл ", tile, " valid=", iso_grid.is_valid_tile(tile))
+print("Занятые (игрок): ", renderer.occupied_tiles_player)
+
+# FSM переходы:
+print("[%s] %s → %s" % [data.unit_name, State.keys()[previous_state], State.keys()[new_state]])
+
+# Экономика:
+print("Доход волна %d: %d Req (бонусы: %d)" % [round_number, income, bonuses])
+
+# Синергии:
+print("Активные синергии: ", SynergyManager.get_active_synergy_names())
+```
+
+---
+
+## ЧТО НЕ ТРОГАТЬ
+
+- `SquadRegistry.gd` и `SoldierRegistry.gd` — API стабилен
+- `GameConstants.gd` — FIXED_TICK=0.1 неприкосновенно
+- `CardData.gd` и `UnitData.gd` — поля не менять без необходимости
+- `.tscn` файлы — только через код, не вручную
+- `SynergyManager` — только читать income_bonus, не пересчитывать вручную
+
+---
+
+## TDD GAPS (текущие)
+
+| Система | TDD цель | Статус |
+|---|---|---|
+| FSM | 9 состояний | ✅ |
+| Юниты Marines | 10 типов | 5/10 по TDD + Apothecary (нет Librarian, Chaplain, Land Speeder, Dreadnought, Chapter Master); у новых юнитов placeholder-спрайты |
+| Юниты Chaos | Chaos Marine + variants | только базовый |
+| Экономика | 10+wave×2+bonuses | ✅ |
+| Продажа карт | стоимость × 0.5 Requisition | ✅ 1/3 цены (решение пользователя), рука ≤ 10 карт |
+| Salvage | P1: Tier 3 и реликвии | API есть, источников нет (P1 — не MVP) |
+| Синергии | TDD MVP пороги | ✅ 3 базовых |
+| Здания | bolter_turret, fortress_wall | ❌ pass |
+| Цитадель | База с HP | ❌ |
+| Карта забега | Node-граф | ❌ |
+| Карты | 20 MVP карт | 11 (7 squad, 2 building, 2 upgrade); Epic-карт нет |
+| Драфт | 3 карты → выбрать 1 | 4 оффера, покупка любых |
+| Grid | 8×4 слота | 3×3 → 4×4 по этапам |
+| Волны | 5 + босс на 5-й | бесконечные |
+
+## ИЗВЕСТНЫЕ БАГИ
+
+- CASTING / STUNNED / KNOCKBACK реализованы, но их никто не вызывает — нет способностей
+- Агенты `agent-fsm.md`, `agent-grid-fix.md`, `agent-synergy.md` — выполнены, использовать только как справку

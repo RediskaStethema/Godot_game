@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://isr4820mtbyx"]
+
+[ext_resource type="Script" uid="uid://uysbttrho0e0" path="res://scenes/shop/ShopSlot.gd" id="1_hv7q8"]
+
+[node name="ShopSlot" type="PanelContainer" unique_id=71086715]
+script = ExtResource("1_hv7q8")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=472201209]
+layout_mode = 2
+
+[node name="UnitFaction" type="Label" parent="VBoxContainer" unique_id=1694588544]
+layout_mode = 2
+
+[node name="UnitName" type="Label" parent="VBoxContainer" unique_id=2111671637]
+layout_mode = 2
+
+[node name="UnitStats" type="Label" parent="VBoxContainer" unique_id=1196455292]
+layout_mode = 2
+
+[node name="BuyButton" type="Button" parent="VBoxContainer" unique_id=1619576440]
+layout_mode = 2

@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://0xtvbw4bb7lk"]
+
+[ext_resource type="Script" uid="uid://sgqm1yq3nh3x" path="res://scenes/battle/BattleScene.gd" id="1_1dyl0"]
+
+[node name="BattleScene" type="Node2D" unique_id=2112958674]
+script = ExtResource("1_1dyl0")
+
+[node name="Units" type="Node2D" parent="." unique_id=2071127431]
+position = Vector2(100, 90)
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=2133091448]
+
+[node name="StartButton" type="Button" parent="UI" unique_id=307714079]
+offset_left = 1030.0
+offset_top = 2.0
+offset_right = 1151.0
+offset_bottom = 60.0
+
+[node name="ResultLabel" type="Label" parent="UI" unique_id=2077341984]
+offset_left = 142.0
+offset_top = -2.0
+offset_right = 461.0
+offset_bottom = 55.0

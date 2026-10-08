@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://blr3ev1abcw3c"]
+
+[ext_resource type="Script" uid="uid://b4sshkls2gtfv" path="res://scripts/battle/Soldier.gd" id="1_8ukxe"]
+
+[node name="Soldier" type="Node2D" unique_id=384772147]
+script = ExtResource("1_8ukxe")
+
+[node name="Sprite" type="AnimatedSprite2D" parent="." unique_id=903744318]
+scale = Vector2(0.3, 0.3)
