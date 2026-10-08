@@ -14,6 +14,11 @@ var grid_width: int = MAX_KINGDOM_SIZE.x
 var grid_height: int = MAX_KINGDOM_SIZE.y
 # Открытые клетки королевства: tile → true
 var unlocked: Dictionary = {}
+# Цитадель — на фланге королевства, за рамкой (не занимает клетку под отряды).
+# Сверху места нет (HUD), поэтому не позади, а сбоку — внизу слева на экране.
+# Через ряд от рамки: башня не загораживает на экране клетки рамки над собой
+# и HP-бар не уходит под HUD.
+var citadel_tile: Vector2i = Vector2i(0, MAX_KINGDOM_SIZE.y + 1)
 # Зона врага (её тайлы не рисуются — это места построения)
 var enemy_width: int = 3
 var enemy_height: int = 3

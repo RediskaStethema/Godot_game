@@ -20,6 +20,8 @@
 - Лимита армии нет, только рука ≤ 10 карт
 - Королевство 3×3 → 4×4: каждую 3-ю волну при расстановке соседние клетки покупаются кликом (6 + 2×куплено Req); BattleManager.kingdom_tiles
 - Враги скрыты до «В БОЙ»
+- Цитадель (Citadel.gd): HP 1000 на забег; при гибели армии — штурм: враги бьют её атаками, она стреляет по площади; отбилась — победа, 0 HP — новый забег
+- Поле из пиксельного тайлсета assets/sprites/map_sprite (TerrainTiles.gd)
 
 **Критические правила кода:**
 1. Боевая логика — только через `tick(delta)` из BattleManager (FIXED_TICK=0.1), НЕ в `_process`
@@ -121,7 +123,7 @@ TODO/pass в коде: [список]
 |---|---|---|
 | ~~1~~ | ~~Добавить 5 оставшихся юнитов TDD (Librarian, Chaplain, Land Speeder, Dreadnought, Chapter Master)~~ ✅ | agent-units.md |
 | 2 | Реализовать bolter_turret (стреляет в ближайшего врага); после — вернуть здания в `CardFactory.build_pool()` и заменить `"building": pass` в `BattleScene._on_card_dropped` | создать agent-buildings.md |
-| 3 | Реализовать Цитадель с HP (враги атакуют если нет игрока) | создать agent-citadel.md |
+| ~~3~~ | ~~Реализовать Цитадель с HP (враги атакуют если нет игрока)~~ ✅ | — |
 | ~~4~~ | ~~Продажа карт за 1/3 цены, рука до 10 карт, карты не пропадают после боя~~ ✅ | agent-economy.md |
 | 5 | Карта забега (node-граф: бой/магазин/событие), 5 волн + босс на 5-й | создать agent-runmap.md |
 | 6 | Расширить карты до 20 MVP (10 Unit + 5 Buff + 3 Building + 2 Event) | agent-units.md |
@@ -228,7 +230,7 @@ print("Активные синергии: ", SynergyManager.get_active_synergy_n
 | Salvage | P1: Tier 3 и реликвии | API есть, источников нет (P1 — не MVP) |
 | Синергии | TDD MVP пороги | ✅ 3 базовых |
 | Здания | bolter_turret, fortress_wall | ❌ pass |
-| Цитадель | База с HP | ❌ |
+| Цитадель | База с HP | ✅ HP 1000, при гибели армии — бой цитадели с врагами, 0 HP — новый забег |
 | Карта забега | Node-граф | ❌ |
 | Карты | 20 MVP карт | 16 (12 squad, 2 building, 2 upgrade); Epic: Dreadnought, Chapter Master |
 | Драфт | 3 карты → выбрать 1 | 4 оффера, покупка любых |

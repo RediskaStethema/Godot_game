@@ -23,6 +23,17 @@ const TILE_BASE_COST: int = 6
 const TILE_COST_STEP: int = 2
 var kingdom_tiles: Array[Vector2i] = []
 var tiles_bought: int = 0
+
+# Цитадель: HP живёт весь забег. Если армия игрока погибла, начинается штурм —
+# бой цитадели с уцелевшими врагами: враги бьют её своими атаками, она стреляет
+# в ответ (статы — в Citadel.gd). Все враги убиты — волна отбита; HP = 0 — забег окончен.
+const CITADEL_MAX_HP: float = 1000.0
+var citadel_hp: float = CITADEL_MAX_HP
+var citadel: Node2D = null          # цитадель текущего боя (ставит BattleScene)
+var siege_started: bool = false     # армия игрока пала, враги штурмуют цитадель
+
+signal citadel_hp_changed(hp: float)
+signal citadel_destroyed
 # нам нужно различать "ещё не начался" и "уже закончился"
 enum BattlePhase { IDLE, RUNNING, FINISHED }
 var player_units: Array[UnitData] = []
@@ -46,6 +57,7 @@ func start_battle() -> void:
 	phase = BattlePhase.RUNNING
 	winner_team = -1
 	_accumulator = 0.0
+	siege_started = false
 	emit_signal("battle_started")
 	print("BattleManager: бой начался")
 
@@ -83,20 +95,29 @@ func _battle_tick() -> void:
 	var squads = SquadRegistry.get_all_alive_squads()
 	for squad in squads:
 		squad.tick(FIXED_TICK)
+	if siege_started and has_citadel():
+		citadel.tick(FIXED_TICK)
 	_check_battle_end()
 
 func _check_battle_end() -> void:
 	var team0_alive = SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER).size() > 0
 	var team1_alive = SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_ENEMY).size() > 0
 
-	if team0_alive and team1_alive:
+	# Цитадель тоже сторона игрока: пока она стоит, игрок не проиграл
+	var citadel_alive = has_citadel() and citadel_hp > 0.0
+	var player_alive = team0_alive or citadel_alive
+	if team1_alive and player_alive:
+		# Армия пала, цитадель стоит — штурм: бой цитадели с врагами
+		if not team0_alive and not siege_started:
+			siege_started = true
+			print("BattleManager: армия пала — штурм цитадели")
 		return
 
 	phase = BattlePhase.FINISHED
 
-	if team0_alive and not team1_alive:
-		winner_team = GameConstants.TEAM_PLAYER
-	elif team1_alive and not team0_alive:
+	if player_alive and not team1_alive:
+		winner_team = GameConstants.TEAM_PLAYER   # в т.ч. цитадель отбила штурм
+	elif team1_alive:
 		winner_team = GameConstants.TEAM_ENEMY
 	else:
 		winner_team = -1
@@ -123,6 +144,32 @@ func reset_kingdom() -> void:
 	for row in range(START_KINGDOM_SIZE.y):
 		for col in range(START_KINGDOM_SIZE.x):
 			kingdom_tiles.append(Vector2i(col, row))
+
+# -------------------------------------------------------
+# ЦИТАДЕЛЬ
+# -------------------------------------------------------
+func has_citadel() -> bool:
+	return is_instance_valid(citadel)
+
+func damage_citadel(amount: float) -> void:
+	if citadel_hp <= 0.0:
+		return
+	citadel_hp = maxf(citadel_hp - amount, 0.0)
+	emit_signal("citadel_hp_changed", citadel_hp)
+	if citadel_hp <= 0.0:
+		print("BattleManager: цитадель пала")
+		emit_signal("citadel_destroyed")
+
+# Новый забег: цитадель, королевство, армия, рука, экономика, синергии
+func reset_run() -> void:
+	citadel_hp = CITADEL_MAX_HP
+	emit_signal("citadel_hp_changed", citadel_hp)
+	reset_kingdom()
+	player_units.clear()
+	player_placements.clear()
+	pending_cards.clear()
+	EconomyManager.reset()
+	SynergyManager.reset()
 
 # Волна, в которой можно расширять королевство
 func can_expand_kingdom() -> bool:

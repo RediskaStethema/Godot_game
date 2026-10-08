@@ -153,7 +153,10 @@ func _state_idle() -> void:
 func _state_move(delta: float) -> void:
 	var enemies = SoldierRegistry.get_alive_soldiers_of_team(1 - team)
 	if enemies.is_empty():
-		_play_animation("idle")
+		if _is_sieging():
+			_march_on_citadel(delta)
+		else:
+			_play_animation("idle")
 		return
 
 	var nearest = _get_nearest(enemies)
@@ -171,6 +174,38 @@ func _state_move(delta: float) -> void:
 	# Строй рассыпается только в CHASE, когда враг в поле зрения.
 	_move_towards(center + formation_offset, delta)
 
+# -------------------------------------------------------
+# ШТУРМ ЦИТАДЕЛИ — армия игрока пала, враги бьются с цитаделью
+# -------------------------------------------------------
+func _is_sieging() -> bool:
+	return team == GameConstants.TEAM_ENEMY and BattleManager.has_citadel() \
+		and BattleManager.citadel_hp > 0.0 \
+		and SoldierRegistry.get_alive_soldiers_of_team(1 - team).is_empty()
+
+func _citadel_in_range() -> bool:
+	return global_position.distance_to(BattleManager.citadel.global_position) \
+		<= current_attack_range + Citadel.HIT_RADIUS
+
+func _march_on_citadel(delta: float) -> void:
+	if _citadel_in_range():
+		transition_to(State.ATTACK)
+	else:
+		_move_towards(BattleManager.citadel.global_position, delta)
+
+# ATTACK по цитадели: тот же таймер и урон, что по бойцам
+func _attack_citadel(delta: float) -> void:
+	var citadel = BattleManager.citadel
+	if not _citadel_in_range():
+		transition_to(State.MOVE)
+		return
+	_face(citadel.global_position - global_position)
+	attack_timer -= delta
+	if attack_timer <= TIMER_EPSILON:
+		attack_timer = 1.0 / current_attack_speed
+		citadel.take_hit(_roll_damage())
+		sprite.stop()
+		sprite.play("attack")
+
 # Преследуем конкретную цель до дальности атаки
 func _state_chase(delta: float) -> void:
 	if not _has_valid_target():
@@ -185,6 +220,9 @@ func _state_chase(delta: float) -> void:
 		_move_towards(target.global_position, delta)
 
 func _state_attack(delta: float) -> void:
+	if _is_sieging():
+		_attack_citadel(delta)
+		return
 	if not _has_valid_target():
 		target = _find_target()
 		if not target:
@@ -340,16 +378,16 @@ func apply_knockback(direction: Vector2, force: float) -> void:
 # -------------------------------------------------------
 func _do_attack() -> void:
 	if is_instance_valid(target):
-		var damage = current_damage * (1.0 + get_aura_damage_bonus())
-		var variance = damage * data.damage_variance
-		var actual_damage = randf_range(
-			damage - variance,
-			damage + variance
-		)
-		target.take_damage(actual_damage)
+		target.take_damage(_roll_damage())
 		_apply_on_hit_effects()
 		sprite.stop()
 		sprite.play("attack")
+
+# Урон одного удара: аура союзников + разброс damage_variance
+func _roll_damage() -> float:
+	var damage = current_damage * (1.0 + get_aura_damage_bonus())
+	var variance = damage * data.damage_variance
+	return randf_range(damage - variance, damage + variance)
 
 # Эффекты попадания из данных юнита (Librarian — стан, Dreadnought — отбрасывание)
 func _apply_on_hit_effects() -> void:

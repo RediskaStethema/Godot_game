@@ -15,6 +15,7 @@ var player_soldiers_at_start: int = 0   # для бонуса «победа б�
 var synergy_label: Label = null
 var hud: PanelContainer = null
 var requisition_label: Label = null
+var citadel_label: Label = null
 var merge_menu: PanelContainer = null   # выбор «улучшить / вылечить» отряд его картой
 
 # -------------------------------------------------------
@@ -43,12 +44,20 @@ func _ready() -> void:
 	renderer.occupied_tiles_enemy.clear()
 	renderer.queue_redraw()
 
+	_spawn_citadel()
 	_place_enemy_squads()
 	_place_player_squads()
 	_update_synergy_preview()
 	_update_expansion()
 	if BattleManager.can_expand_kingdom() and not iso_grid.get_expansion_tiles().is_empty():
-		_show_message("Можно расширить королевство — кликните по зелёной клетке")
+		_show_message("Расширение: кликните по зелёной клетке")
+
+# Цитадель — в общем контейнере юнитов, чтобы сортироваться по глубине с бойцами
+func _spawn_citadel() -> void:
+	var citadel = Citadel.new()
+	citadel.position = iso_grid.tile_to_screen(iso_grid.citadel_tile)
+	units_container.add_child(citadel)
+	BattleManager.citadel = citadel
 
 # Область экрана под сетки: между HUD сверху и скамейкой снизу
 const PLAY_AREA_MARGIN: float = 40.0
@@ -212,10 +221,16 @@ func _apply_commander_bonus(soldiers: Array) -> void:
 # КОНЕЦ БОЯ
 # -------------------------------------------------------
 func _on_battle_ended(winner_team: int) -> void:
+	if BattleManager.citadel_hp <= 0:
+		_game_over()
+		return
 	if winner_team == GameConstants.TEAM_PLAYER:
 		var bonuses = _calculate_victory_bonuses()
 		var income = EconomyManager.give_round_income(true, bonuses)
-		result_label.text = "Победа! +%d Req" % income
+		if BattleManager.siege_started:
+			result_label.text = "Цитадель выстояла! +%d Req" % income
+		else:
+			result_label.text = "Победа! +%d Req" % income
 		_save_survivors()
 	elif winner_team == GameConstants.TEAM_ENEMY:
 		var income = EconomyManager.give_round_income(false)
@@ -233,6 +248,15 @@ func _on_battle_ended(winner_team: int) -> void:
 	SquadRegistry.clear()
 	SoldierRegistry.clear()
 	await get_tree().create_timer(2.0).timeout
+	get_tree().change_scene_to_file("res://scenes/shop/ShopScene.tscn")
+
+# Цитадель пала — забег окончен, начинаем новый с магазина
+func _game_over() -> void:
+	result_label.text = "Цитадель пала! Забег окончен — волна %d" % EconomyManager.round_number
+	SquadRegistry.clear()
+	SoldierRegistry.clear()
+	await get_tree().create_timer(3.0).timeout
+	BattleManager.reset_run()
 	get_tree().change_scene_to_file("res://scenes/shop/ShopScene.tscn")
 
 # Бонусы TDD к доходу за победу. Кап +8 применяет EconomyManager.
@@ -274,10 +298,17 @@ func _build_ui() -> void:
 	row.add_child(requisition_label)
 	_update_requisition(EconomyManager.requisition)
 	EconomyManager.requisition_changed.connect(_update_requisition)
+	citadel_label = UITheme.make_label("", "ValueLabel")
+	row.add_child(citadel_label)
+	_update_citadel_label(BattleManager.citadel_hp)
+	BattleManager.citadel_hp_changed.connect(_update_citadel_label)
 
 	result_label.reparent(row)
 	result_label.theme_type_variation = "HeaderLabel"
 	result_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Длинные подсказки обрезаются, а не выталкивают кнопку «В БОЙ» за экран
+	result_label.clip_text = true
+	result_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	result_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	result_label.text = "Расставьте отряды"
@@ -308,6 +339,11 @@ func _build_ui() -> void:
 
 func _update_requisition(amount: int) -> void:
 	requisition_label.text = "%d Req" % amount
+
+func _update_citadel_label(hp: float) -> void:
+	citadel_label.text = "Цитадель %d/%d" % [ceili(hp), int(BattleManager.CITADEL_MAX_HP)]
+	citadel_label.add_theme_color_override("font_color",
+		UITheme.RED_BRIGHT if hp <= BattleManager.CITADEL_MAX_HP / 4 else UITheme.GOLD_BRIGHT)
 
 # Во время расстановки — только предпросмотр, бойцам ничего не применяем
 func _update_synergy_preview() -> void:

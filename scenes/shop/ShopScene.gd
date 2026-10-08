@@ -22,6 +22,7 @@ var army_details: Label = null   # список отрядов-ветерано�
 var hand_title: Label = null
 var hand_row: HBoxContainer = null
 var message_label: Label = null
+var citadel_label: Label = null
 
 func _ready() -> void:
 	_build_layout()
@@ -210,7 +211,11 @@ func _build_layout() -> void:
 	round_label.theme_type_variation = "HeaderLabel"
 	requisition_label.reparent(hud_row)
 	requisition_label.theme_type_variation = "ValueLabel"
-	for l in [round_label, requisition_label]:
+	citadel_label = UITheme.make_label("Цитадель %d/%d" % [ceili(BattleManager.citadel_hp), int(BattleManager.CITADEL_MAX_HP)], "ValueLabel")
+	if BattleManager.citadel_hp <= BattleManager.CITADEL_MAX_HP / 4:
+		citadel_label.add_theme_color_override("font_color", UITheme.RED_BRIGHT)
+	hud_row.add_child(citadel_label)
+	for l in [round_label, requisition_label, citadel_label]:
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	$TopBar.hide()
 
