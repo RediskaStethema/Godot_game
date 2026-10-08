@@ -1,3 +1,31 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+*.tmp
+*.translation
+
+
+/build/
+/export/
+*.exe
+*.pck
+*.apk
+*.aab
+*.zip
+
+# Сторонние аддоны (не подключены к проекту)
+/godot_agent-*/
+/open_godot_mcp/
+
+# История чатов godot_agent, если аддон когда-нибудь поставят в addons/
+/addons/godot_agent/conversations/
+
+# Локальные настройки Claude Code
+.claude/settings.local.json
+
+# Мусор ОС и редакторов
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
