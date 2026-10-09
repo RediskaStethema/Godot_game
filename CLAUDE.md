@@ -22,7 +22,7 @@ scripts/
   autoload/
 	BattleManager.gd    — управляет боем, хранит player_units, pending_cards
 	EconomyManager.gd   — requisition, round_number, доход
-	ShopManager.gd      — генерация офферов магазина
+	ShopManager.gd      — набор магазина (4 карты, RunManager.rng), обновление за Req, бесплатная карта 1-й волны, цена к оплате get_price()
 	SquadRegistry.gd    — реестр всех Squad на сцене
 	SoldierRegistry.gd  — реестр всех Soldier на сцене
 	SynergyManager.gd   — синергии по тегам (TDD MVP: marine x3/x6, elite x2), доход +2 за 3 marine
@@ -54,7 +54,7 @@ scripts/
 |---|---|
 | BattleManager | player_units: Array[UnitData], pending_cards: Array[CardData], player_placements: Dictionary |
 | EconomyManager | requisition: int, round_number: int |
-| ShopManager | — |
+| ShopManager | current_offers, open_shop() (новый магазин), try_reroll() / get_reroll_cost(), get_price(card), try_purchase(slot), free_cards_left |
 | SquadRegistry | register(squad), get_all_alive_squads(), get_alive_squads_of_team(team) |
 | SoldierRegistry | register(soldier), get_alive_soldiers_of_team(team) |
 | SynergyManager | calculate_synergies(soldiers), apply_synergies_to_soldiers(soldiers), income_bonus, epic_discount_pending |
@@ -83,6 +83,7 @@ scripts/
 - Бонусы: «без потерь» (+5), синергия (+2 за 3 marine), +3 за каждого элитного врага (тег `elite`: Hellbrute, Champion, Chaos Lord)
 - `EconomyManager.add_requisition()` и `BattleManager.heal_citadel()` — разовые награды вне боя (раньше — события), round_number не трогают
 - Рука: `BattleManager.pending_cards`, максимум `BattleManager.MAX_HAND_SIZE = 10`; переносится между раундами (после боя не очищается)
+- Магазин (решение пользователя вместо драфта TDD «3 → 1»): 4 карты, каждый магазин — новый набор (`ShopManager.open_shop()`). Обновить набор — `REROLL_BASE_COST = 5` Req, каждое следующее в этом магазине ×`REROLL_COST_GROWTH = 1.13` (5, 6, 6, 7, 8, 9, 10, 12…), в новом магазине снова 5. В магазине 1-й волны первая карта бесплатно (`FIRST_WAVE_FREE_CARDS = 1`). Цену к оплате считает `ShopManager.get_price()` (бесплатная → 0, иначе скидка Epic)
 - Продажа карт в магазине: `EconomyManager.sell_card()` = `cost / 3` (округление вниз) — решение пользователя, в TDD было ×0.5. Цена Epic со скидкой не меняет `card.cost`
 - Salvage: API есть (`add_salvage`, кап 5, `try_spend(req, sal)`), источников нет — P1 по TDD
 - Лимита армии нет — ограничена только рука (`MAX_HAND_SIZE = 10`)
@@ -104,8 +105,9 @@ scripts/
 - Здания: ✅ `Building.gd` (агент `docs/task-briefs/agent-buildings.md`). Занимают клетку королевства, неуязвимы, стоят между раундами (`BattleManager.player_buildings`: CardData → Vector2i), тикают от BattleManager. Bolter Turret (Rare 7, в TDD нет) — 15 урона, 1.5/с, 300 px. Fortress Wall (Common 5) — щит цитадели +200 на каждый бой (`BattleManager.citadel_shield`, TDD «+20 HP базе» ×10) и замедление врагов ×0.6 в 130 px (`Building.slow_mult_at` в `Soldier._move_towards`). Plasma Generatorium — нет
 - Цитадель: ✅ HP 1000 на весь забег (`BattleManager.citadel_hp`, float). Армия пала → `siege_started` → штурм: бой цитадели с врагами. Враги идут к ней и бьют обычными атаками в ATTACK (`Soldier._is_sieging / _attack_citadel`, дальность + `Citadel.HIT_RADIUS`); цитадель тикает от BattleManager и бьёт по площади ближайшего врага (`Citadel.DAMAGE/ATTACK_SPEED/ATTACK_RANGE/SPLASH_RADIUS`). Враги перебиты → победа («Цитадель выстояла», доход за победу); HP 0 → `BattleManager.reset_run()` и новый забег. Catch-up бонус TDD — нет
 - Синергии: ✅ 3 MVP из TDD (frontline/backline позиции — нет)
-- Карты: 16 из 20 MVP (12 squad, 2 building, 2 upgrade); пул магазина 30 копий: common 18 / rare 9 / epic 3
-- Забег: ✅ линейная цепочка из 15 волн, магазин перед каждой, мини-босс на 5/10, главный босс на 15, экраны победы и поражения. Chaos: `chaos_marine` + `chaos_champion` (элита) + `chaos_hellbrute` (мини-босс) + `chaos_lord` (босс) — масштаб статов/размера/тинта, без своих спрайтов; кривая волн подобрана симуляцией под армию из Common; Rare/Epic карты по цене проигрывают Common — см. tests/balance_sim.gd. Экран карты с выбором пути (`RunMapScene`) и события (`RunEvents`) удалены — описание и полный код в `docs/archive/run-map-and-events.md`
+- Карты: 15 из 20 MVP (11 squad, 2 building, 2 upgrade); пул магазина 30 копий: common 18 (Tactical 7, Assault 5, Scout 4, Wall 2) / rare 9 / epic 3. Враги (`chaos_*`) в пул не входят
+- Баланс карт (решение пользователя, статы отличаются от TDD): Rare/Epic подобраны по паритету HP×DPS за Req с Tactical (карта вдвое дороже ≈ вдвое больше HP и урона), способности — сверху; Scout 4 Req ×3; улучшения 7 Req (+25% HP / +20% урона)
+- Забег: ✅ линейная цепочка из 15 волн, магазин перед каждой, мини-босс на 5/10, главный босс на 15, экраны победы и поражения. Chaos: `chaos_marine` + `chaos_champion` (элита) + `chaos_hellbrute` (мини-босс) + `chaos_lord` (босс) — масштаб статов/размера/тинта, без своих спрайтов; кривая волн и карты подобраны симуляцией `tests/balance_sim.gd` (идеальный игрок проходит 1–14, босс 15 — пик: Tactical 3/4, Rare/Epic 1/4). Экран карты с выбором пути (`RunMapScene`) и события (`RunEvents`) удалены — описание и полный код в `docs/archive/run-map-and-events.md`
 
 ## Правила данных юнитов
 - `UnitData` — шаблон; в бою меняются только runtime-поля Soldier: `max_hp`, `current_damage`, `current_move_speed`, `current_attack_range`, `current_attack_speed`, `current_heal_per_second`

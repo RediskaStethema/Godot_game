@@ -23,6 +23,7 @@ var hand_title: Label = null
 var hand_row: HBoxContainer = null
 var message_label: Label = null
 var citadel_label: Label = null
+var reroll_button: Button = null   # обновить набор карт (ShopManager.try_reroll)
 var _empty_army_warned: bool = false   # уход без армии — со второго нажатия
 
 func _ready() -> void:
@@ -32,6 +33,7 @@ func _ready() -> void:
 	EconomyManager.requisition_changed.connect(_update_requisition_label)
 	ShopManager.shop_refreshed.connect(_populate_shop)
 	battle_button.pressed.connect(_on_battle_pressed)
+	reroll_button.pressed.connect(_on_reroll_pressed)
 
 	# Загружаем выживших
 	for unit in BattleManager.player_units:
@@ -46,7 +48,10 @@ func _ready() -> void:
 	_refresh_hand()
 	round_label.text = "Волна %d/%d" % [mini(EconomyManager.round_number, RunManager.get_total_waves()),
 		RunManager.get_total_waves()]
-	ShopManager.refresh_shop()
+	# Каждый новый магазин — новый набор, цена обновления снова базовая
+	ShopManager.open_shop()
+	if ShopManager.free_cards_left > 0:
+		_show_message("Первая волна: одна карта бесплатно")
 
 func _populate_shop(offers: Array) -> void:
 	for child in shop_slots.get_children():
@@ -57,29 +62,21 @@ func _populate_shop(offers: Array) -> void:
 		slot.setup(offers[i], i)
 		slot.set_hand_full(_is_hand_full())
 		slot.purchase_requested.connect(_on_purchase_requested)
+	_refresh_reroll_button()
 
 func _on_purchase_requested(slot_index: int) -> void:
-	# Сначала смотрим что за карта — без списания денег
 	if slot_index >= ShopManager.current_offers.size():
 		return
-	var card_preview = ShopManager.current_offers[slot_index]
 
 	# Проверяем лимит руки ДО покупки — деньги не списываем вообще
 	if _is_hand_full():
 		_show_message("Рука полна (%d/%d) — продайте лишние карты" % [purchased_cards.size(), BattleManager.MAX_HAND_SIZE])
 		return
 
-	# Скидка синергии (elite x2) на Epic карту — списываем цену со скидкой,
-	# а в карте оставляем изначальную (от неё считается цена продажи)
-	var original_cost = card_preview.cost
-	card_preview.cost = SynergyManager.get_discounted_cost(card_preview)
-
-	# Только теперь покупаем
+	# Цену (бесплатная карта 1-й волны, скидка Epic) считает ShopManager
 	var card = ShopManager.try_purchase(slot_index)
-	card_preview.cost = original_cost
 	if not card:
 		return
-	SynergyManager.consume_discount(card)
 
 	# Все типы карт идут в руку: отряды и здания выкладываются на тайл,
 	# улучшения — бросаются на свой отряд в бою
@@ -184,6 +181,24 @@ func _update_army_label() -> void:
 
 func _update_requisition_label(amount: int) -> void:
 	requisition_label.text = "%d Req" % amount
+	_refresh_reroll_button()
+
+# -------------------------------------------------------
+# ОБНОВЛЕНИЕ НАБОРА
+# -------------------------------------------------------
+func _on_reroll_pressed() -> void:
+	var cost = ShopManager.get_reroll_cost()
+	if not ShopManager.try_reroll():
+		_show_message("Не хватает Requisition: обновление стоит %d" % cost)
+		return
+	_show_message("Набор обновлён (−%d Req), следующее обновление — %d Req" % [cost, ShopManager.get_reroll_cost()])
+
+func _refresh_reroll_button() -> void:
+	if reroll_button == null:
+		return
+	var cost = ShopManager.get_reroll_cost()
+	reroll_button.text = "Обновить · %d Req" % cost
+	reroll_button.disabled = not EconomyManager.can_afford(cost)
 
 # -------------------------------------------------------
 # ВЁРСТКА (ноды из .tscn переставляем кодом, .tscn вручную не трогаем)
@@ -234,6 +249,15 @@ func _build_layout() -> void:
 	var title: Label = $ShopPanel/ShopTitle
 	title.text = "РЕКВИЗИЦИЯ"
 	title.theme_type_variation = "HeaderLabel"
+	# Заголовок магазина + кнопка обновления набора справа
+	var header = HBoxContainer.new()
+	shop_panel.add_child(header)
+	shop_panel.move_child(header, title.get_index())
+	title.reparent(header)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reroll_button = Button.new()
+	reroll_button.custom_minimum_size = Vector2(200, 40)
+	header.add_child(reroll_button)
 	shop_slots.add_theme_constant_override("separation", 18)
 	shop_slots.size_flags_vertical = Control.SIZE_EXPAND_FILL
 

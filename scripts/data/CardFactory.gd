@@ -34,30 +34,17 @@ static func assault_squad() -> CardData:
 	c.unit_count = 2
 	return c
 
-static func chaos_warband() -> CardData:
-	var c = CardData.new()
-	c.id = "chaos_warband"
-	c.title = "Chaos Warband"
-	c.description = "Берсерки Хаоса жаждут крови"
-	c.faction = "chaos"
-	c.cost = 5
-	c.rarity = "common"
-	c.card_type = "squad"
-	c.unit_factory_id = "chaos_marine"
-	c.unit_count = 4
-	return c
-
 static func scout_squad() -> CardData:
 	var c = CardData.new()
 	c.id = "scout_squad"
 	c.title = "Scout Squad"
 	c.description = "Быстрые стрелки, добивают раненых"
 	c.faction = "space_marines"
-	c.cost = 3
+	c.cost = 4
 	c.rarity = "common"
 	c.card_type = "squad"
 	c.unit_factory_id = "scout_marine"
-	c.unit_count = 4
+	c.unit_count = 3
 	return c
 
 static func devastator_squad() -> CardData:
@@ -83,7 +70,7 @@ static func terminator_squad() -> CardData:
 	c.rarity = "rare"
 	c.card_type = "squad"
 	c.unit_factory_id = "terminator"
-	c.unit_count = 1
+	c.unit_count = 2
 	return c
 
 static func apothecary_card() -> CardData:
@@ -116,7 +103,7 @@ static func chaplain_card() -> CardData:
 	var c = CardData.new()
 	c.id = "chaplain"
 	c.title = "Chaplain"
-	c.description = "Аура: союзники ближнего боя рядом +15% урона"
+	c.description = "Аура: союзники ближнего боя рядом +20% урона"
 	c.faction = "space_marines"
 	c.cost = 8
 	c.rarity = "rare"
@@ -155,7 +142,7 @@ static func chapter_master_card() -> CardData:
 	var c = CardData.new()
 	c.id = "chapter_master"
 	c.title = "Chapter Master"
-	c.description = "Командир: +10% урона всей армии"
+	c.description = "Командир: +15% урона всей армии"
 	c.faction = "space_marines"
 	c.cost = 16
 	c.rarity = "epic"
@@ -211,13 +198,13 @@ static func blessed_armour() -> CardData:
 	var c = CardData.new()
 	c.id = "blessed_armour"
 	c.title = "Blessed Armour"
-	c.description = "Отряд Marines: +20% HP"
+	c.description = "Отряд Marines: +25% HP"
 	c.faction = "space_marines"
-	c.cost = 10
+	c.cost = 7
 	c.rarity = "rare"
 	c.card_type = "upgrade"
 	c.upgrade_type = "hp_boost"
-	c.upgrade_value = 0.2
+	c.upgrade_value = 0.25
 	c.affects_tag = "marine"
 	return c
 
@@ -225,13 +212,13 @@ static func battle_fury() -> CardData:
 	var c = CardData.new()
 	c.id = "battle_fury"
 	c.title = "Battle Fury"
-	c.description = "Отряд Marines: +15% урона"
+	c.description = "Отряд Marines: +20% урона"
 	c.faction = "space_marines"
-	c.cost = 12
+	c.cost = 7
 	c.rarity = "rare"
 	c.card_type = "upgrade"
 	c.upgrade_type = "damage_boost"
-	c.upgrade_value = 0.15
+	c.upgrade_value = 0.20
 	c.affects_tag = "marine"
 	return c
 
@@ -245,10 +232,10 @@ static func battle_fury() -> CardData:
 static func build_pool() -> Array:
 	var pool = []
 	# Common — 18 копий
-	for i in range(6): pool.append(tactical_squad())
-	for i in range(4): pool.append(assault_squad())
+	# Враги (chaos_*) в пул игрока не входят
+	for i in range(7): pool.append(tactical_squad())
+	for i in range(5): pool.append(assault_squad())
 	for i in range(4): pool.append(scout_squad())
-	for i in range(2): pool.append(chaos_warband())
 	for i in range(2): pool.append(fortress_wall())
 	# Rare — 9 копий
 	pool.append(devastator_squad())

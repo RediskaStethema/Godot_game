@@ -3,8 +3,8 @@ extends SceneTree
 # Симуляция баланса забега: для каждой волны 1..15 собирается армия, которую
 # игрок может купить на накопленный доход (модель ниже), и прогоняется бой
 # без рендера. Запуск:
-#   godot --headless --path . -s tests/balance_sim.gd -- [стратегия] [прогонов]
-# Стратегии: tactical (только Tactical), mixed (смешанная армия), all (обе).
+#   godot --headless --path . -s tests/balance_sim.gd -- [стратегия] [прогонов] [с волны] [по волну]
+# Стратегии: tactical (только Tactical), mixed (смешанная армия), elite (Rare/Epic), all (все).
 #
 # Модель игрока (оптимистичная — верхняя оценка силы):
 #   * каждую волну выигрывает, бонус к доходу BONUS_NORMAL / BONUS_BOSS;
@@ -25,6 +25,10 @@ const STRATEGIES = {
 		"terminator_squad", "apothecary", "dreadnought", "chaplain", "chapter_master",
 		"tactical_squad", "assault_squad", "devastator_squad", "librarian", "tactical_squad",
 		"terminator_squad", "land_speeder"],
+	# В основном Rare/Epic, Tactical — только если на дорогие не хватает
+	"elite": ["terminator_squad", "devastator_squad", "dreadnought", "librarian",
+		"chaplain", "apothecary", "chapter_master", "land_speeder", "terminator_squad",
+		"devastator_squad", "dreadnought", "tactical_squad"],
 }
 # Карты-улучшения: по одной каждого вида на отряд
 const UPGRADES: Array[String] = ["blessed_armour", "battle_fury"]
@@ -36,6 +40,8 @@ var ended := false
 var winner := -99
 var game_time := 0.0
 var cards := {}
+var first_wave := 1
+var last_wave := WAVES
 # Autoload-ы в скрипте -s не видны по имени при компиляции — берём узлы
 var em: Node
 var bm: Node
@@ -57,6 +63,8 @@ func _main() -> void:
 	bm = root.get_node("BattleManager")
 	var strategy: String = args[0] if args.size() > 0 else "all"
 	var runs: int = int(args[1]) if args.size() > 1 else 3
+	first_wave = int(args[2]) if args.size() > 2 else 1
+	last_wave = int(args[3]) if args.size() > 3 else WAVES
 	for c in CardFactory.build_pool():
 		cards[c.id] = c
 	Engine.time_scale = TIME_SCALE
@@ -155,7 +163,7 @@ func _build_army(strategy: String, budget: int, tiles: int) -> Dictionary:
 func _run_strategy(strategy: String, runs: int) -> void:
 	print("\n=== Стратегия: %s, прогонов на волну: %d ===" % [strategy, runs])
 	print("волна | тип      | Req  | клет | отр | бойц игрока | врагов: отр/бойц/HP×  | побед | выжило | урон цитадели | время, с")
-	for wave in range(1, WAVES + 1):
+	for wave in range(first_wave, last_wave + 1):
 		var b = _budget(wave)
 		var wins = 0
 		var survived = 0.0

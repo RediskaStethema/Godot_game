@@ -29,10 +29,11 @@ const MINIBOSS = {
 	"elite_wave_div": 5,    # волна 5 — 1 элитный отряд, волна 10 — 2
 }
 
-# Главный босс (последняя волна): Chaos Lord заменяет передний отряд обычной волны
+# Главный босс (последняя волна): Chaos Lord заменяет передние отряды обычной волны
 const BOSS = {
 	"unit": "chaos_lord",
 	"soldiers": 1,
+	"replaces_squads": 2,
 }
 
 static func get_stat_mult(wave: int) -> float:
@@ -53,7 +54,7 @@ static func build(wave: int, node_type: String, max_squads: int) -> Array[Dictio
 	match node_type:
 		RunMapNode.BOSS:
 			squads.append({"unit": BOSS["unit"], "count": BOSS["soldiers"], "mult": mult})
-			replaced = 1
+			replaced = BOSS["replaces_squads"]
 		RunMapNode.MINIBOSS:
 			squads.append({"unit": MINIBOSS["unit"], "count": MINIBOSS["soldiers"], "mult": mult})
 			var elites = MINIBOSS["elite_base"] + wave / MINIBOSS["elite_wave_div"]

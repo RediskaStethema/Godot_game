@@ -86,7 +86,7 @@ func _make_portrait(data: CardData) -> Control:
 	return frame
 
 func _cost() -> int:
-	return SynergyManager.get_discounted_cost(card_data)
+	return ShopManager.get_price(card_data)
 
 func set_hand_full(full: bool) -> void:
 	hand_full = full
@@ -98,7 +98,7 @@ func _refresh_button() -> void:
 		buy_button.text = "Рука полна"
 		buy_button.disabled = true
 		return
-	buy_button.text = "Купить · %d Req" % cost
+	buy_button.text = "Взять бесплатно" if cost == 0 else "Купить · %d Req" % cost
 	buy_button.disabled = not EconomyManager.can_afford(cost)
 
 func _on_buy_pressed() -> void:
