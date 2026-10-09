@@ -11,17 +11,21 @@ model: sonnet
 ## Окружение
 - Godot: `C:/Godot/Godot_v4.6.2-stable_win64_console.exe` (в Bash: `GODOT="/c/Godot/Godot_v4.6.2-stable_win64_console.exe"`)
 - Проект: `C:/Godot_Projects/wh-40kings` (`--path .`)
-- Цикл: ShopScene → BattleScene → ShopScene
+- Цикл: ShopScene (главная сцена) → BattleScene → ShopScene следующей волны, 15 волн, переходы через `RunManager.advance()`
+- Постоянные тесты — `tests/` (не удалять!): `tests/test_run.gd` — цепочка забега, бои обычный/мини-босс/босс/штурм, расширение королевства; `tests/balance_sim.gd` — баланс по волнам (долгий, гонять только при изменении баланса)
+- Шум в логе из стороннего `godot_agent-*/` (Parse Error, `addons/godot_agent`) — не относится к игре, игнорировать
 
 ## Порядок проверки
 1. **Что изменилось**: `git status` и `git diff` — какие системы затронуты.
-2. **Парсинг и импорт**: `"$GODOT" --headless --path . --import 2>&1 | grep -iE "error|parse|failed"`.
-3. **Запуск**: `"$GODOT" --headless --path . --quit-after 600 2>&1 | grep -iE "SCRIPT ERROR|ERROR|WARNING"` — магазин стартует без ошибок.
+2. **Регресс забега**: `"$GODOT" --headless --path . -s tests/test_run.gd 2>&1 | grep -E "^\[|chain|ensure|expansion|buy tile|ERROR|SCRIPT"` — `chain ok: true`, у каждого боя `ended_count=1`, расширение `[3, 6, 9, 12, 15]`.
+3. **Парсинг и импорт**: `"$GODOT" --headless --path . --import 2>&1 | grep -iE "error|parse|failed"`.
+4. **Запуск**: `"$GODOT" --headless --path . --quit-after 600 2>&1 | grep -iE "SCRIPT ERROR|ERROR|WARNING"` — магазин стартует без ошибок.
    Альтернатива — `mcp__godot__run_project` + `mcp__godot__get_debug_output`, затем обязательно `mcp__godot__stop_project`.
-4. **Тест-сценарий** для затронутой системы: временный `res://_test_<тема>.gd` (`extends SceneTree`, логика в `_initialize()`, autoload'ы через `root.get_node("BattleManager")`, в конце `quit()`), запуск `"$GODOT" --headless --path . -s res://_test_<тема>.gd`.
+5. **Тест-сценарий** для затронутой системы: временный `res://_tmp_test_<тема>.gd` (`extends SceneTree`, логика в `_initialize()`, autoload'ы только через `root.get_node("BattleManager")` — по имени они в `-s` скриптах не компилируются; классы `Squad`/`Soldier` не упоминать, проверять через `get("поле")`; в конце `quit()`), запуск `"$GODOT" --headless --path . -s res://_tmp_test_<тема>.gd`.
    - Для проверок с сеткой/позициями — без `--headless` (в headless окно 64×64 и раскладка IsoGrid искажается).
    - Бой гоняй с лимитом тиков: не дождался `battle_ended` → это баг «вечный бой».
-   - После прогона ОБЯЗАТЕЛЬНО удали `_test_*.gd` и их `.uid`.
+   - После победы BattleScene сама уходит в магазин (`RunManager.advance()` через 2 с) — перед `queue_free()` сцены проверяй `is_instance_valid`.
+   - После прогона ОБЯЗАТЕЛЬНО удали `_tmp_test_*.gd` и их `.uid`. Файлы в `tests/` не трогай.
 
 ## Регрессионные проверки (по затронутым системам)
 - Покупка карты, лимит руки `BattleManager.MAX_HAND_SIZE = 10`, продажа = `cost / 3`.
@@ -30,7 +34,8 @@ model: sonnet
 - Доход за победу = `10 + wave×2 + min(bonuses, 8)`; `round_number` растёт ровно на 1.
 - Выжившие возвращаются на свои тайлы, `saved_hp` — доли (0..1].
 - FSM: IDLE → MOVE → CHASE → ATTACK; STUNNED возвращается в previous_state; RETREATING один раз; `died` один раз.
-- Цитадель: армия пала → `siege_started`, HP цитадели падает; 0 HP → `reset_run()`.
+- Цитадель: армия пала → `siege_started`, HP цитадели падает; 0 HP → экран «ЦИТАДЕЛЬ ПАЛА», по кнопке `reset_run()` и магазин волны 1.
+- Забег: после боя — магазин следующей волны; `RunMapNode.wave` боя == `round_number`; мини-босс на 5/10, босс на 15; победа над боссом → экран «ПОБЕДА».
 - После боя `SquadRegistry` и `SoldierRegistry` пусты.
 
 ## Отчёт

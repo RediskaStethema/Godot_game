@@ -66,7 +66,9 @@ scripts/
 - `RunMapNode.wave` боевого шага всегда равна `EconomyManager.round_number` (растёт только в `give_round_income`, 1 раз за бой)
 - Магазин: кнопка «В БОЙ» переносит руку в `BattleManager.pending_cards`, завершает шаг, `RunManager.advance()`. Без армии — уход со второго нажатия. Запуск игры: `ShopScene._ready` → `RunManager.ensure_started()`
 - Бой: враги по `EnemyWaves.build(wave, type)`; итог → `RunManager.complete_current_node()` → через 2 с `advance()` в магазин следующей волны
-- Мини-босс: Hellbrute (`chaos_hellbrute`) + отряды Chaos Champion (1 на волне 5, 2 на волне 10) + 2 обычных отряда
+- Враги (`EnemyWaves`, константы вверху файла): обычная волна — `2 + (w−1)/2` отрядов Chaos Marine по `3 + (w−1)/3` бойцов (≤ 6), статы ×(1 + 0.10·(w−1)). Мини-босс — Hellbrute сверх волны + Chaos Champion (1 на 5-й, 2 на 10-й) вместо передних отрядов; босс — Chaos Lord вместо переднего отряда
+- Регресс забега: `tests/test_run.gd` (цепочка, бои обычный/мини-босс/босс/штурм, расширение): `godot --headless --path . -s tests/test_run.gd`
+- Баланс: `tests/balance_sim.gd` (headless, армия на накопленный доход по волнам 1–15): `godot --headless --path . -s tests/balance_sim.gd -- [tactical|mixed|all] [прогонов]`
 - Главный босс (Chaos Lord) побеждён → экран «ПОБЕДА»; цитадель 0 HP → экран «ЦИТАДЕЛЬ ПАЛА»; кнопка «НОВЫЙ ЗАБЕГ» → `BattleManager.reset_run()` (сбрасывает и цепочку через `RunManager.new_run()`) → магазин волны 1
 - Рука, королевство, здания, ветераны и HP цитадели переживают переходы между сценами
 
@@ -103,7 +105,7 @@ scripts/
 - Цитадель: ✅ HP 1000 на весь забег (`BattleManager.citadel_hp`, float). Армия пала → `siege_started` → штурм: бой цитадели с врагами. Враги идут к ней и бьют обычными атаками в ATTACK (`Soldier._is_sieging / _attack_citadel`, дальность + `Citadel.HIT_RADIUS`); цитадель тикает от BattleManager и бьёт по площади ближайшего врага (`Citadel.DAMAGE/ATTACK_SPEED/ATTACK_RANGE/SPLASH_RADIUS`). Враги перебиты → победа («Цитадель выстояла», доход за победу); HP 0 → `BattleManager.reset_run()` и новый забег. Catch-up бонус TDD — нет
 - Синергии: ✅ 3 MVP из TDD (frontline/backline позиции — нет)
 - Карты: 16 из 20 MVP (12 squad, 2 building, 2 upgrade); пул магазина 30 копий: common 18 / rare 9 / epic 3
-- Забег: ✅ линейная цепочка из 15 волн, магазин перед каждой, мини-босс на 5/10, главный босс на 15, экраны победы и поражения. Chaos: `chaos_marine` + `chaos_champion` (элита) + `chaos_hellbrute` (мини-босс) + `chaos_lord` (босс) — масштаб статов/размера/тинта, без своих спрайтов; баланс черновой (босс 15 и мини-босс 10 пока слишком сильны). Экран карты с выбором пути (`RunMapScene`) и события (`RunEvents`) удалены — описание и полный код в `docs/archive/run-map-and-events.md`
+- Забег: ✅ линейная цепочка из 15 волн, магазин перед каждой, мини-босс на 5/10, главный босс на 15, экраны победы и поражения. Chaos: `chaos_marine` + `chaos_champion` (элита) + `chaos_hellbrute` (мини-босс) + `chaos_lord` (босс) — масштаб статов/размера/тинта, без своих спрайтов; кривая волн подобрана симуляцией под армию из Common; Rare/Epic карты по цене проигрывают Common — см. tests/balance_sim.gd. Экран карты с выбором пути (`RunMapScene`) и события (`RunEvents`) удалены — описание и полный код в `docs/archive/run-map-and-events.md`
 
 ## Правила данных юнитов
 - `UnitData` — шаблон; в бою меняются только runtime-поля Soldier: `max_hp`, `current_damage`, `current_move_speed`, `current_attack_range`, `current_attack_speed`, `current_heal_per_second`
