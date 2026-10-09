@@ -17,7 +17,7 @@ scenes/
 	Bench.tscn / Bench.gd               — скамейка карт (drag & drop на тайл)
 	Squad.tscn / Squad.gd               — отряд (группа солдат на тайле)
   shop/
-	ShopScene.tscn / ShopScene.gd       — магазин между боями
+	ShopScene.tscn / ShopScene.gd       — магазин перед каждой волной; главная сцена
 scripts/
   autoload/
 	BattleManager.gd    — управляет боем, хранит player_units, pending_cards
@@ -26,6 +26,7 @@ scripts/
 	SquadRegistry.gd    — реестр всех Squad на сцене
 	SoldierRegistry.gd  — реестр всех Soldier на сцене
 	SynergyManager.gd   — синергии по тегам (TDD MVP: marine x3/x6, elite x2), доход +2 за 3 marine
+	RunManager.gd       — забег: линейная цепочка шагов (RunMapData), текущий шаг, advance() — переход к следующему
   battle/
 	IsoGrid.gd          — раскладка как в 9 Kings: королевство (открытые клетки `unlocked` в рамке 4×4, сверху слева) и зона врага на одной изометрической оси col, между ними gap_tiles «ничьей земли»; setup(screen, play_area) центрирует всю раскладку
 	IsoGridRenderer.gd  — платформа из блоков лунного тайлсета (кэш в дочернем узле, перерисовка refresh_floor()), техно-плиты королевства, тёмные плиты зоны врага, декор; подсветка клеток; occupied_tiles_player/enemy
@@ -37,8 +38,11 @@ scripts/
   data/
 	UnitData.gd         — Resource: hp, damage, speed, tags, faction...
 	CardData.gd         — Resource: card_type, unit_count, unit_factory_id...
-	UnitFactory.gd      — фабрика: create(id) + tactical/assault/scout/devastator/terminator/apothecary/librarian/chaplain/land_speeder/dreadnought/chapter_master/chaos_marine
+	UnitFactory.gd      — фабрика: create(id) + tactical/assault/scout/devastator/terminator/apothecary/librarian/chaplain/land_speeder/dreadnought/chapter_master + chaos_marine/chaos_champion/chaos_hellbrute/chaos_lord
 	CardFactory.gd      — карты и пул магазина (30 копий: common 18 / rare 9 / epic 3)
+	RunMapNode.gd       — Resource: шаг забега (type shop/battle/miniboss/boss, wave, next)
+	RunMapData.gd       — Resource: цепочка магазин→бой × TOTAL_WAVES (15), MINIBOSS_EVERY (5) + generate()
+	EnemyWaves.gd       — состав врагов по волне и типу боя (обычный / мини-босс / босс) — данными
   ui/
 	UITheme.gd          — палитра, Theme, стили карт по редкости, портреты юнитов, фон
   utils/
@@ -54,9 +58,17 @@ scripts/
 | SquadRegistry | register(squad), get_all_alive_squads(), get_alive_squads_of_team(team) |
 | SoldierRegistry | register(soldier), get_alive_soldiers_of_team(team) |
 | SynergyManager | calculate_synergies(soldiers), apply_synergies_to_soldiers(soldiers), income_bonus, epic_discount_pending |
+| RunManager | map: RunMapData, current_node_id, current_completed, visited, run_won; advance(), ensure_started(), enter_node(id), complete_current_node(), get_battle_type/wave(), new_run() (зовёт BattleManager.reset_run) |
 
 ## Игровой цикл
-ShopScene → (купить карты, drag на скамейку) → BattleScene → (расставить карты на тайлы, запустить бой) → ShopScene
+Линейный, игрок путь не выбирает: ShopScene (главная сцена) → BattleScene (волна 1) → ShopScene → BattleScene (волна 2) → … → волна 15
+- Цепочка (`RunMapData.generate`): перед каждой волной магазин; волны 5 и 10 — мини-босс (`MINIBOSS_EVERY`), волна 15 — главный босс (`TOTAL_WAVES`)
+- `RunMapNode.wave` боевого шага всегда равна `EconomyManager.round_number` (растёт только в `give_round_income`, 1 раз за бой)
+- Магазин: кнопка «В БОЙ» переносит руку в `BattleManager.pending_cards`, завершает шаг, `RunManager.advance()`. Без армии — уход со второго нажатия. Запуск игры: `ShopScene._ready` → `RunManager.ensure_started()`
+- Бой: враги по `EnemyWaves.build(wave, type)`; итог → `RunManager.complete_current_node()` → через 2 с `advance()` в магазин следующей волны
+- Мини-босс: Hellbrute (`chaos_hellbrute`) + отряды Chaos Champion (1 на волне 5, 2 на волне 10) + 2 обычных отряда
+- Главный босс (Chaos Lord) побеждён → экран «ПОБЕДА»; цитадель 0 HP → экран «ЦИТАДЕЛЬ ПАЛА»; кнопка «НОВЫЙ ЗАБЕГ» → `BattleManager.reset_run()` (сбрасывает и цепочку через `RunManager.new_run()`) → магазин волны 1
+- Рука, королевство, здания, ветераны и HP цитадели переживают переходы между сценами
 
 ## Текущий статус FSM
 **Реализовано (все 9 по TDD)**: IDLE → MOVE → CHASE → ATTACK → CASTING → STUNNED → KNOCKBACK → RETREATING → DEAD  
@@ -66,12 +78,13 @@ ShopScene → (купить карты, drag на скамейку) → BattleSc
 ## Текущий статус экономики
 - Старт: `STARTING_REQUISITION = 12` (по таблице TDD волна 1 = 2–3 Common)
 - Доход за победу: `10 + wave×2 + min(bonuses, 8)`; поражение/ничья — половина базы без бонусов
-- Бонусы: «без потерь» (+5), синергия (+2 за 3 marine); элитных врагов (+3) нет
+- Бонусы: «без потерь» (+5), синергия (+2 за 3 marine), +3 за каждого элитного врага (тег `elite`: Hellbrute, Champion, Chaos Lord)
+- `EconomyManager.add_requisition()` и `BattleManager.heal_citadel()` — разовые награды вне боя (раньше — события), round_number не трогают
 - Рука: `BattleManager.pending_cards`, максимум `BattleManager.MAX_HAND_SIZE = 10`; переносится между раундами (после боя не очищается)
 - Продажа карт в магазине: `EconomyManager.sell_card()` = `cost / 3` (округление вниз) — решение пользователя, в TDD было ×0.5. Цена Epic со скидкой не меняет `card.cost`
 - Salvage: API есть (`add_salvage`, кап 5, `try_spend(req, sal)`), источников нет — P1 по TDD
 - Лимита армии нет — ограничена только рука (`MAX_HAND_SIZE = 10`)
-- Королевство: `BattleManager.kingdom_tiles` (старт 3×3, рамка `IsoGrid.MAX_KINGDOM_SIZE` 4×4), живёт весь забег. Каждую 3-ю волну (`round_number % 3 == 0`) во время расстановки соседние клетки продаются кликом: `6 + 2×куплено` Req. `IsoGrid.is_valid_tile` = клетка открыта; зона врага — отдельно `enemy_width/height` 3×3
+- Королевство: `BattleManager.kingdom_tiles` (старт 3×3, рамка `IsoGrid.MAX_KINGDOM_SIZE` 4×4), живёт весь забег. Каждую 3-ю волну (`round_number % BattleManager.EXPANSION_EVERY == 0`, волны 3, 6, 9, 12, 15) во время расстановки соседние клетки продаются кликом: `6 + 2×куплено` Req. `IsoGrid.is_valid_tile` = клетка открыта; зона врага — отдельно `enemy_width/height` 3×3
 - Враги скрыты (`squad.visible = false`) до нажатия «В БОЙ»
 
 ## Критические правила кодирования
@@ -85,12 +98,12 @@ ShopScene → (купить карты, drag на скамейку) → BattleSc
 - FSM: ✅ 9 состояний; CASTING — Librarian, STUNNED — его попадание, KNOCKBACK — удар Dreadnought
 - Юниты: ✅ 10/10 Marines из TDD + Apothecary (не из TDD); у всех кроме Tactical/Assault placeholder-спрайты (тинт)
 - Способности — данными в UnitData: `on_hit_stun`, `on_hit_knockback` (в `Soldier._apply_on_hit_effects`), аура `aura_damage_bonus/radius/tag` (считается в момент удара, `Soldier.get_aura_damage_bonus`), `commander_damage_bonus` (`BattleScene._apply_commander_bonus` перед боем); ауры и командиры не суммируются — берётся максимум
-- Экономика: ✅ формула TDD, продажа карт (1/3), рука ≤ 10; Salvage без источников (P1); нет элитных врагов
+- Экономика: ✅ формула TDD, продажа карт (1/3), рука ≤ 10, +3 за элитного врага; Salvage без источников (P1); catch-up бонус — нет
 - Здания: ✅ `Building.gd` (агент `docs/task-briefs/agent-buildings.md`). Занимают клетку королевства, неуязвимы, стоят между раундами (`BattleManager.player_buildings`: CardData → Vector2i), тикают от BattleManager. Bolter Turret (Rare 7, в TDD нет) — 15 урона, 1.5/с, 300 px. Fortress Wall (Common 5) — щит цитадели +200 на каждый бой (`BattleManager.citadel_shield`, TDD «+20 HP базе» ×10) и замедление врагов ×0.6 в 130 px (`Building.slow_mult_at` в `Soldier._move_towards`). Plasma Generatorium — нет
 - Цитадель: ✅ HP 1000 на весь забег (`BattleManager.citadel_hp`, float). Армия пала → `siege_started` → штурм: бой цитадели с врагами. Враги идут к ней и бьют обычными атаками в ATTACK (`Soldier._is_sieging / _attack_citadel`, дальность + `Citadel.HIT_RADIUS`); цитадель тикает от BattleManager и бьёт по площади ближайшего врага (`Citadel.DAMAGE/ATTACK_SPEED/ATTACK_RANGE/SPLASH_RADIUS`). Враги перебиты → победа («Цитадель выстояла», доход за победу); HP 0 → `BattleManager.reset_run()` и новый забег. Catch-up бонус TDD — нет
 - Синергии: ✅ 3 MVP из TDD (frontline/backline позиции — нет)
 - Карты: 16 из 20 MVP (12 squad, 2 building, 2 upgrade); пул магазина 30 копий: common 18 / rare 9 / epic 3
-- Карта забега (run map): не реализована
+- Забег: ✅ линейная цепочка из 15 волн, магазин перед каждой, мини-босс на 5/10, главный босс на 15, экраны победы и поражения. Chaos: `chaos_marine` + `chaos_champion` (элита) + `chaos_hellbrute` (мини-босс) + `chaos_lord` (босс) — масштаб статов/размера/тинта, без своих спрайтов; баланс черновой (босс 15 и мини-босс 10 пока слишком сильны). Экран карты с выбором пути (`RunMapScene`) и события (`RunEvents`) удалены — описание и полный код в `docs/archive/run-map-and-events.md`
 
 ## Правила данных юнитов
 - `UnitData` — шаблон; в бою меняются только runtime-поля Soldier: `max_hp`, `current_damage`, `current_move_speed`, `current_attack_range`, `current_attack_speed`, `current_heal_per_second`

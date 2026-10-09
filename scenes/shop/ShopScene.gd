@@ -23,8 +23,11 @@ var hand_title: Label = null
 var hand_row: HBoxContainer = null
 var message_label: Label = null
 var citadel_label: Label = null
+var _empty_army_warned: bool = false   # уход без армии — со второго нажатия
 
 func _ready() -> void:
+	# Магазин — главная сцена: при запуске игры он же первый шаг забега
+	RunManager.ensure_started()
 	_build_layout()
 	EconomyManager.requisition_changed.connect(_update_requisition_label)
 	ShopManager.shop_refreshed.connect(_populate_shop)
@@ -41,7 +44,8 @@ func _ready() -> void:
 	_update_requisition_label(EconomyManager.requisition)
 	_update_army_label()
 	_refresh_hand()
-	round_label.text = "Раунд %d" % EconomyManager.round_number
+	round_label.text = "Волна %d/%d" % [mini(EconomyManager.round_number, RunManager.get_total_waves()),
+		RunManager.get_total_waves()]
 	ShopManager.refresh_shop()
 
 func _populate_shop(offers: Array) -> void:
@@ -284,13 +288,19 @@ func _build_layout() -> void:
 	battle_button.text = "В БОЙ"
 	battle_button.custom_minimum_size = Vector2(220, 60)
 
+# Уход из магазина — сразу в бой волны: шаг магазина пройден, следующий шаг
+# цепочки — бой. Без армии — предупреждение, со второго нажатия уходим всё
+# равно (иначе без денег и карт можно застрять в магазине).
 func _on_battle_pressed() -> void:
-	if _count_units() == 0 and surviving_units.is_empty():
-		_show_message("Нет юнитов для боя — купите отряд")
+	if _count_units() == 0 and surviving_units.is_empty() and not _empty_army_warned:
+		_empty_army_warned = true
+		_show_message("Армии нет — купите отряд или нажмите ещё раз, чтобы уйти без неё")
 		return
-	# Передаём всё в BattleManager: рука → скамейка
+	# Передаём всё в BattleManager: рука → скамейка следующего боя
 	BattleManager.pending_cards = purchased_cards
 	BattleManager.player_units.clear()
 	for unit in surviving_units:
 		BattleManager.player_units.append(unit)
-	get_tree().change_scene_to_file("res://scenes/battle/BattleScene.tscn")
+	if RunManager.is_shop_node_active():
+		RunManager.complete_current_node()
+	RunManager.advance()

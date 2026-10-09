@@ -15,7 +15,7 @@ const FIXED_TICK: float = GameConstants.FIXED_TICK
 var pending_cards: Array[CardData] = []
 
 # Королевство: открытые клетки для расстановки. Живут весь забег.
-# Каждую EXPANSION_EVERY-ю волну (3, 6, 9…) во время расстановки можно
+# Каждую EXPANSION_EVERY-ю волну (3, 6, 9, 12, 15) во время расстановки можно
 # докупать соседние клетки; цена растёт с каждой купленной.
 const START_KINGDOM_SIZE = Vector2i(3, 3)
 const EXPANSION_EVERY: int = 3
@@ -88,7 +88,9 @@ func _process(delta: float) -> void:
 	# Это называется "accumulator pattern" — стандартный подход
 	# для фиксированного шага симуляции.
 	_accumulator += delta
-	while _accumulator >= FIXED_TICK:
+	# Бой мог закончиться на одном из тиков кадра — дальше не тикаем,
+	# иначе при длинном кадре battle_ended придёт несколько раз (двойной доход)
+	while _accumulator >= FIXED_TICK and phase == BattlePhase.RUNNING:
 		_battle_tick()
 		_accumulator -= FIXED_TICK
 
@@ -171,7 +173,14 @@ func damage_citadel(amount: float) -> void:
 		print("BattleManager: цитадель пала")
 		emit_signal("citadel_destroyed")
 
-# Новый забег: цитадель, королевство, армия, рука, экономика, синергии
+# Ремонт цитадели (события карты забега). Возвращает, сколько HP восстановлено.
+func heal_citadel(amount: float) -> float:
+	var before = citadel_hp
+	citadel_hp = minf(citadel_hp + maxf(amount, 0.0), CITADEL_MAX_HP)
+	emit_signal("citadel_hp_changed", citadel_hp)
+	return citadel_hp - before
+
+# Новый забег: цитадель, королевство, армия, рука, экономика, синергии, цепочка забега
 func reset_run() -> void:
 	citadel_hp = CITADEL_MAX_HP
 	emit_signal("citadel_hp_changed", citadel_hp)
@@ -183,6 +192,7 @@ func reset_run() -> void:
 	pending_cards.clear()
 	EconomyManager.reset()
 	SynergyManager.reset()
+	RunManager.new_run()
 
 # Волна, в которой можно расширять королевство
 func can_expand_kingdom() -> bool:

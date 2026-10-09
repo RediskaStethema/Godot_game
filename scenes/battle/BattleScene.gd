@@ -12,6 +12,10 @@ var bench: Node = null
 var iso_grid: IsoGrid = IsoGrid.new()
 var is_placement_phase: bool = true
 var player_soldiers_at_start: int = 0   # для бонуса «победа без потерь»
+var enemy_elites_at_start: int = 0      # элитные враги (тег elite) — бонус TDD +3 за каждого
+var battle_type: String = RunMapNode.BATTLE   # тип боя шага забега: battle / miniboss / boss
+var battle_wave: int = 1
+var _battle_resolved: bool = false
 var synergy_label: Label = null
 var hud: PanelContainer = null
 var requisition_label: Label = null
@@ -22,6 +26,9 @@ var merge_menu: PanelContainer = null   # выбор «улучшить / выл
 # ИНИЦИАЛИЗАЦИЯ
 # -------------------------------------------------------
 func _ready() -> void:
+	# Тип боя и волна — из текущего шага забега
+	battle_type = RunManager.get_battle_type()
+	battle_wave = RunManager.get_battle_wave()
 	start_button.pressed.connect(_on_start_pressed)
 	BattleManager.battle_ended.connect(_on_battle_ended)
 
@@ -119,21 +126,23 @@ func _place_player_squads() -> void:
 # -------------------------------------------------------
 # РАССТАНОВКА ВРАГОВ
 # -------------------------------------------------------
+# Состав — данными в EnemyWaves по волне и типу боя (бой / мини-босс / босс)
 func _place_enemy_squads() -> void:
-	var round = EconomyManager.round_number
-	var squad_count = min(round + 1, iso_grid.enemy_width * iso_grid.enemy_height)
-	var stat_mult = 1.0 + (round - 1) * 0.15
-	var soldiers_per_squad = min(round + 1, 6)
+	var all_tiles = iso_grid.get_enemy_tiles_front_first()
+	var squads = EnemyWaves.build(battle_wave, battle_type, all_tiles.size())
+	enemy_elites_at_start = 0
 
 	# Враги занимают зону с переднего края (ближе к королевству) в тыл
-	var all_tiles = iso_grid.get_enemy_tiles_front_first()
-	for i in range(squad_count):
+	for i in range(squads.size()):
 		if i >= all_tiles.size():
 			break
-		var enemy_data = UnitFactory.chaos_marine()
-		enemy_data.hp_multiplier = stat_mult
-		enemy_data.damage_multiplier = stat_mult
-		_spawn_squad(enemy_data, GameConstants.TEAM_ENEMY, all_tiles[i], soldiers_per_squad)
+		var spec: Dictionary = squads[i]
+		var enemy_data = UnitFactory.create(spec["unit"])
+		enemy_data.hp_multiplier = spec["mult"]
+		enemy_data.damage_multiplier = spec["mult"]
+		_spawn_squad(enemy_data, GameConstants.TEAM_ENEMY, all_tiles[i], spec["count"])
+		if "elite" in enemy_data.tags:
+			enemy_elites_at_start += spec["count"]
 
 # -------------------------------------------------------
 # СПАВН ОТРЯДА
@@ -248,8 +257,19 @@ func _apply_commander_bonus(soldiers: Array) -> void:
 # КОНЕЦ БОЯ
 # -------------------------------------------------------
 func _on_battle_ended(winner_team: int) -> void:
+	# Итог боя обрабатывается ровно один раз: доход, round_number, узел карты
+	if _battle_resolved:
+		return
+	_battle_resolved = true
 	if BattleManager.citadel_hp <= 0:
 		_game_over()
+		return
+	# Босс повержен — забег выигран (доход уже не нужен: забег окончен)
+	if battle_type == RunMapNode.BOSS and winner_team == GameConstants.TEAM_PLAYER:
+		RunManager.complete_current_node()
+		SquadRegistry.clear()
+		SoldierRegistry.clear()
+		_show_run_end(true)
 		return
 	if winner_team == GameConstants.TEAM_PLAYER:
 		var bonuses = _calculate_victory_bonuses()
@@ -271,28 +291,77 @@ func _on_battle_ended(winner_team: int) -> void:
 		BattleManager.player_placements.clear()
 
 	# BattleManager.pending_cards НЕ очищаем: невыложенные карты остаются
-	# в руке игрока и возвращаются в магазин (лимит руки — MAX_HAND_SIZE)
+	# в руке игрока и переносятся дальше по карте (лимит руки — MAX_HAND_SIZE)
 	SquadRegistry.clear()
 	SoldierRegistry.clear()
+	RunManager.complete_current_node(winner_team == GameConstants.TEAM_PLAYER)
+	# Босс не побеждён без гибели цитадели (бывает только без цитадели) — забег проигран
+	if battle_type == RunMapNode.BOSS:
+		_show_run_end(false)
+		return
+	# Следующая волна начинается с магазина
 	await get_tree().create_timer(2.0).timeout
-	get_tree().change_scene_to_file("res://scenes/shop/ShopScene.tscn")
+	RunManager.advance()
 
-# Цитадель пала — забег окончен, начинаем новый с магазина
+# Цитадель пала — забег окончен: экран поражения, по кнопке — новый забег
 func _game_over() -> void:
-	result_label.text = "Цитадель пала! Забег окончен — волна %d" % EconomyManager.round_number
+	result_label.text = "Цитадель пала!"
 	SquadRegistry.clear()
 	SoldierRegistry.clear()
-	await get_tree().create_timer(3.0).timeout
+	_show_run_end(false)
+
+# Экран конца забега (TDD: Victory / Game Over). Кнопка — новый забег с первого магазина.
+func _show_run_end(victory: bool) -> void:
+	var total = RunManager.get_total_waves()
+	var dim = ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.65)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	$UI.add_child(dim)
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.add_child(center)
+	var panel = PanelContainer.new()
+	panel.theme = UITheme.get_theme()
+	panel.custom_minimum_size = Vector2(480, 0)
+	center.add_child(panel)
+	var col = VBoxContainer.new()
+	col.add_theme_constant_override("separation", 12)
+	panel.add_child(col)
+
+	var title = UITheme.make_label("ПОБЕДА" if victory else "ЦИТАДЕЛЬ ПАЛА", "TitleLabel")
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if not victory:
+		title.add_theme_color_override("font_color", UITheme.RED_BRIGHT)
+	col.add_child(title)
+	var text = "Главный босс Хаоса повержен — забег выигран!" if victory 		else "Забег окончен на волне %d из %d." % [battle_wave, total]
+	var sub = UITheme.make_label(text, "HeaderLabel")
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(sub)
+	var stats = UITheme.make_label("Побед в волнах: %d · Цитадель %d/%d · %d Req" % [
+		EconomyManager.wins + (1 if victory else 0), ceili(BattleManager.citadel_hp),
+		int(BattleManager.CITADEL_MAX_HP), EconomyManager.requisition], "SmallLabel")
+	stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(stats)
+	var again = Button.new()
+	again.theme_type_variation = "PrimaryButton"
+	again.text = "НОВЫЙ ЗАБЕГ"
+	again.pressed.connect(_on_new_run_pressed)
+	col.add_child(again)
+	print("BattleScene: забег окончен — %s" % ("победа" if victory else "поражение"))
+
+func _on_new_run_pressed() -> void:
 	BattleManager.reset_run()
-	get_tree().change_scene_to_file("res://scenes/shop/ShopScene.tscn")
+	RunManager.advance()
 
 # Бонусы TDD к доходу за победу. Кап +8 применяет EconomyManager.
-# Есть: «без потерь» и синергия фракции; элитных врагов пока нет.
+# «Без потерь», синергия фракции и +3 за каждого элитного врага (на победе убиты все).
 func _calculate_victory_bonuses() -> int:
 	var bonuses = SynergyManager.income_bonus
 	var alive = SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER).size()
 	if player_soldiers_at_start > 0 and alive == player_soldiers_at_start:
 		bonuses += EconomyManager.BONUS_FLAWLESS
+	bonuses += enemy_elites_at_start * EconomyManager.BONUS_ELITE_KILL
 	return bonuses
 
 # -------------------------------------------------------
@@ -319,7 +388,10 @@ func _build_ui() -> void:
 	var row = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 24)
 	hud.add_child(row)
-	var wave = UITheme.make_label("Волна %d" % EconomyManager.round_number, "HeaderLabel")
+	var wave_text = "Волна %d/%d" % [battle_wave, RunManager.get_total_waves()]
+	if battle_type != RunMapNode.BATTLE:
+		wave_text += " · " + UITheme.NODE_NAMES.get(battle_type, battle_type)
+	var wave = UITheme.make_label(wave_text, "HeaderLabel")
 	row.add_child(wave)
 	requisition_label = UITheme.make_label("", "ValueLabel")
 	row.add_child(requisition_label)

@@ -27,6 +27,9 @@ static func create(factory_id: String) -> UnitData:
 		"tactical_marine": d = tactical_marine()
 		"assault_marine":  d = assault_marine()
 		"chaos_marine":    d = chaos_marine()
+		"chaos_champion":  d = chaos_champion()
+		"chaos_lord":      d = chaos_lord()
+		"chaos_hellbrute": d = chaos_hellbrute()
 		"scout_marine":    d = scout_marine()
 		"devastator":      d = devastator()
 		"terminator":      d = terminator()
@@ -91,6 +94,59 @@ static func chaos_marine() -> UnitData:
 	d.cost = 5
 	d.rarity = GameConstants.RARITY_COMMON
 	d.sprite_path = "res://assets/sprites/chaos"  # ← временно тот же
+	return d
+
+# Элита Хаоса (эскорт мини-босса): усиленный Chaos Marine ближнего боя.
+# Своего спрайта нет — спрайт chaos, крупнее и с красным тинтом.
+static func chaos_champion() -> UnitData:
+	var d = chaos_marine()
+	d.unit_name = "Chaos Champion"
+	d.tags = ["chaos", "melee", "elite"]
+	d.hp = 180.0
+	d.damage = 22.0
+	d.attack_speed = 1.0
+	d.attack_range = 70.0
+	d.move_speed = 80.0
+	d.retreat_hp_threshold = 0.0
+	d.rarity = GameConstants.RARITY_RARE
+	d.tint = Color(1.0, 0.55, 0.5)
+	d.sprite_scale = 1.25
+	return d
+
+# Главный босс последней волны: Chaos Lord — один огромный боец, удар отбрасывает.
+# Спрайт chaos, фиолетовый тинт, ×1.8 размера. Баланс — черновой.
+static func chaos_lord() -> UnitData:
+	var d = chaos_marine()
+	d.unit_name = "Chaos Lord"
+	d.tags = ["chaos", "melee", "elite", "boss"]
+	d.hp = 1400.0
+	d.damage = 40.0
+	d.attack_speed = 0.8
+	d.attack_range = 80.0
+	d.move_speed = 60.0
+	d.on_hit_knockback = 250.0
+	d.retreat_hp_threshold = 0.0
+	d.rarity = GameConstants.RARITY_EPIC
+	d.tint = Color(0.85, 0.5, 1.0)
+	d.sprite_scale = 1.8
+	return d
+
+# Мини-босс каждой 5-й волны: Hellbrute — медленная машина ближнего боя,
+# удар отбрасывает. Спрайт chaos, оранжевый тинт, ×1.5 размера. Баланс — черновой.
+static func chaos_hellbrute() -> UnitData:
+	var d = chaos_marine()
+	d.unit_name = "Hellbrute"
+	d.tags = ["chaos", "melee", "vehicle", "elite"]
+	d.hp = 600.0
+	d.damage = 30.0
+	d.attack_speed = 0.7
+	d.attack_range = 75.0
+	d.move_speed = 55.0
+	d.on_hit_knockback = 150.0
+	d.retreat_hp_threshold = 0.0
+	d.rarity = GameConstants.RARITY_EPIC
+	d.tint = Color(1.0, 0.65, 0.35)
+	d.sprite_scale = 1.5
 	return d
 
 # Лёгкий стрелок: хрупкий, быстрый, добивает раненых

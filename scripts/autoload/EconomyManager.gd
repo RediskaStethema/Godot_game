@@ -58,6 +58,14 @@ func give_round_income(won: bool, bonuses: int = 0) -> int:
 	emit_signal("requisition_changed", requisition)
 	return income
 
+# Разовая награда вне боя (события карты забега). round_number не трогает.
+func add_requisition(amount: int) -> void:
+	if amount <= 0:
+		return
+	requisition += amount
+	print("EconomyManager: +%d Req, итого %d Req" % [amount, requisition])
+	emit_signal("requisition_changed", requisition)
+
 # -------------------------------------------------------
 # SALVAGE
 # -------------------------------------------------------

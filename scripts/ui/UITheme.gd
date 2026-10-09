@@ -27,6 +27,14 @@ const RARITY_COLORS = {
 const RARITY_NAMES = {"common": "Обычная", "rare": "Редкая", "epic": "Эпическая"}
 const TYPE_NAMES = {"squad": "Отряд", "building": "Здание", "upgrade": "Улучшение"}
 
+# Подпись типа шага забега (RunMapNode.*) — в HUD боя
+const NODE_NAMES = {
+	"battle": "БОЙ",
+	"miniboss": "МИНИ-БОСС",
+	"boss":   "БОСС",
+	"shop":   "МАГАЗИН",
+}
+
 # Высота HUD сверху и панели скамейки снизу (бой) — сетки ставятся между ними
 const HUD_HEIGHT: float = 60.0
 const BENCH_HEIGHT: float = 176.0
