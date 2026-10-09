@@ -192,6 +192,7 @@ func reset_run() -> void:
 	pending_cards.clear()
 	EconomyManager.reset()
 	SynergyManager.reset()
+	ShopManager.reset()
 	RunManager.new_run()
 
 # Волна, в которой можно расширять королевство

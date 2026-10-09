@@ -68,6 +68,8 @@ func _run_battle(label:String, type:String, wave:int, army:Array[UnitData], max_
 	await process_frame
 
 func _initialize() -> void:
+	# Бои сами пишут сохранение — в тестах выключаем, чтобы не затереть сохранение игрока
+	root.get_node("SaveManager").enabled = false
 	Engine.time_scale = 8.0
 	_main()
 

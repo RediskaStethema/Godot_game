@@ -39,9 +39,11 @@ func _ready() -> void:
 	# Загружаем выживших
 	for unit in BattleManager.player_units:
 		surviving_units.append(unit)
-	# Карты, не выложенные в прошлом бою, остаются в руке
+	# Карты, не выложенные в прошлом бою, остаются в руке. Рука магазина — тот же
+	# массив, что BattleManager.pending_cards: сохранение видит покупки сразу
 	for card in BattleManager.pending_cards:
 		purchased_cards.append(card)
+	BattleManager.pending_cards = purchased_cards
 	print("ShopScene: загружено выживших: %d, карт в руке: %d" % [surviving_units.size(), purchased_cards.size()])
 
 	_update_requisition_label(EconomyManager.requisition)
@@ -53,6 +55,7 @@ func _ready() -> void:
 	ShopManager.open_shop()
 	if ShopManager.free_cards_left > 0:
 		_show_message("Первая волна: одна карта бесплатно")
+	SaveManager.save_run()
 
 func _populate_shop(offers: Array) -> void:
 	for child in shop_slots.get_children():
@@ -87,6 +90,7 @@ func _on_purchase_requested(slot_index: int) -> void:
 	_update_army_label()
 	_refresh_hand()
 	_populate_shop(ShopManager.current_offers)
+	SaveManager.save_run()
 
 # -------------------------------------------------------
 # РУКА И ПРОДАЖА
@@ -103,6 +107,7 @@ func _sell_card(card: CardData) -> void:
 	_update_army_label()
 	_refresh_hand()
 	_populate_shop(ShopManager.current_offers)
+	SaveManager.save_run()
 
 func _refresh_hand() -> void:
 	if hand_row == null:
@@ -193,6 +198,7 @@ func _on_reroll_pressed() -> void:
 		_show_message("Не хватает Requisition: обновление стоит %d" % cost)
 		return
 	_show_message("Набор обновлён (−%d Req), следующее обновление — %d Req" % [cost, ShopManager.get_reroll_cost()])
+	SaveManager.save_run()
 
 func _refresh_reroll_button() -> void:
 	if reroll_button == null:

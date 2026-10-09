@@ -229,6 +229,14 @@ static func battle_fury() -> CardData:
 # Карты с большим весом появляются чаще.
 
 # Веса по TDD: common 60% (18), rare 30% (9), epic 10% (3) — из 30 копий.
+# Новая карта по id (сохранения). Все карты игрока есть в пуле магазина.
+static func create(id: String) -> CardData:
+	for card in build_pool():
+		if card.id == id:
+			return card
+	push_warning("CardFactory: неизвестная карта '%s'" % id)
+	return null
+
 static func build_pool() -> Array:
 	var pool = []
 	# Common — 18 копий

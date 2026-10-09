@@ -47,6 +47,8 @@ var em: Node
 var bm: Node
 
 func _initialize() -> void:
+	# Бои сами пишут сохранение — в тестах выключаем, чтобы не затереть сохранение игрока
+	root.get_node("SaveManager").enabled = false
 	_main()
 
 func _process(delta: float) -> bool:

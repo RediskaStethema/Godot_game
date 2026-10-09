@@ -88,6 +88,8 @@ func _ready() -> void:
 	_update_expansion()
 	if BattleManager.can_expand_kingdom() and not iso_grid.get_expansion_tiles().is_empty():
 		_show_message("Расширение: кликните по зелёной клетке")
+	# Сохранение до расстановки: закрыли игру посреди боя — бой с начала
+	SaveManager.save_run()
 
 # Цитадель — в общем контейнере юнитов, чтобы сортироваться по глубине с бойцами
 func _spawn_citadel() -> void:
@@ -491,6 +493,8 @@ func _on_battle_ended(winner_team: int) -> void:
 	if battle_type == RunMapNode.BOSS:
 		_show_run_end(false)
 		return
+	# Итог боя сохранён: при загрузке — сразу магазин следующей волны
+	SaveManager.save_run()
 	# Следующая волна начинается с магазина
 	await get_tree().create_timer(2.0).timeout
 	RunManager.advance()
@@ -504,6 +508,8 @@ func _game_over() -> void:
 
 # Экран конца забега (TDD: Victory / Game Over). Кнопка — новый забег с первого магазина.
 func _show_run_end(victory: bool) -> void:
+	# Забег окончен — продолжать нечего
+	SaveManager.delete_save()
 	var total = RunManager.get_total_waves()
 	var dim = ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.65)
@@ -544,6 +550,7 @@ func _show_run_end(victory: bool) -> void:
 
 func _on_new_run_pressed() -> void:
 	BattleManager.reset_run()
+	SaveManager.delete_save()
 	RunManager.advance()
 
 # Бонусы TDD к доходу за победу. Кап +8 применяет EconomyManager.
