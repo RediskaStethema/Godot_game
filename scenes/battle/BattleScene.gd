@@ -92,6 +92,8 @@ func _build_field() -> void:
 	renderer = IsoGridRenderer.new()
 	renderer.setup(iso_grid)
 	grid_renderer.add_child(renderer)
+	# Здания и цитадель полупрозрачны, пока за ними стоят бойцы
+	add_child(OcclusionFader.new())
 	camera = BattleCamera.new()
 	add_child(camera)
 	camera.make_current()

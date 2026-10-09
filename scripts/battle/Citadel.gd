@@ -37,10 +37,16 @@ const SHOT_COLOR = Color(1.0, 0.85, 0.45)
 
 var attack_timer: float = 0.0
 var shot_timer: float = 0.0
+# HP-бар — отдельный дочерний узел: OcclusionFader гасит цитадель через
+# self_modulate, а дочерние узлы его не наследуют — бар остаётся ярким
+var _hp_bar: Node2D
 var shot_target: Vector2 = Vector2.ZERO   # в глобальных координатах
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_hp_bar = Node2D.new()
+	_hp_bar.draw.connect(_draw_hp_bar)
+	add_child(_hp_bar)
 	BattleManager.citadel_hp_changed.connect(_on_hp_changed)
 
 func _exit_tree() -> void:
@@ -51,7 +57,6 @@ func _draw() -> void:
 	# BLOCKS уже упорядочены от дальних подклеток к ближним, внутри — снизу вверх
 	for b in BLOCKS:
 		TerrainTiles.draw_block(self, TerrainTiles.tile(b[0]), _block_top(b[1], b[2], b[3]), Color.WHITE, BLOCK_SCALE)
-	_draw_hp_bar()
 	if shot_timer > Soldier.TIMER_EPSILON:
 		var a = shot_timer / SHOT_SHOW_TIME
 		var to = to_local(shot_target)
@@ -72,17 +77,26 @@ func _block_top(i: int, j: int, level: int) -> Vector2:
 func _top_y() -> float:
 	return _block_top(0, 0, KEEP_LEVELS).y - IsoGrid.TILE_HEIGHT * BLOCK_SCALE / 2.0
 
+# Область экрана (мировые координаты), которую закрывают блоки цитадели
+func get_occlusion_rect() -> Rect2:
+	var rect = Rect2()
+	for b in BLOCKS:
+		var r = TerrainTiles.block_rect(_block_top(b[1], b[2], b[3]), BLOCK_SCALE)
+		rect = r if rect.size == Vector2.ZERO else rect.merge(r)
+	return Rect2(rect.position + global_position, rect.size)
+
+# Рисуется в дочернем узле _hp_bar (координаты те же — узел в начале цитадели)
 func _draw_hp_bar() -> void:
 	var rect = Rect2(Vector2(-HP_BAR_SIZE.x / 2.0, _top_y() - HP_BAR_GAP - HP_BAR_SIZE.y), HP_BAR_SIZE)
-	draw_rect(rect.grow(1.5), Color(0, 0, 0, 0.8))
+	_hp_bar.draw_rect(rect.grow(1.5), Color(0, 0, 0, 0.8))
 	var ratio = clampf(float(BattleManager.citadel_hp) / BattleManager.CITADEL_MAX_HP, 0.0, 1.0)
-	draw_rect(Rect2(rect.position, Vector2(rect.size.x * ratio, rect.size.y)), UITheme.GOLD)
+	_hp_bar.draw_rect(Rect2(rect.position, Vector2(rect.size.x * ratio, rect.size.y)), UITheme.GOLD)
 	# Щит от стен — синяя полоска над HP (доля от максимального HP)
 	if BattleManager.citadel_shield > 0.0:
 		var srect = Rect2(rect.position - Vector2(0, SHIELD_BAR_HEIGHT + 3.0), Vector2(rect.size.x, SHIELD_BAR_HEIGHT))
-		draw_rect(srect.grow(1.0), Color(0, 0, 0, 0.8))
+		_hp_bar.draw_rect(srect.grow(1.0), Color(0, 0, 0, 0.8))
 		var sratio = clampf(BattleManager.citadel_shield / BattleManager.CITADEL_MAX_HP, 0.0, 1.0)
-		draw_rect(Rect2(srect.position, Vector2(srect.size.x * sratio, srect.size.y)), SHIELD_COLOR)
+		_hp_bar.draw_rect(Rect2(srect.position, Vector2(srect.size.x * sratio, srect.size.y)), SHIELD_COLOR)
 
 # -------------------------------------------------------
 # БОЙ (штурм)
@@ -127,4 +141,4 @@ func take_hit(amount: float) -> void:
 	create_tween().tween_property(self, "modulate", Color.WHITE, 0.25)
 
 func _on_hp_changed(_hp: float) -> void:
-	queue_redraw()
+	_hp_bar.queue_redraw()
