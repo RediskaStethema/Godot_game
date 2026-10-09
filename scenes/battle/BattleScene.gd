@@ -12,6 +12,9 @@ var bench: Node = null
 var iso_grid: IsoGrid = IsoGrid.new()
 var is_placement_phase: bool = true
 var player_soldiers_at_start: int = 0   # для бонуса «победа без потерь»
+# Отряды игрока на старте боя: { "data": UnitData, "tile": Vector2i } — павшие
+# целиком при победе возрождаются (UnitData.respawn_after_wipe)
+var player_squads_at_start: Array[Dictionary] = []
 var enemy_elites_at_start: int = 0      # элитные враги (тег elite) — бонус TDD +3 за каждого
 var battle_type: String = RunMapNode.BATTLE   # тип боя шага забега: battle / miniboss / boss
 var battle_wave: int = 1
@@ -21,6 +24,24 @@ var hud: PanelContainer = null
 var requisition_label: Label = null
 var citadel_label: Label = null
 var merge_menu: PanelContainer = null   # выбор «улучшить / вылечить» отряд его картой
+var synergy_panel: PanelContainer = null
+# Камера вписывает поле (IsoGrid.get_world_bounds) в свободную от UI область:
+# при расстановке — между HUD и скамейкой, в бою скамейка и синергии прячутся
+# и камера отъезжает на весь экран под HUD
+var camera: Camera2D = null
+const CAMERA_TWEEN_TIME: float = 0.6
+# Подпись отряда под курсором: наведение дольше HOVER_NAME_DELAY сек — имя
+const HOVER_NAME_DELAY: float = 0.5
+const HOVER_HALF_WIDTH: float = 20.0   # полуширина бойца для попадания курсором, px мира
+var hover_panel: PanelContainer = null
+var hover_text: Label = null
+var _hover_squad: Squad = null
+var _hover_time: float = 0.0
+# Справка по своему отряду по клику: уровень, бойцы, HP, бонусы (обновляется на лету)
+var info_panel: PanelContainer = null
+var info_title: Label = null
+var info_text: Label = null
+var info_squad: Squad = null
 
 # -------------------------------------------------------
 # ИНИЦИАЛИЗАЦИЯ
@@ -40,7 +61,12 @@ func _ready() -> void:
 	_build_ui()
 
 	iso_grid.set_unlocked_tiles(BattleManager.kingdom_tiles)
-	iso_grid.setup(get_viewport_rect().size, _get_play_area())
+	iso_grid.setup()
+	camera = Camera2D.new()
+	add_child(camera)
+	camera.make_current()
+	_fit_camera(false)
+	get_viewport().size_changed.connect(_fit_camera.bind(false))
 
 	var renderer = IsoGridRenderer.new()
 	renderer.setup(iso_grid)
@@ -87,17 +113,160 @@ func _spawn_building(card: CardData, tile: Vector2i) -> void:
 	if renderer:
 		renderer.set_occupied(tile, true)
 
-# Область экрана под сетки: между HUD сверху и скамейкой снизу
-const PLAY_AREA_MARGIN: float = 40.0
+# Область экрана под поле: под HUD; при расстановке — до скамейки
+const PLAY_AREA_MARGIN: float = 8.0
 
 func _get_play_area() -> Rect2:
 	var screen = get_viewport_rect().size
-	var top = hud.get_global_rect().end.y if hud else start_button.get_global_rect().end.y
+	var top = UITheme.HUD_HEIGHT
 	var bottom = screen.y
-	var bench_panel = bench.get_node_or_null("BenchPanel") as Control
-	if bench_panel:
-		bottom = bench_panel.get_global_rect().position.y
-	return Rect2(PLAY_AREA_MARGIN, top, screen.x - PLAY_AREA_MARGIN * 2.0, bottom - top)
+	if is_placement_phase:
+		bottom -= UITheme.BENCH_HEIGHT
+	return Rect2(PLAY_AREA_MARGIN, top + PLAY_AREA_MARGIN,
+		screen.x - PLAY_AREA_MARGIN * 2.0, bottom - top - PLAY_AREA_MARGIN * 2.0)
+
+# -------------------------------------------------------
+# ПОДПИСЬ ОТРЯДА ПОД КУРСОРОМ
+# -------------------------------------------------------
+# Только UI: время наведения считается по кадрам, боевую логику не трогает
+func _process(delta: float) -> void:
+	_update_info_panel()
+	var squad = null if merge_menu else _squad_at(get_global_mouse_position())
+	# Справка уже открыта на этом отряде — подпись не нужна
+	if squad != null and squad == info_squad:
+		squad = null
+	if squad != _hover_squad:
+		_hover_squad = squad
+		_hover_time = 0.0
+		hover_panel.hide()
+	if squad == null:
+		return
+	_hover_time += delta
+	if _hover_time >= HOVER_NAME_DELAY:
+		_show_hover(squad, get_viewport().get_mouse_position())
+
+# Подпись над курсором, в пределах экрана
+func _show_hover(squad: Squad, screen_pos: Vector2) -> void:
+	_set_hover_caption(squad)
+	hover_panel.reset_size()
+	var pos = screen_pos + Vector2(14, -hover_panel.size.y - 6)
+	hover_panel.position = pos.clamp(Vector2.ZERO, get_viewport_rect().size - hover_panel.size)
+	hover_panel.show()
+
+# Отряд, боец которого в точке мира (ближайший); скрытые враги не в счёт
+func _squad_at(world_pos: Vector2) -> Squad:
+	var best: Squad = null
+	var best_dist = INF
+	for squad in SquadRegistry.get_all_alive_squads():
+		if not squad.visible:
+			continue
+		for soldier in squad.soldiers:
+			var k = soldier.data.sprite_scale
+			var local = world_pos - soldier.global_position
+			if absf(local.x) > HOVER_HALF_WIDTH * k or local.y > 6.0 					or local.y < -Soldier.TARGET_SPRITE_HEIGHT * k:
+				continue
+			var d = local.length()
+			if d < best_dist:
+				best_dist = d
+				best = squad
+	return best
+
+func _set_hover_caption(squad: Squad) -> void:
+	var text = "%s ×%d" % [squad.data.unit_name, squad.soldiers.size()]
+	if squad.team == GameConstants.TEAM_PLAYER and squad.data.squad_level > 0:
+		text += " · ур.%d" % squad.data.squad_level
+	hover_text.text = text
+	hover_text.add_theme_color_override("font_color",
+		UITheme.GOLD_BRIGHT if squad.team == GameConstants.TEAM_PLAYER else UITheme.RED_BRIGHT)
+
+# -------------------------------------------------------
+# СПРАВКА ПО ОТРЯДУ (клик по своему отряду)
+# -------------------------------------------------------
+# _unhandled_input: клики по UI (скамейка, HUD, меню) сюда не доходят
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	if merge_menu:
+		return
+	var squad = _squad_at(_screen_to_world(event.position))
+	if squad == null or squad.team != GameConstants.TEAM_PLAYER or squad == info_squad:
+		_close_info_panel()
+		return
+	info_squad = squad
+	_update_info_panel()
+
+func _close_info_panel() -> void:
+	info_squad = null
+	if info_panel:
+		info_panel.hide()
+
+func _update_info_panel() -> void:
+	if info_squad == null:
+		return
+	if not is_instance_valid(info_squad) or not info_squad.is_alive():
+		_close_info_panel()
+		return
+	info_title.text = info_squad.data.unit_name
+	info_text.text = _squad_info_text(info_squad)
+	info_panel.reset_size()
+	info_panel.show()
+	# Рядом с отрядом (за первым живым бойцом — в бою отряд движется), в пределах экрана
+	var anchor = _world_to_screen(info_squad.soldiers[0].global_position)
+	var pos = anchor + Vector2(24, -info_panel.size.y / 2.0)
+	info_panel.position = pos.clamp(Vector2(0, UITheme.HUD_HEIGHT), get_viewport_rect().size - info_panel.size)
+
+func _squad_info_text(squad: Squad) -> String:
+	var d = squad.data
+	var lines: Array[String] = []
+	lines.append("Уровень %d/%d" % [d.squad_level, UnitFactory.MAX_SQUAD_LEVEL])
+	var alive = squad.soldiers.size()
+	lines.append("Бойцы: %d/%d" % [alive, maxi(d.squad_size, alive)])
+	var hp := 0.0
+	var max_hp := 0.0
+	for soldier in squad.soldiers:
+		hp += soldier.current_hp
+		max_hp += soldier.max_hp
+	lines.append("HP: %d/%d" % [ceili(hp), ceili(max_hp)])
+	# Бонусы отряда: слияния и карты-улучшения (множители UnitData)
+	var bonuses: Array[String] = []
+	for b in [[d.hp_multiplier, "HP"], [d.damage_multiplier, "урона"], [d.attack_speed_multiplier, "скорострельности"]]:
+		if b[0] > 1.001:
+			bonuses.append("+%d%% %s" % [roundi((b[0] - 1.0) * 100.0), b[1]])
+	lines.append("Бонусы: " + (", ".join(bonuses) if not bonuses.is_empty() else "нет"))
+	if not d.applied_upgrades.is_empty():
+		lines.append("Улучшения: " + ", ".join(d.applied_upgrades))
+	# Синергии, которые действуют на бойцов этого отряда (не экономические)
+	var syn: Array[String] = []
+	for s in SynergyManager.active_synergies:
+		if s["tag"] in d.tags and not s["bonus"].has("epic_discount"):
+			syn.append(s["name"])
+	if not syn.is_empty():
+		lines.append("Синергии: " + ", ".join(syn))
+	return "\n".join(lines)
+
+# Вписывает мир в свободную область экрана: центр мира — в центр области
+func _fit_camera(animate: bool) -> void:
+	if camera == null:
+		return
+	var area = _get_play_area()
+	var bounds = iso_grid.get_world_bounds()
+	var z = minf(area.size.x / bounds.size.x, area.size.y / bounds.size.y)
+	var screen_center = get_viewport_rect().size / 2.0
+	var pos = bounds.get_center() - (area.get_center() - screen_center) / z
+	if animate:
+		var tw = create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(camera, "zoom", Vector2(z, z), CAMERA_TWEEN_TIME)
+		tw.tween_property(camera, "position", pos, CAMERA_TWEEN_TIME)
+	else:
+		camera.zoom = Vector2(z, z)
+		camera.position = pos
+
+# Экран ↔ мир (поле под камерой, UI — в CanvasLayer)
+func _screen_to_world(p: Vector2) -> Vector2:
+	return get_canvas_transform().affine_inverse() * p
+
+func _world_to_screen(p: Vector2) -> Vector2:
+	return get_canvas_transform() * p
 
 # -------------------------------------------------------
 # РАССТАНОВКА ИГРОКА
@@ -180,12 +349,12 @@ func _input(event: InputEvent) -> void:
 	if not is_placement_phase or merge_menu:
 		return
 	if event is InputEventMouseMotion:
-		var tile = iso_grid.screen_to_tile(event.position, false)
+		var tile = iso_grid.screen_to_tile(_screen_to_world(event.position), false)
 		var renderer = grid_renderer.get_child(0) as IsoGridRenderer
 		if renderer:
 			renderer.update_hover(tile)
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_try_buy_tile(iso_grid.screen_to_tile(event.position, false))
+		_try_buy_tile(iso_grid.screen_to_tile(_screen_to_world(event.position), false))
 
 # -------------------------------------------------------
 # РАСШИРЕНИЕ КОРОЛЕВСТВА (каждая 3-я волна)
@@ -217,6 +386,10 @@ func _on_start_pressed() -> void:
 	is_placement_phase = false
 	start_button.disabled = true
 	_close_merge_menu()
+	# Бой: прячем скамейку и синергии, камера отъезжает на всё поле
+	bench.visible = false
+	synergy_panel.visible = false
+	_fit_camera(true)
 	result_label.text = "Бой идёт..."
 	_update_expansion()
 	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_ENEMY):
@@ -233,6 +406,9 @@ func _on_start_pressed() -> void:
 	_show_synergies()
 
 	player_soldiers_at_start = my_soldiers.size()
+	player_squads_at_start.clear()
+	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER):
+		player_squads_at_start.append({"data": squad.data, "tile": squad.tile})
 	# Стены дают цитадели щит на этот бой
 	var shield: float = 0.0
 	for b in BattleManager.buildings:
@@ -278,7 +454,9 @@ func _on_battle_ended(winner_team: int) -> void:
 			result_label.text = "Цитадель выстояла! +%d Req" % income
 		else:
 			result_label.text = "Победа! +%d Req" % income
-		_save_survivors()
+		var revived = _save_survivors()
+		if revived > 0:
+			result_label.text += " · возрождено отрядов: %d" % revived
 	elif winner_team == GameConstants.TEAM_ENEMY:
 		var income = EconomyManager.give_round_income(false)
 		result_label.text = "Поражение! +%d Req" % income
@@ -419,6 +597,7 @@ func _build_ui() -> void:
 
 	# --- Панель синергий ---
 	var syn_panel = PanelContainer.new()
+	synergy_panel = syn_panel
 	syn_panel.theme = UITheme.get_theme()
 	syn_panel.theme_type_variation = "HudPanel"
 	syn_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -435,6 +614,35 @@ func _build_ui() -> void:
 	synergy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	synergy_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(synergy_label)
+
+	# --- Справка по отряду (клик) ---
+	info_panel = PanelContainer.new()
+	info_panel.theme = UITheme.get_theme()
+	info_panel.theme_type_variation = "HudPanel"
+	info_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info_panel.custom_minimum_size = Vector2(220, 0)
+	info_panel.hide()
+	$UI.add_child(info_panel)
+	var info_col = VBoxContainer.new()
+	info_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info_panel.add_child(info_col)
+	info_title = UITheme.make_label("", "HeaderLabel")
+	info_col.add_child(info_title)
+	info_text = UITheme.make_label("", "SmallLabel")
+	info_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info_text.custom_minimum_size = Vector2(220, 0)
+	info_col.add_child(info_text)
+
+	# --- Подпись отряда под курсором ---
+	hover_panel = PanelContainer.new()
+	hover_panel.theme = UITheme.get_theme()
+	hover_panel.theme_type_variation = "HudPanel"
+	hover_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hover_panel.hide()
+	$UI.add_child(hover_panel)
+	hover_text = UITheme.make_label("", "SmallLabel")
+	hover_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hover_panel.add_child(hover_text)
 
 func _update_requisition(amount: int) -> void:
 	requisition_label.text = "%d Req" % amount
@@ -464,7 +672,8 @@ func _show_synergies() -> void:
 # -------------------------------------------------------
 # СОХРАНЕНИЕ ВЫЖИВШИХ
 # -------------------------------------------------------
-func _save_survivors() -> void:
+# Возвращает, сколько павших отрядов возрождено
+func _save_survivors() -> int:
 	BattleManager.player_units.clear()
 	BattleManager.player_placements.clear()
 
@@ -481,8 +690,22 @@ func _save_survivors() -> void:
 		BattleManager.player_units.append(squad.data)
 		BattleManager.player_placements[squad.data] = squad.tile
 		soldier_count += hp_list.size()
+	var survived = BattleManager.player_units.size()
 
-	print("BattleScene: выжило %d отрядов, %d бойцов" % [BattleManager.player_units.size(), soldier_count])
+	# Павшие целиком отряды возрождаются на свою клетку: уровень −1, без улучшений
+	var revived: Array[String] = []
+	for entry in player_squads_at_start:
+		var data: UnitData = entry["data"]
+		if BattleManager.player_units.has(data):
+			continue
+		data.respawn_after_wipe()
+		BattleManager.player_units.append(data)
+		BattleManager.player_placements[data] = entry["tile"]
+		revived.append(data.unit_name)
+
+	print("BattleScene: выжило %d отрядов, %d бойцов; возрождено отрядов: %d %s" % [
+		survived, soldier_count, revived.size(), revived])
+	return revived.size()
 
 # -------------------------------------------------------
 # DROP КАРТЫ НА ТАЙЛ
@@ -491,7 +714,7 @@ func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
 	if not is_placement_phase:
 		return
 	_close_merge_menu()
-	var tile = iso_grid.screen_to_tile(screen_pos, false)
+	var tile = iso_grid.screen_to_tile(_screen_to_world(screen_pos), false)
 
 	if not iso_grid.is_valid_tile(tile):
 		_show_message("Мимо сетки")
@@ -535,6 +758,7 @@ func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
 # КАРТА ОТРЯДА НА ТАКОЙ ЖЕ ОТРЯД: УЛУЧШЕНИЕ / ЛЕЧЕНИЕ
 # -------------------------------------------------------
 func _open_merge_menu(card: CardData, squad: Squad) -> void:
+	_close_info_panel()
 	var can_upgrade = squad.data.can_merge_upgrade()
 	var wounded = squad.is_wounded()
 	if not can_upgrade and not wounded:
@@ -578,7 +802,7 @@ func _open_merge_menu(card: CardData, squad: Squad) -> void:
 
 	# Рядом с отрядом, но в пределах экрана
 	merge_menu.reset_size()
-	var pos = squad.global_position + Vector2(-merge_menu.size.x / 2.0, 20)
+	var pos = _world_to_screen(squad.global_position) + Vector2(-merge_menu.size.x / 2.0, 20)
 	var screen = get_viewport_rect().size
 	merge_menu.position = pos.clamp(Vector2.ZERO, screen - merge_menu.size)
 

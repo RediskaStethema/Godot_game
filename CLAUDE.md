@@ -28,9 +28,9 @@ scripts/
 	SynergyManager.gd   — синергии по тегам (TDD MVP: marine x3/x6, elite x2), доход +2 за 3 marine
 	RunManager.gd       — забег: линейная цепочка шагов (RunMapData), текущий шаг, advance() — переход к следующему
   battle/
-	IsoGrid.gd          — раскладка как в 9 Kings: королевство (открытые клетки `unlocked` в рамке 4×4, сверху слева) и зона врага на одной изометрической оси col, между ними gap_tiles «ничьей земли»; setup(screen, play_area) центрирует всю раскладку
+	IsoGrid.gd          — раскладка как в 9 Kings: королевство (открытые клетки `unlocked` в рамке 4×4, сверху слева) и зона врага на одной изометрической оси col, между ними `gap_tiles = 5` «ничьей земли»; раскладка в мировых координатах (`setup()`), `get_world_bounds()` — что должно быть видно (с цитаделью и запасом под спрайты)
 	IsoGridRenderer.gd  — платформа из блоков лунного тайлсета (кэш в дочернем узле, перерисовка refresh_floor()), техно-плиты королевства, тёмные плиты зоны врага, декор; подсветка клеток; occupied_tiles_player/enemy
-	TerrainTiles.gd     — тайлсет assets/sprites/map_sprite (32×32 пиксель-арт, масштаб 128/30, TEXTURE_FILTER_NEAREST): draw_block / draw_decoration, списки Slice по назначению
+	TerrainTiles.gd     — тайлсет assets/sprites/map_sprite (32×32 пиксель-арт, масштаб IsoGrid.TILE_WIDTH/30 (клетка 140×70), TEXTURE_FILTER_NEAREST): draw_block / draw_decoration, списки Slice по назначению
 	Building.gd         — здание на клетке королевства: вид из блоков (BLOCKS по building_type), турель (tick), аура замедления стены
 	Citadel.gd          — цитадель: крепость из блоков в полклетки на IsoGrid.citadel_tile (0,5), HP-бар, орудие для штурма (tick / take_hit)
 	Soldier.gd          — FSM юнита (9 состояний, transition_to / apply_stun / apply_knockback)
@@ -115,11 +115,15 @@ scripts/
 - Карта отряда, брошенная на свой отряд того же типа (`UnitData.factory_id == CardData.unit_factory_id`) → меню в BattleScene: **улучшить** (`Squad.merge_upgrade()`, до `UnitFactory.MAX_SQUAD_LEVEL = 3`, уровень — `UnitData.squad_level`, множители hp/damage/attack_speed копятся умножением) или **вылечить** (`Squad.heal_by_ratio`, без лимита: живым +доля max HP, павшие до полного состава `UnitData.squad_size` возвращаются с той же долей HP). Бонусы по фракциям — `UnitFactory.SQUAD_MERGE_BONUSES` (space_marines: +20% урона, +20% HP, +15% скорострельности; лечение 35% max HP)
 - Множители `UnitData` — только улучшения отряда и масштабирование врагов по волнам; синергии — только runtime-поля Soldier
 - Один UnitData = один отряд; `saved_hp` — **доли** HP (0..1] выживших бойцов между раундами (не абсолют — иначе баффы обрезаются)
+- Отряд пал целиком, но бой выигран (в т.ч. «Цитадель выстояла») → `UnitData.respawn_after_wipe()` в `BattleScene._save_survivors`: полный состав `squad_size` с полным HP на свою клетку, уровень −1 (с базового — просто возрождается), карты-улучшения сбрасываются (решение пользователя). Поражение / ничья — армия теряется, как раньше
 - Дальности и скорости — в пикселях (melee ≈ 60, ranged 200–320)
 
 ## UI и ассеты
 - UI собирается кодом поверх .tscn (`_build_layout` в ShopScene, `_build_ui` в BattleScene, `_ready` в Bench); стили — только из `UITheme` (вариации: HeaderLabel, TitleLabel, ValueLabel, DimLabel, SmallLabel, HudPanel, PrimaryButton)
-- Окно: 1152×648, `stretch = canvas_items / expand` — всё масштабируется под размер окна
+- Окно: 1152×648, `stretch = canvas_items / expand` — всё масштабируется под размер окна; минимальная высота 648 — под неё подобраны панели магазина (`ShopScene.BOTTOM_BAR_HEIGHT / HAND_PANEL_HEIGHT`, `ShopSlot.CARD_SIZE`) и карта скамейки (`BenchCard`, текст ≤ 3 строк)
+- Бой: `Camera2D` в BattleScene (`_fit_camera`) вписывает `IsoGrid.get_world_bounds()` в свободную от UI область — при расстановке между HUD и скамейкой, после «В БОЙ» скамейка и синергии прячутся, камера плавно отъезжает. Ввод с экрана → мир: `_screen_to_world()` (UI — в CanvasLayer, камера на него не влияет)
+- Подпись отряда: курсор на бойце дольше `BattleScene.HOVER_NAME_DELAY` (0.5 с) → имя ×бойцов (· ур.N у своих), свои золотом, враги красным; скрытые до боя враги не подписываются (`_squad_at`, `_show_hover`)
+- Справка по отряду: клик по своему отряду (`_unhandled_input` — клики по UI не доходят) → панель рядом: уровень, живые бойцы / `squad_size`, текущее / макс. HP, бонусы множителей `UnitData` в %, карты-улучшения, синергии отряда; обновляется каждый кадр (`_update_info_panel`), повторный клик или клик мимо — закрыть
 - Спрайты юнитов нормализуются к `Soldier.TARGET_SPRITE_HEIGHT` (62 px) по кадру idle, ноги — в точке бойца; размер юнита — `UnitData.sprite_scale`, окраска — `UnitData.tint`
 - Импорт спрайтов: mipmaps включены; `premult_alpha` / `normal_map_invert_y` должны быть false (иначе зелёные силуэты)
 - Units и Squad — `y_sort_enabled`; полоска HP рисуется в `Soldier._draw()`

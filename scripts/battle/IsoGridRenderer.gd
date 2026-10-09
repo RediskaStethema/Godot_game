@@ -24,7 +24,7 @@ const COLOR_ENEMY    = Color(0.56, 0.15, 0.13, 0.10)
 const BORDER_ENEMY   = Color(0.78, 0.27, 0.23, 0.35)
 
 # --- Платформа ---
-const FLOOR_PAD_TILES: int = 3          # поле шире раскладки на столько тайлов
+const FLOOR_PAD_TILES: int = 5          # поле шире раскладки на столько тайлов (камера в бою отъезжает)
 const FLOOR_TINT = Color(0.72, 0.70, 0.68)   # пол чуть темнее — юниты читаются лучше
 const DECOR_CHANCE: int = 12            # % клеток вне боевой полосы с декором
 const DECOR_FLAT_CHANCE: int = 4        # % клеток «ничьей земли» с кратером

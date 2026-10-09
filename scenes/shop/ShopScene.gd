@@ -8,10 +8,11 @@ extends Control
 
 const SHOP_SLOT_SCENE = preload("res://scenes/shop/ShopSlot.tscn")
 
-# Высоты нижних панелей магазина
-const BOTTOM_BAR_HEIGHT: float = 92.0
-const HAND_PANEL_HEIGHT: float = 150.0
-const HAND_CARD_SIZE = Vector2(118, 112)
+# Высоты нижних панелей магазина. Подобраны под минимальную высоту окна 648:
+# HUD + заголовок + карта (ShopSlot.CARD_SIZE) + рука + нижняя панель
+const BOTTOM_BAR_HEIGHT: float = 80.0
+const HAND_PANEL_HEIGHT: float = 124.0
+const HAND_CARD_SIZE = Vector2(118, 96)
 
 # «Рука» — карты, ещё не выложенные на поле: купленные сейчас +
 # оставшиеся на скамейке с прошлого боя. Не больше BattleManager.MAX_HAND_SIZE.

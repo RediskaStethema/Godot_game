@@ -3,8 +3,10 @@ extends RefCounted
 
 # Размер одного тайла в пикселях
 # 2:1 соотношение — стандарт для изометрии
-const TILE_WIDTH: int = 128
-const TILE_HEIGHT: int = 64
+# 140×70 — было 128×64, крупнее на ~10% (чётные половинки, чтобы целочисленные
+# TILE_WIDTH / 2 и TILE_HEIGHT / 2 сохраняли 2:1)
+const TILE_WIDTH: int = 140
+const TILE_HEIGHT: int = 70
 
 # Рамка королевства игрока: в ней лежат открытые клетки (unlocked) и клетки,
 # которые можно докупить. Раскладка считается по рамке, поэтому при покупке
@@ -29,30 +31,33 @@ var enemy_origin: Vector2    # зона врага — снизу справа, 
 # Раскладка как в 9 Kings: одно общее поле, королевство и зона врага лежат
 # на одной изометрической оси (ось col, экранное направление (2, 1)).
 # Между ними — «ничья земля» в gap_tiles тайлов, где сходятся армии.
-const DEFAULT_GAP_TILES: int = 3
-const MIN_GAP_TILES: int = 1
+const DEFAULT_GAP_TILES: int = 5
 var gap_tiles: int = DEFAULT_GAP_TILES
 
-# play_area — свободная от UI область экрана. Пустая = весь экран.
-# Вся раскладка (королевство + ничья земля + зона врага) центрируется в ней.
-func setup(screen_size: Vector2, play_area: Rect2 = Rect2()) -> void:
-	if play_area.size == Vector2.ZERO:
-		play_area = Rect2(Vector2.ZERO, screen_size)
+# Запас вокруг раскладки для get_world_bounds(): сверху — спрайты бойцов
+# верхнего ряда и HP-бары, у цитадели — её башня
+const BOUNDS_MARGIN: float = 24.0
+const UNIT_HEADROOM: float = 80.0
+const CITADEL_HEADROOM: float = 190.0
 
-	# Большие сетки по высоте не влезают — сокращаем ничью землю
+# Раскладка в мировых координатах: левый верхний угол рамки — (0, 0).
+# В экран её вписывает камера BattleScene (get_world_bounds), поэтому поле
+# не сжимается под размер окна.
+func setup() -> void:
 	gap_tiles = DEFAULT_GAP_TILES
-	while gap_tiles > MIN_GAP_TILES and get_layout_size().y > play_area.size.y:
-		gap_tiles -= 1
-
-	var size = get_layout_size()
-	var top_left = play_area.position + (play_area.size - size) / 2.0
-	# Левый верхний угол рамки раскладки относительно player_origin
-	player_origin = top_left - Vector2(-get_layout_rows() * TILE_WIDTH / 2.0, -TILE_HEIGHT / 2.0)
+	player_origin = Vector2(get_layout_rows() * TILE_WIDTH / 2.0, TILE_HEIGHT / 2.0)
 	enemy_origin = player_origin + get_enemy_shift()
 
-	if size.x > play_area.size.x or size.y > play_area.size.y:
-		push_warning("IsoGrid: раскладка %dx%d (%s px) не влезает в игровую область %s" \
-			% [grid_width, grid_height, size, play_area.size])
+# Прямоугольник мира, который должен быть виден целиком: раскладка, цитадель,
+# запас под спрайты
+func get_world_bounds() -> Rect2:
+	var r = Rect2(Vector2.ZERO, get_layout_size())
+	var citadel = tile_to_screen(citadel_tile)
+	r = r.expand(citadel + Vector2(-TILE_WIDTH / 2.0, TILE_HEIGHT / 2.0))
+	r = r.expand(citadel + Vector2(TILE_WIDTH / 2.0, -CITADEL_HEADROOM))
+	r.position.y -= UNIT_HEADROOM
+	r.size.y += UNIT_HEADROOM
+	return r.grow(BOUNDS_MARGIN)
 
 # Сдвиг зоны врага от королевства — вдоль оси col (направление наступления)
 func get_enemy_shift() -> Vector2:

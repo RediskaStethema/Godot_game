@@ -91,6 +91,22 @@ func apply_merge_upgrade() -> void:
 	attack_speed_multiplier *= 1.0 + b["attack_speed"]
 	squad_level += 1
 
+# Отряд пал целиком в выигранном бою: возрождается полным составом с полным HP,
+# на уровень ниже и без карт-улучшений (с базового уровня — просто возрождается).
+func respawn_after_wipe() -> void:
+	var new_level = maxi(squad_level - 1, 0)
+	hp_multiplier = 1.0
+	damage_multiplier = 1.0
+	attack_speed_multiplier = 1.0
+	applied_upgrades.clear()
+	squad_level = 0
+	for i in range(new_level):
+		apply_merge_upgrade()
+	var hp_list: Array[float] = []
+	for i in range(maxi(squad_size, 1)):
+		hp_list.append(1.0)
+	saved_hp = hp_list
+
 # Может ли карта-улучшение быть применена к этому отряду
 func can_apply_upgrade(card: CardData) -> bool:
 	return card.card_type == "upgrade" and (card.affects_tag == "" or card.affects_tag in tags)

@@ -3,7 +3,7 @@ extends RefCounted
 
 # Пиксельный изометрический тайлсет луны (assets/sprites/map_sprite, 32×32).
 # Верхняя грань куба — ромб 30×15 px с центром в (16, 7.5), боковая грань — 16 px.
-# Масштабируем так, чтобы ромб совпал с тайлом сетки (128×64).
+# Масштабируем так, чтобы ромб совпал с тайлом сетки (IsoGrid.TILE_WIDTH × TILE_HEIGHT).
 
 const DIR = "res://assets/sprites/map_sprite/"
 const TOP_WIDTH_PX: float = 30.0

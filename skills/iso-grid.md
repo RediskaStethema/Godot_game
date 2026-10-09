@@ -90,7 +90,7 @@ _place_player_squads()
 
 ## Проблема: враги вне экрана
 
-Если враги уходят за правый/нижний край viewport, проверить `enemy_origin` в IsoGrid.setup().  
+Если поле или враги уходят за край экрана — проверить `IsoGrid.get_world_bounds()` (что входит в видимую область) и `BattleScene._fit_camera()` / `_get_play_area()`; раскладка сама в экран не вписывается, это делает камера.  
 Формула: `enemy_origin` должна быть в пределах viewport с учётом TILE_WIDTH * grid_width.
 
 ## Отладка тайлов

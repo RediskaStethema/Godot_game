@@ -5,8 +5,8 @@ extends PanelContainer
 @onready var card_desc: Label = $VBoxContainer/UnitStats
 @onready var buy_button: Button = $VBoxContainer/BuyButton
 
-const CARD_SIZE = Vector2(230, 290)
-const PORTRAIT_HEIGHT = 84.0
+const CARD_SIZE = Vector2(220, 270)
+const PORTRAIT_HEIGHT = 70.0
 
 var slot_index: int = 0
 var card_data: CardData = null
