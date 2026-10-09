@@ -31,6 +31,9 @@ const CITADEL_MAX_HP: float = 1000.0
 var citadel_hp: float = CITADEL_MAX_HP
 var citadel: Node2D = null          # цитадель текущего боя (ставит BattleScene)
 var siege_started: bool = false     # армия игрока пала, враги штурмуют цитадель
+# «В БОЙ» нажата, итога ещё нет. Сохраняется: «Продолжить» ставит армию как была
+# и сразу запускает бой (без повторной расстановки)
+var battle_in_progress: bool = false
 # Щит цитадели на текущий бой (Fortress Wall): урон штурма сначала снимает его
 var citadel_shield: float = 0.0
 
@@ -182,6 +185,7 @@ func heal_citadel(amount: float) -> float:
 
 # Новый забег: цитадель, королевство, армия, рука, экономика, синергии, цепочка забега
 func reset_run() -> void:
+	battle_in_progress = false
 	citadel_hp = CITADEL_MAX_HP
 	emit_signal("citadel_hp_changed", citadel_hp)
 	citadel_shield = 0.0

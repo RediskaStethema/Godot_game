@@ -5,9 +5,11 @@ extends Node
 # -------------------------------------------------------
 # Один слот: user://run_save.json. Пишется автоматически:
 #   * вход в магазин и каждое действие в нём (покупка, продажа, обновление);
-#   * вход в бой (состояние до расстановки) и итог боя;
+#   * вход в бой, каждое действие расстановки (отряд, слияние, лечение,
+#     улучшение, здание, клетка), нажатие «В БОЙ» и итог боя;
 # удаляется в конце забега (победа / цитадель пала) и при новом забеге.
-# Закрыли игру посреди боя — бой начнётся заново с расстановки.
+# Закрыли игру посреди боя — армия встаёт как была (уровни, улучшения, клетки)
+# и бой сразу начинается заново; ход самой схватки не сохраняется.
 #
 # Отряды и карты хранятся по id фабрик (UnitFactory / CardFactory) + состояние
 # отряда; при загрузке собираются заново — правки баланса применяются и к
@@ -69,6 +71,7 @@ func save_run() -> bool:
 			"units": units,
 			"buildings": buildings,
 			"hand": _card_ids(BattleManager.pending_cards),
+			"in_progress": BattleManager.battle_in_progress,
 		},
 		"shop": {
 			"node_id": ShopManager.shop_node_id,
@@ -130,6 +133,7 @@ func load_run() -> bool:
 		if card:
 			BattleManager.player_buildings[card] = _arr_to_v2i(entry["tile"])
 	BattleManager.pending_cards = _cards_from_ids(b["hand"])
+	BattleManager.battle_in_progress = bool(b.get("in_progress", false))
 
 	var shop: Dictionary = data["shop"]
 	ShopManager.shop_node_id = int(shop["node_id"])

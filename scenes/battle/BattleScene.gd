@@ -50,6 +50,10 @@ var info_squad: Squad = null
 # ИНИЦИАЛИЗАЦИЯ
 # -------------------------------------------------------
 func _ready() -> void:
+	# Прошлый бой мог не дойти до итога (загрузка сохранения посреди боя) —
+	# в реестрах остались бы удалённые отряды и бойцы
+	SquadRegistry.clear()
+	SoldierRegistry.clear()
 	# Тип боя и волна — из текущего шага забега
 	battle_type = RunManager.get_battle_type()
 	battle_wave = RunManager.get_battle_wave()
@@ -88,8 +92,11 @@ func _ready() -> void:
 	_update_expansion()
 	if BattleManager.can_expand_kingdom() and not iso_grid.get_expansion_tiles().is_empty():
 		_show_message("Расширение: кликните по зелёной клетке")
-	# Сохранение до расстановки: закрыли игру посреди боя — бой с начала
 	SaveManager.save_run()
+	# Загрузили сохранение посреди боя: армия уже стоит как была — сразу в бой
+	if BattleManager.battle_in_progress:
+		_show_message("Бой продолжается")
+		_on_start_pressed.call_deferred()
 
 # Цитадель — в общем контейнере юнитов, чтобы сортироваться по глубине с бойцами
 func _spawn_citadel() -> void:
@@ -394,6 +401,7 @@ func _try_buy_tile(tile: Vector2i) -> void:
 	iso_grid.set_unlocked_tiles(BattleManager.kingdom_tiles)
 	_update_expansion()
 	_show_message("Королевство расширено (−%d Req), клеток: %d" % [cost, BattleManager.kingdom_tiles.size()])
+	_save_placement()
 
 # -------------------------------------------------------
 # БОЙ
@@ -402,6 +410,10 @@ func _on_start_pressed() -> void:
 	is_placement_phase = false
 	start_button.disabled = true
 	_close_merge_menu()
+	# Армия перед боем — в забег и в сохранение. До синергий: они меняют max_hp
+	# бойцов только на этот бой и исказили бы доли HP
+	BattleManager.battle_in_progress = true
+	_save_placement()
 	# Бой: прячем скамейку и синергии, камера отъезжает на всё поле
 	bench.visible = false
 	synergy_panel.visible = false
@@ -453,6 +465,7 @@ func _on_battle_ended(winner_team: int) -> void:
 	if _battle_resolved:
 		return
 	_battle_resolved = true
+	BattleManager.battle_in_progress = false
 	if BattleManager.citadel_hp <= 0:
 		_game_over()
 		return
@@ -851,6 +864,23 @@ func _close_merge_menu() -> void:
 func _consume_bench_card(card: CardData) -> void:
 	bench.bench_cards.erase(card)
 	bench._populate()
+	_save_placement()
+
+# Расстановка меняет армию на поле — переносим её в забег (BattleManager) и
+# сохраняем: «Продолжить» вернёт отряды с теми же уровнями, улучшениями и HP
+func _sync_player_army() -> void:
+	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER):
+		var hp_list: Array[float] = []
+		for soldier in squad.soldiers:
+			hp_list.append(clampf(soldier.current_hp / soldier.max_hp, 0.01, 1.0))
+		squad.data.saved_hp = hp_list
+		if not BattleManager.player_units.has(squad.data):
+			BattleManager.player_units.append(squad.data)
+		BattleManager.player_placements[squad.data] = squad.tile
+
+func _save_placement() -> void:
+	_sync_player_army()
+	SaveManager.save_run()
 
 func _get_player_squad_at(tile: Vector2i) -> Squad:
 	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER):

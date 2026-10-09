@@ -1,7 +1,8 @@
 extends SceneTree
 
 # Сохранение забега (SaveManager): магазин после перезапуска, развитая армия,
-# «Продолжить» после пройденного шага и посреди боя, удаление в конце забега.
+# «Продолжить» после пройденного шага, посреди расстановки и посреди боя,
+# удаление в конце забега.
 # Пишет в свой файл — сохранение игрока не трогает.
 #   godot --headless --path . -s tests/test_save.gd
 const TEST_SAVE_PATH: String = "user://test_run_save.json"
@@ -100,21 +101,39 @@ func _main() -> void:
 	await _frames(3)
 	_check("пройденный шаг → магазин шага 8", current_scene.name == "ShopScene" and rm.current_node_id == 8)
 
-	# 5. В бой, «вылет» посреди боя → «Продолжить» → тот же бой с расстановки
+	# 5. Расстановка: выставить отряд с карты и наложить улучшение → «вылет» →
+	#    «Продолжить» возвращает поле как было
 	current_scene._on_battle_pressed()
 	await _frames(3)
+	var battle = current_scene
 	var battle_node = rm.current_node_id
-	current_scene._on_start_pressed()
-	await _frames(5)
-	bm.stop_battle()
+	var hand_tactical = bm.pending_cards.filter(func(c): return c.id == "tactical_squad")[0]
+	var hand_fury = bm.pending_cards.filter(func(c): return c.id == "battle_fury")[0]
+	battle._on_card_dropped(hand_tactical, battle._world_to_screen(battle.iso_grid.tile_to_screen(Vector2i(0, 0))))
+	battle._on_card_dropped(hand_fury, battle._world_to_screen(battle.iso_grid.tile_to_screen(Vector2i(1, 1))))
 	bm.reset_run()
 	sv.load_run()
 	rm.resume()
 	await _frames(3)
-	_check("вылет посреди боя → тот же бой", current_scene.name == "BattleScene" and rm.current_node_id == battle_node \
-		and bm.player_units.size() == 2)
+	battle = current_scene
+	var term = bm.player_units.filter(func(d): return d.factory_id == "terminator")[0]
+	var tac = bm.player_units.filter(func(d): return d.factory_id == "tactical_marine")
+	_check("расстановка сохранена: новый отряд на клетке, улучшение, рука пуста", battle.name == "BattleScene" 		and battle.is_placement_phase and rm.current_node_id == battle_node and bm.player_units.size() == 3 		and tac.size() == 1 and bm.player_placements.get(tac[0]) == Vector2i(0, 0) and tac[0].saved_hp.size() == 3 		and term.squad_level == 1 and term.applied_upgrades == ["Blessed Armour", "Battle Fury"] 		and bm.pending_cards.is_empty() 		and root.get_node("SquadRegistry").get_alive_squads_of_team(0).size() == 3)
 
-	# 6. Конец забега — сохранение удалено
+	# 6. «В БОЙ» → «вылет» посреди боя → «Продолжить»: та же армия, бой сразу идёт
+	battle._on_start_pressed()
+	await _frames(5)
+	bm.stop_battle()
+	bm.reset_run()
+	sv.load_run()
+	_check("флаг «бой идёт» в сохранении", bm.battle_in_progress)
+	rm.resume()
+	await _frames(4)
+	battle = current_scene
+	term = bm.player_units.filter(func(d): return d.factory_id == "terminator")[0]
+	_check("вылет посреди боя → бой сразу, армия как была", battle.name == "BattleScene" 		and not battle.is_placement_phase and rm.current_node_id == battle_node and bm.player_units.size() == 3 		and term.applied_upgrades == ["Blessed Armour", "Battle Fury"] 		and root.get_node("SquadRegistry").get_alive_squads_of_team(0).size() == 3)
+
+	# 7. Конец забега — сохранение удалено
 	current_scene._show_run_end(false)
 	_check("конец забега удаляет сохранение", not sv.has_save())
 	sv.delete_save()
