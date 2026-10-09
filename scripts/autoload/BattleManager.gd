@@ -102,6 +102,7 @@ func _process(delta: float) -> void:
 # -------------------------------------------------------
 
 func _battle_tick() -> void:
+	SoldierRegistry.begin_tick()
 	# Тикаем все живые отряды
 	var squads = SquadRegistry.get_all_alive_squads()
 	for squad in squads:

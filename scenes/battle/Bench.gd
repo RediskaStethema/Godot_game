@@ -15,6 +15,8 @@ var empty_hint: Label = null
 const PREVIEW_SIZE = Vector2(72, 72)
 
 func _ready() -> void:
+	# Кадровый апдейт нужен только пока тащим карту
+	set_process(false)
 	# Панель скамейки — во всю ширину снизу, справа место под панель синергий
 	var panel: PanelContainer = $BenchPanel
 	panel.theme = UITheme.get_theme()
@@ -87,6 +89,7 @@ func _on_drag_started(card: CardData, from_pos: Vector2) -> void:
 	drag_preview = preview
 	add_child(drag_preview)
 	drag_preview.global_position = from_pos
+	set_process(true)
 
 func _process(_delta: float) -> void:
 	# Превью следует за мышью
@@ -103,6 +106,7 @@ func _input(event: InputEvent) -> void:
 			_on_drop(get_viewport().get_mouse_position())
 
 func _on_drop(screen_pos: Vector2) -> void:
+	set_process(false)
 	# Убираем превью
 	if drag_preview:
 		drag_preview.queue_free()
