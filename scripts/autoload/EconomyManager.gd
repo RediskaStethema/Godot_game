@@ -39,6 +39,11 @@ func calculate_wave_income(wave: int, bonuses: int = 0) -> int:
 	var base = INCOME_BASE + wave * INCOME_PER_WAVE
 	return base + clampi(bonuses, 0, INCOME_CAP_BONUS)
 
+# Бонусы TDD к доходу за победу (кап +8 применит calculate_wave_income):
+# синергия фракции, «без потерь», +BONUS_ELITE_KILL за каждого элитного врага
+func calculate_victory_bonuses(synergy_income: int, flawless: bool, elite_kills: int) -> int:
+	return synergy_income + (BONUS_FLAWLESS if flawless else 0) + elite_kills * BONUS_ELITE_KILL
+
 # Вызывается один раз в конце каждого боя — единственное место,
 # где растёт round_number.
 func give_round_income(won: bool, bonuses: int = 0) -> int:
@@ -103,6 +108,20 @@ func sell_card(card: CardData) -> int:
 	requisition += refund
 	emit_signal("requisition_changed", requisition)
 	return refund
+
+# -------------------------------------------------------
+# СОХРАНЕНИЕ (SaveManager) — своё состояние забега
+# -------------------------------------------------------
+func save_state() -> Dictionary:
+	return {"requisition": requisition, "salvage": salvage, "wins": wins, "round_number": round_number}
+
+func load_state(d: Dictionary) -> void:
+	requisition = int(d["requisition"])
+	salvage = int(d["salvage"])
+	wins = int(d["wins"])
+	round_number = int(d["round_number"])
+	emit_signal("requisition_changed", requisition)
+	emit_signal("salvage_changed", salvage)
 
 # -------------------------------------------------------
 # СБРОС

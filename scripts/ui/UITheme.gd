@@ -176,6 +176,25 @@ static func make_label(text: String, variation: String = "") -> Label:
 		l.theme_type_variation = variation
 	return l
 
+# Панель в стиле UITheme (по умолчанию HudPanel). ignore_mouse — подсказки
+# и всплывающие панели, которые не должны перехватывать клики
+static func make_panel(variation: String = "HudPanel", ignore_mouse: bool = false) -> PanelContainer:
+	var p = PanelContainer.new()
+	p.theme = get_theme()
+	p.theme_type_variation = variation
+	if ignore_mouse:
+		p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return p
+
+static func make_button(text: String, variation: String = "", on_pressed: Callable = Callable()) -> Button:
+	var b = Button.new()
+	b.text = text
+	if variation != "":
+		b.theme_type_variation = variation
+	if on_pressed.is_valid():
+		b.pressed.connect(on_pressed)
+	return b
+
 static func make_spacer() -> Control:
 	var c = Control.new()
 	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL

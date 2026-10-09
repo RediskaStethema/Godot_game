@@ -38,13 +38,10 @@ func setup(data: CardData) -> void:
 	info_label.max_lines_visible = INFO_MAX_LINES
 	info_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	# Текст зависит от типа карты: коротко, что это и куда класть
-	match data.card_type:
-		"squad":
-			info_label.text = "%s ×%d" % [data.title, data.unit_count]
-		"building":
-			info_label.text = "%s\nздание → на клетку" % data.title
-		"upgrade":
-			info_label.text = "%s\nна свой отряд" % data.title
+	if data.card_type == "squad":
+		info_label.text = "%s ×%d" % [data.title, data.unit_count]
+	else:
+		info_label.text = "%s\n%s" % [data.title, data.get_play_hint()]
 
 	mouse_entered.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity, true)))
 	mouse_exited.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity)))

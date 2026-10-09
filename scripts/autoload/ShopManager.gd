@@ -55,6 +55,23 @@ func refresh_shop() -> void:
 	print("ShopManager: магазин обновлён, %d предложений" % current_offers.size())
 
 # -------------------------------------------------------
+# СОХРАНЕНИЕ (SaveManager) — своё состояние забега
+# -------------------------------------------------------
+func save_state() -> Dictionary:
+	return {
+		"node_id": shop_node_id,
+		"offers": CardFactory.ids_of(current_offers),
+		"rerolls_done": rerolls_done,
+		"free_cards_left": free_cards_left,
+	}
+
+func load_state(d: Dictionary) -> void:
+	shop_node_id = int(d["node_id"])
+	current_offers = CardFactory.create_many(d["offers"])
+	rerolls_done = int(d["rerolls_done"])
+	free_cards_left = int(d["free_cards_left"])
+
+# -------------------------------------------------------
 # ОБНОВЛЕНИЕ НАБОРА
 # -------------------------------------------------------
 func get_reroll_cost() -> int:

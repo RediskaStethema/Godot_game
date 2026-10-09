@@ -17,52 +17,47 @@ signal purchase_requested(slot_index: int)
 func setup(data: CardData, index: int) -> void:
 	card_data = data
 	slot_index = index
-
 	custom_minimum_size = CARD_SIZE
 	add_theme_stylebox_override("panel", UITheme.card_style(data.rarity))
-	var box: VBoxContainer = $VBoxContainer
-	box.add_theme_constant_override("separation", 6)
+	$VBoxContainer.add_theme_constant_override("separation", 6)
+	_fill_header(data)
+	_fill_body(data)
+	buy_button.custom_minimum_size = Vector2(0, 42)
+	buy_button.pressed.connect(_on_buy_pressed)
+	EconomyManager.requisition_changed.connect(_on_requisition_changed)
+	_refresh_button()
+	mouse_entered.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity, true)))
+	mouse_exited.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity)))
 
-	# Строка редкости и типа
+# Редкость · тип, портрет, название
+func _fill_header(data: CardData) -> void:
 	card_faction.text = "%s · %s" % [
 		UITheme.RARITY_NAMES.get(data.rarity, data.rarity),
 		UITheme.TYPE_NAMES.get(data.card_type, data.card_type)]
 	card_faction.theme_type_variation = "DimLabel"
 	card_faction.add_theme_color_override("font_color", UITheme.rarity_color(data.rarity))
-
 	# Портрет: кадр idle юнита, для зданий/улучшений — заглушка с названием типа
 	var portrait = _make_portrait(data)
-	box.add_child(portrait)
-	box.move_child(portrait, 1)
-
+	$VBoxContainer.add_child(portrait)
+	$VBoxContainer.move_child(portrait, 1)
 	card_title.text = data.title
 	card_title.theme_type_variation = "HeaderLabel"
 	card_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
-	# Характеристики + описание
-	var text = data.description
-	match data.card_type:
-		"squad":
-			var u = UnitFactory.create(data.unit_factory_id)
-			text = "×%d   HP %d   УРН %d   ДАЛ %d\n%s" % [data.unit_count, u.hp, u.damage, u.attack_range, data.description]
-		"upgrade":
-			text = "%s\n(перетащите на свой отряд в бою)" % data.description
-		"building":
-			text = "%s\n(ставится на клетку королевства)" % data.description
-	card_desc.text = text
+# Характеристики + описание + куда класть (CardData — общее для магазина и скамейки)
+func _fill_body(data: CardData) -> void:
+	var lines: Array[String] = []
+	if data.get_stats_line() != "":
+		lines.append(data.get_stats_line())
+	lines.append(data.description)
+	if data.get_play_hint() != "":
+		lines.append("(в бою: %s)" % data.get_play_hint())
+	card_desc.text = "\n".join(lines)
 	card_desc.theme_type_variation = "SmallLabel"
 	card_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	card_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card_desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	buy_button.custom_minimum_size = Vector2(0, 42)
-	buy_button.pressed.connect(_on_buy_pressed)
-	EconomyManager.requisition_changed.connect(_on_requisition_changed)
-	_refresh_button()
-
-	mouse_entered.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity, true)))
-	mouse_exited.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity)))
 
 func _make_portrait(data: CardData) -> Control:
 	var frame = PanelContainer.new()

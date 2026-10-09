@@ -73,23 +73,51 @@ func apply_synergies_to_soldiers(soldiers: Array) -> void:
 			if synergy["tag"] in soldier.data.tags:
 				_apply_bonus(soldier, bonus)
 
+# Ключ бонуса → runtime-поле бойца. Новый бонус синергии — строка здесь
+# и ключ в SYNERGY_DEFINITIONS (hp_mult — отдельно: сохраняет долю HP)
+const BONUS_MULT_FIELDS = {
+	"damage_mult": "current_damage",
+	"move_speed_mult": "current_move_speed",
+	"attack_speed_mult": "current_attack_speed",
+	"heal_mult": "current_heal_per_second",
+}
+const BONUS_ADD_FIELDS = {
+	"attack_range_add": "current_attack_range",
+}
+
 func _apply_bonus(soldier, bonus: Dictionary) -> void:
 	if bonus.has("hp_mult"):
 		# Раненые остаются ранеными в той же пропорции
 		var ratio = soldier.current_hp / soldier.max_hp
 		soldier.max_hp *= bonus["hp_mult"]
 		soldier.current_hp = soldier.max_hp * ratio
-	if bonus.has("damage_mult"):
-		soldier.current_damage *= bonus["damage_mult"]
-	if bonus.has("move_speed_mult"):
-		soldier.current_move_speed *= bonus["move_speed_mult"]
-	if bonus.has("attack_speed_mult"):
-		soldier.current_attack_speed *= bonus["attack_speed_mult"]
-	if bonus.has("attack_range_add"):
-		soldier.current_attack_range += bonus["attack_range_add"]
-	if bonus.has("heal_mult"):
-		soldier.current_heal_per_second *= bonus["heal_mult"]
+	for key in BONUS_MULT_FIELDS:
+		if bonus.has(key):
+			soldier.set(BONUS_MULT_FIELDS[key], soldier.get(BONUS_MULT_FIELDS[key]) * bonus[key])
+	for key in BONUS_ADD_FIELDS:
+		if bonus.has(key):
+			soldier.set(BONUS_ADD_FIELDS[key], soldier.get(BONUS_ADD_FIELDS[key]) + bonus[key])
 	soldier.queue_redraw()
+
+# Командир (Chapter Master): +урон всем союзникам, один раз перед боем.
+# Несколько командиров не суммируются — берётся самый сильный бонус.
+func apply_commander_bonus(soldiers: Array) -> void:
+	var bonus: float = 0.0
+	for s in soldiers:
+		bonus = maxf(bonus, s.data.commander_damage_bonus)
+	if bonus <= 0.0:
+		return
+	for s in soldiers:
+		s.current_damage *= 1.0 + bonus
+	print("SynergyManager: командир — +%d%% урона армии" % roundi(bonus * 100.0))
+
+# Синергии, действующие на бойцов с этими тегами (без экономических)
+func get_soldier_synergy_names(tags: Array) -> Array[String]:
+	var names: Array[String] = []
+	for s in active_synergies:
+		if s["tag"] in tags and not s["bonus"].has("epic_discount"):
+			names.append(s["name"])
+	return names
 
 # -------------------------------------------------------
 # ЭКОНОМИКА
@@ -112,6 +140,16 @@ func get_active_synergy_names() -> Array[String]:
 	for s in active_synergies:
 		names.append("%s (%s %d/%d): %s" % [s["name"], s["tag"], s["count"], s["threshold"], s["desc"]])
 	return names
+
+# -------------------------------------------------------
+# СОХРАНЕНИЕ (SaveManager) — своё состояние забега
+# -------------------------------------------------------
+# Синергии пересчитываются по полю — между боями живёт только скидка Epic
+func save_state() -> Dictionary:
+	return {"epic_discount_pending": epic_discount_pending}
+
+func load_state(d: Dictionary) -> void:
+	epic_discount_pending = int(d["epic_discount_pending"])
 
 # Новая игра
 func reset() -> void:

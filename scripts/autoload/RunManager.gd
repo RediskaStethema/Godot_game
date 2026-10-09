@@ -115,6 +115,25 @@ func complete_current_node(won: bool = true) -> void:
 	emit_signal("node_completed", node)
 
 # -------------------------------------------------------
+# СОХРАНЕНИЕ (SaveManager) — своё состояние забега
+# -------------------------------------------------------
+# seed/state — 64-битные: в JSON строками (число потеряло бы точность);
+# state ставится после seed. Граф не хранится: RunMapData.generate() детерминирован
+func save_state() -> Dictionary:
+	return {
+		"rng_seed": str(rng.seed),
+		"rng_state": str(rng.state),
+		"current_node_id": current_node_id,
+		"current_completed": current_completed,
+	}
+
+func load_state(d: Dictionary) -> void:
+	rng.seed = str(d["rng_seed"]).to_int()
+	rng.state = str(d["rng_state"]).to_int()
+	current_node_id = int(d["current_node_id"])
+	current_completed = bool(d["current_completed"])
+
+# -------------------------------------------------------
 # ДЛЯ БОЯ
 # -------------------------------------------------------
 # Тип текущего боя; если BattleScene запущена напрямую — обычный бой
