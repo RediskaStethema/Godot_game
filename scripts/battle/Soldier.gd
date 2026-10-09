@@ -529,5 +529,5 @@ func _on_state_enter(state: State) -> void:
 
 func _on_death_finished() -> void:
 	if current_state == State.DEAD:
-		var timer = get_tree().create_timer(0.3)
+		var timer = get_tree().create_timer(0.3, false)   # на паузе не тикает
 		timer.timeout.connect(queue_free)

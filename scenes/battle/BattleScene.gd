@@ -22,6 +22,11 @@ var bench: Node = null
 var hud: BattleHud = null
 var inspector: SquadInspector = null
 var merge_menu: MergeMenu = null   # выбор «улучшить / вылечить» отряд его картой
+var pause_menu: PauseMenu = null
+# Скорость боя: Engine.time_scale = базовый × GameSettings.battle_speed, только
+# пока идёт бой; базовый — тот, что был до боя (тесты гоняют с ускорением)
+var _base_time_scale: float = 1.0
+var _speed_applied: bool = false
 
 var battle_type: String = RunMapNode.BATTLE   # тип боя шага забега: battle / miniboss / boss
 var battle_wave: int = 1
@@ -82,6 +87,9 @@ func _build_ui() -> void:
 
 	inspector = SquadInspector.new()
 	$UI.add_child(inspector)
+	pause_menu = PauseMenu.new()
+	add_child(pause_menu)
+	GameSettings.changed.connect(_apply_battle_speed)
 	BattleManager.battle_ended.connect(_on_battle_ended)
 
 func _build_field() -> void:
@@ -371,6 +379,9 @@ func _on_start_pressed() -> void:
 		player_squads_at_start.append({"data": squad.data, "tile": squad.tile})
 	BattleManager.prepare_citadel_shield()
 	BattleManager.start_battle()
+	_base_time_scale = Engine.time_scale
+	_speed_applied = true
+	_apply_battle_speed()
 
 # -------------------------------------------------------
 # КОНЕЦ БОЯ
@@ -381,6 +392,7 @@ func _on_battle_ended(winner_team: int) -> void:
 		return
 	_battle_resolved = true
 	BattleManager.battle_in_progress = false
+	_restore_time_scale()
 	if BattleManager.citadel_hp <= 0:
 		_end_run(false, "Цитадель пала!")
 		return
@@ -400,7 +412,8 @@ func _on_battle_ended(winner_team: int) -> void:
 		return
 	# Итог боя сохранён: при загрузке — сразу магазин следующей волны
 	SaveManager.save_run()
-	await get_tree().create_timer(2.0).timeout
+	# Таймер не тикает на паузе (иначе ушли бы в магазин с открытым меню паузы)
+	await get_tree().create_timer(2.0, false).timeout
 	RunManager.advance()
 
 # Доход и армия по итогу боя; возвращает текст для шапки
@@ -437,16 +450,34 @@ func _show_run_end(victory: bool) -> void:
 	var stats = "Побед в волнах: %d · Цитадель %d/%d · %d Req" % [
 		EconomyManager.wins + (1 if victory else 0), ceili(BattleManager.citadel_hp),
 		int(BattleManager.CITADEL_MAX_HP), EconomyManager.requisition]
+	pause_menu.enabled = false
 	var screen = RunEndScreen.new()
 	$UI.add_child(screen)
 	screen.setup(victory, subtitle, stats)
 	screen.new_run_pressed.connect(_on_new_run_pressed)
+	screen.main_menu_pressed.connect(RunManager.goto_main_menu)
 	print("BattleScene: забег окончен — %s" % ("победа" if victory else "поражение"))
 
 func _on_new_run_pressed() -> void:
 	BattleManager.reset_run()
 	SaveManager.delete_save()
 	RunManager.advance()
+
+# -------------------------------------------------------
+# СКОРОСТЬ БОЯ
+# -------------------------------------------------------
+func _apply_battle_speed() -> void:
+	if _speed_applied:
+		Engine.time_scale = _base_time_scale * GameSettings.battle_speed
+
+func _restore_time_scale() -> void:
+	if _speed_applied:
+		Engine.time_scale = _base_time_scale
+		_speed_applied = false
+
+# Ушли со сцены посреди боя (в меню) — скорость не должна остаться ускоренной
+func _exit_tree() -> void:
+	_restore_time_scale()
 
 # -------------------------------------------------------
 # UI

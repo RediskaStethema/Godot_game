@@ -47,6 +47,8 @@ var em: Node
 var bm: Node
 
 func _initialize() -> void:
+	# Скорость боя игрока (GameSettings) не должна влиять на тест
+	root.get_node("GameSettings").battle_speed = 1.0
 	# Бои сами пишут сохранение — в тестах выключаем, чтобы не затереть сохранение игрока
 	root.get_node("SaveManager").enabled = false
 	_main()

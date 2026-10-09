@@ -9,6 +9,8 @@ const SOLDIERS_PER_SQUAD: int = 6
 const TICKS: int = 300
 
 func _initialize() -> void:
+	# Скорость боя игрока (GameSettings) не должна влиять на тест
+	root.get_node("GameSettings").battle_speed = 1.0
 	root.get_node("SaveManager").enabled = false
 	_main()
 

@@ -1,0 +1,44 @@
+class_name ModalOverlay
+extends ColorRect
+
+# Модальное окно: затемнение на весь экран (ловит клики) и панель по центру.
+# Наследники наполняют content (VBoxContainer) в своём setup().
+# Работает и на паузе (PROCESS_MODE_ALWAYS) — пауза, настройки, подтверждения.
+
+const DIM_COLOR = Color(0, 0, 0, 0.65)
+
+var content: VBoxContainer
+
+func _init() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
+# Вызвать из setup() наследника после add_child
+func build_frame(width: float) -> void:
+	color = DIM_COLOR
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(center)
+	var panel = UITheme.make_panel("")
+	panel.custom_minimum_size = Vector2(width, 0)
+	center.add_child(panel)
+	content = VBoxContainer.new()
+	content.add_theme_constant_override("separation", 12)
+	panel.add_child(content)
+
+func add_title(text: String, variation: String = "TitleLabel") -> Label:
+	var l = UITheme.make_label(text, variation)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(l)
+	return l
+
+func add_button(text: String, on_pressed: Callable, variation: String = "") -> Button:
+	var b = UITheme.make_button(text, variation, on_pressed)
+	b.custom_minimum_size = Vector2(0, 46)
+	content.add_child(b)
+	return b
+
+func close() -> void:
+	queue_free()

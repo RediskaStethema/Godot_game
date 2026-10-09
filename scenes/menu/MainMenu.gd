@@ -1,7 +1,8 @@
 extends Control
 
 # Главное меню — главная сцена. «Продолжить» — есть сохранение забега
-# (SaveManager), «Новый забег» — сброс и магазин 1-й волны.
+# (SaveManager), «Новый забег» — сброс и магазин 1-й волны (при сохранении —
+# с подтверждением), «Настройки» — GameSettings.
 # UI собирается кодом, стили — из UITheme.
 
 const BUTTON_SIZE = Vector2(320, 56)
@@ -40,6 +41,7 @@ func _build_layout() -> void:
 	continue_button = _make_button("ПРОДОЛЖИТЬ", "PrimaryButton", _on_continue_pressed)
 	col.add_child(continue_button)
 	col.add_child(_make_button("НОВЫЙ ЗАБЕГ", "PrimaryButton", _on_new_run_pressed))
+	col.add_child(_make_button("Настройки", "", _on_settings_pressed))
 	col.add_child(_make_button("Выход", "", _on_quit_pressed))
 
 	info_label = UITheme.make_label("", "SmallLabel")
@@ -64,9 +66,23 @@ func _on_continue_pressed() -> void:
 	RunManager.resume()
 
 func _on_new_run_pressed() -> void:
+	if not SaveManager.has_save():
+		_start_new_run()
+		return
+	var dialog = ConfirmDialog.new()
+	add_child(dialog)
+	dialog.setup("Начать новый забег? Сохранённый забег будет потерян.", "НАЧАТЬ ЗАНОВО")
+	dialog.confirmed.connect(_start_new_run)
+
+func _start_new_run() -> void:
 	BattleManager.reset_run()
 	SaveManager.delete_save()
 	RunManager.advance()
+
+func _on_settings_pressed() -> void:
+	var panel = SettingsPanel.new()
+	add_child(panel)
+	panel.setup()
 
 func _on_quit_pressed() -> void:
 	get_tree().quit()
