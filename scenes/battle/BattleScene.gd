@@ -30,6 +30,9 @@ var synergy_panel: PanelContainer = null
 # и камера отъезжает на весь экран под HUD
 var camera: Camera2D = null
 const CAMERA_TWEEN_TIME: float = 0.6
+# При расстановке камера ближе: королевство и цитадель (левый верхний угол мира)
+# крупнее, зона врага справа-снизу может обрезаться — враги до боя всё равно скрыты
+const PLACEMENT_ZOOM: float = 1.15
 # Подпись отряда под курсором: наведение дольше HOVER_NAME_DELAY сек — имя
 const HOVER_NAME_DELAY: float = 0.5
 const HOVER_HALF_WIDTH: float = 20.0   # полуширина бойца для попадания курсором, px мира
@@ -252,7 +255,18 @@ func _fit_camera(animate: bool) -> void:
 	var bounds = iso_grid.get_world_bounds()
 	var z = minf(area.size.x / bounds.size.x, area.size.y / bounds.size.y)
 	var screen_center = get_viewport_rect().size / 2.0
+	# Экран = (мир − camera.position) × zoom + центр экрана
 	var pos = bounds.get_center() - (area.get_center() - screen_center) / z
+	if is_placement_phase:
+		z *= PLACEMENT_ZOOM
+		# Левый верхний угол мира — в левый верхний угол области
+		pos = bounds.position - (area.position - screen_center) / z
+		# Если после приближения мир всё ещё уже области — центрируем по этой оси
+		var visible = area.size / z
+		if bounds.size.x <= visible.x:
+			pos.x = bounds.get_center().x - (area.get_center().x - screen_center.x) / z
+		if bounds.size.y <= visible.y:
+			pos.y = bounds.get_center().y - (area.get_center().y - screen_center.y) / z
 	if animate:
 		var tw = create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		tw.tween_property(camera, "zoom", Vector2(z, z), CAMERA_TWEEN_TIME)
