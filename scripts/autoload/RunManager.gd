@@ -89,6 +89,14 @@ func advance() -> void:
 	if id < 0 or not enter_node(id):
 		push_warning("RunManager: следующего шага нет")
 
+# Продолжить загруженный забег (SaveManager.load_run): незавершённый шаг —
+# открыть его заново (бой — с расстановки), завершённый — перейти к следующему
+func resume() -> void:
+	if current_node_id >= 0 and not current_completed:
+		enter_node(current_node_id)
+	else:
+		advance()
+
 # Сцена открыта напрямую (главная сцена — магазин): забег ещё не начат —
 # первый шаг становится текущим без смены сцены
 func ensure_started() -> void:
@@ -105,6 +113,25 @@ func complete_current_node(won: bool = true) -> void:
 		run_won = true
 		print("RunManager: босс повержен — забег выигран")
 	emit_signal("node_completed", node)
+
+# -------------------------------------------------------
+# СОХРАНЕНИЕ (SaveManager) — своё состояние забега
+# -------------------------------------------------------
+# seed/state — 64-битные: в JSON строками (число потеряло бы точность);
+# state ставится после seed. Граф не хранится: RunMapData.generate() детерминирован
+func save_state() -> Dictionary:
+	return {
+		"rng_seed": str(rng.seed),
+		"rng_state": str(rng.state),
+		"current_node_id": current_node_id,
+		"current_completed": current_completed,
+	}
+
+func load_state(d: Dictionary) -> void:
+	rng.seed = str(d["rng_seed"]).to_int()
+	rng.state = str(d["rng_state"]).to_int()
+	current_node_id = int(d["current_node_id"])
+	current_completed = bool(d["current_completed"])
 
 # -------------------------------------------------------
 # ДЛЯ БОЯ

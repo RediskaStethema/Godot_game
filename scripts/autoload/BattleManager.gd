@@ -31,6 +31,9 @@ const CITADEL_MAX_HP: float = 1000.0
 var citadel_hp: float = CITADEL_MAX_HP
 var citadel: Node2D = null          # цитадель текущего боя (ставит BattleScene)
 var siege_started: bool = false     # армия игрока пала, враги штурмуют цитадель
+# «В БОЙ» нажата, итога ещё нет. Сохраняется: «Продолжить» ставит армию как была
+# и сразу запускает бой (без повторной расстановки)
+var battle_in_progress: bool = false
 # Щит цитадели на текущий бой (Fortress Wall): урон штурма сначала снимает его
 var citadel_shield: float = 0.0
 
@@ -99,6 +102,7 @@ func _process(delta: float) -> void:
 # -------------------------------------------------------
 
 func _battle_tick() -> void:
+	SoldierRegistry.begin_tick()
 	# Тикаем все живые отряды
 	var squads = SquadRegistry.get_all_alive_squads()
 	for squad in squads:
@@ -182,6 +186,7 @@ func heal_citadel(amount: float) -> float:
 
 # Новый забег: цитадель, королевство, армия, рука, экономика, синергии, цепочка забега
 func reset_run() -> void:
+	battle_in_progress = false
 	citadel_hp = CITADEL_MAX_HP
 	emit_signal("citadel_hp_changed", citadel_hp)
 	citadel_shield = 0.0
@@ -192,7 +197,107 @@ func reset_run() -> void:
 	pending_cards.clear()
 	EconomyManager.reset()
 	SynergyManager.reset()
+	ShopManager.reset()
 	RunManager.new_run()
+
+# -------------------------------------------------------
+# АРМИЯ ИГРОКА МЕЖДУ БОЯМИ
+# -------------------------------------------------------
+# Отряды с поля → забег: новые отряды из карт, уровни, улучшения, доли HP
+# (расстановка и «В БОЙ» — чтобы сохранение вернуло поле как было)
+func sync_army_from_squads(squads: Array) -> void:
+	for squad in squads:
+		var hp_list: Array[float] = []
+		for soldier in squad.soldiers:
+			hp_list.append(clampf(soldier.current_hp / soldier.max_hp, 0.01, 1.0))
+		squad.data.saved_hp = hp_list
+		if not player_units.has(squad.data):
+			player_units.append(squad.data)
+		player_placements[squad.data] = squad.tile
+
+# Итог победы: армия = выжившие отряды; павшие целиком возрождаются на свою
+# клетку (UnitData.respawn_after_wipe — уровень −1, без улучшений).
+# at_start — [{ "data": UnitData, "tile": Vector2i }] на начало боя.
+# Возвращает имена возрождённых отрядов.
+func store_survivors(alive_squads: Array, at_start: Array) -> Array[String]:
+	player_units.clear()
+	player_placements.clear()
+	sync_army_from_squads(alive_squads)
+	var revived: Array[String] = []
+	for entry in at_start:
+		var data: UnitData = entry["data"]
+		if player_units.has(data):
+			continue
+		data.respawn_after_wipe()
+		player_units.append(data)
+		player_placements[data] = entry["tile"]
+		revived.append(data.unit_name)
+	return revived
+
+# Поражение / ничья — армия потеряна
+func lose_army() -> void:
+	player_units.clear()
+	player_placements.clear()
+
+# -------------------------------------------------------
+# СОХРАНЕНИЕ (SaveManager) — своё состояние забега
+# -------------------------------------------------------
+# Клетки — [x, y]; отряды — UnitData.save_state() + клетка; карты — по id
+func save_state() -> Dictionary:
+	var units: Array = []
+	for d in player_units:
+		var u = d.save_state()
+		if player_placements.has(d):
+			u["tile"] = _v2i_to_arr(player_placements[d])
+		units.append(u)
+	var builds: Array = []
+	for card in player_buildings:
+		builds.append({"card": card.id, "tile": _v2i_to_arr(player_buildings[card])})
+	var kingdom: Array = []
+	for t in kingdom_tiles:
+		kingdom.append(_v2i_to_arr(t))
+	return {
+		"citadel_hp": citadel_hp,
+		"kingdom_tiles": kingdom,
+		"tiles_bought": tiles_bought,
+		"units": units,
+		"buildings": builds,
+		"hand": CardFactory.ids_of(pending_cards),
+		"in_progress": battle_in_progress,
+	}
+
+func load_state(d: Dictionary) -> void:
+	citadel_hp = float(d["citadel_hp"])
+	kingdom_tiles.clear()
+	for t in d["kingdom_tiles"]:
+		kingdom_tiles.append(_arr_to_v2i(t))
+	tiles_bought = int(d["tiles_bought"])
+	for u in d["units"]:
+		var data = UnitData.from_save_state(u)
+		player_units.append(data)
+		if u.has("tile"):
+			player_placements[data] = _arr_to_v2i(u["tile"])
+	for entry in d["buildings"]:
+		var card = CardFactory.create(entry["card"])
+		if card:
+			player_buildings[card] = _arr_to_v2i(entry["tile"])
+	pending_cards = CardFactory.create_many(d["hand"])
+	battle_in_progress = bool(d.get("in_progress", false))
+	emit_signal("citadel_hp_changed", citadel_hp)
+
+static func _v2i_to_arr(v: Vector2i) -> Array:
+	return [v.x, v.y]
+
+static func _arr_to_v2i(a: Array) -> Vector2i:
+	return Vector2i(int(a[0]), int(a[1]))
+
+# Щит цитадели на бой — сумма от зданий (Fortress Wall)
+func prepare_citadel_shield() -> void:
+	citadel_shield = 0.0
+	for b in buildings:
+		if is_instance_valid(b):
+			citadel_shield += b.get_citadel_shield()
+	emit_signal("citadel_hp_changed", citadel_hp)
 
 # Волна, в которой можно расширять королевство
 func can_expand_kingdom() -> bool:

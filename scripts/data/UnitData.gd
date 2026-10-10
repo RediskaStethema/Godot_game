@@ -107,6 +107,37 @@ func respawn_after_wipe() -> void:
 		hp_list.append(1.0)
 	saved_hp = hp_list
 
+# Сохранение отряда игрока: тип (factory_id) + состояние между боями.
+# Базовые статы не храним — берутся из UnitFactory (правки баланса применяются)
+func save_state() -> Dictionary:
+	return {
+		"id": factory_id,
+		"saved_hp": Array(saved_hp),
+		"hp_mult": hp_multiplier,
+		"dmg_mult": damage_multiplier,
+		"as_mult": attack_speed_multiplier,
+		"upgrades": Array(applied_upgrades),
+		"squad_size": squad_size,
+		"level": squad_level,
+	}
+
+static func from_save_state(d: Dictionary) -> UnitData:
+	var u = UnitFactory.create(d["id"])
+	var hp: Array[float] = []
+	for v in d["saved_hp"]:
+		hp.append(float(v))
+	u.saved_hp = hp
+	u.hp_multiplier = float(d["hp_mult"])
+	u.damage_multiplier = float(d["dmg_mult"])
+	u.attack_speed_multiplier = float(d["as_mult"])
+	var ups: Array[String] = []
+	for s in d["upgrades"]:
+		ups.append(str(s))
+	u.applied_upgrades = ups
+	u.squad_size = int(d["squad_size"])
+	u.squad_level = int(d["level"])
+	return u
+
 # Может ли карта-улучшение быть применена к этому отряду
 func can_apply_upgrade(card: CardData) -> bool:
 	return card.card_type == "upgrade" and (card.affects_tag == "" or card.affects_tag in tags)

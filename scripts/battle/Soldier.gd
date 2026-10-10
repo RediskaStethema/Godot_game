@@ -83,30 +83,32 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 # -------------------------------------------------------
 # АНИМАЦИИ
 # -------------------------------------------------------
-func _load_animations() -> void:
+# Анимация → подпапка спрайтов. Кадры: <sprite_path>/<папка>/0.png, 1.png, ...
+const ANIMATION_FOLDERS = {"idle": "idle", "walk": "run", "attack": "attack", "death": "death"}
+const ANIMATION_FPS: float = 8.0
+# Набор кадров на папку спрайтов собирается один раз и общий для всех бойцов
+# этого вида (раньше — заново на каждого бойца, с проверкой файлов на диске)
+static var _frames_cache: Dictionary = {}   # sprite_path → SpriteFrames
+
+static func _get_frames(sprite_path: String) -> SpriteFrames:
+	if _frames_cache.has(sprite_path):
+		return _frames_cache[sprite_path]
 	var frames = SpriteFrames.new()
 	frames.remove_animation("default")
-
-	var animations = {
-		"idle":   data.sprite_path + "/idle/",
-		"walk":   data.sprite_path + "/run/",
-		"attack": data.sprite_path + "/attack/",
-		"death":  data.sprite_path + "/death/"
-	}
-
-	for anim_name in animations:
-		var folder = animations[anim_name]
+	for anim_name in ANIMATION_FOLDERS:
+		var folder = sprite_path + "/" + ANIMATION_FOLDERS[anim_name] + "/"
 		frames.add_animation(anim_name)
 		frames.set_animation_loop(anim_name, anim_name != "attack" and anim_name != "death")
-		frames.set_animation_speed(anim_name, 8.0)
+		frames.set_animation_speed(anim_name, ANIMATION_FPS)
 		var i = 0
-		while true:
-			var path = folder + str(i) + ".png"
-			if not ResourceLoader.exists(path):
-				break
-			frames.add_frame(anim_name, load(path))
+		while ResourceLoader.exists(folder + str(i) + ".png"):
+			frames.add_frame(anim_name, load(folder + str(i) + ".png"))
 			i += 1
+	_frames_cache[sprite_path] = frames
+	return frames
 
+func _load_animations() -> void:
+	var frames = _get_frames(data.sprite_path)
 	sprite.sprite_frames = frames
 	# Масштаб по высоте первого кадра idle — все юниты одного роста,
 	# sprite_scale делает Терминатора крупнее, а скаута мельче
@@ -160,15 +162,12 @@ func _state_move(delta: float) -> void:
 		return
 
 	var nearest = _get_nearest(enemies)
-	if global_position.distance_to(nearest.global_position) <= data.vision_range:
+	if global_position.distance_squared_to(nearest.global_position) <= data.vision_range * data.vision_range:
 		target = _find_target()
 		transition_to(State.CHASE)
 		return
 
-	var center = Vector2.ZERO
-	for e in enemies:
-		center += e.global_position
-	center /= enemies.size()
+	var center = SoldierRegistry.get_team_center(1 - team)
 	# Марш строем (как в 9 Kings): цель каждого бойца — центр врага + его
 	# смещение в строю, поэтому весь отряд идёт параллельно, не сбиваясь в кучу.
 	# Строй рассыпается только в CHASE, когда враг в поле зрения.
@@ -289,8 +288,9 @@ func _tick_support(delta: float) -> void:
 	# Лечим самого раненого (по доле HP) союзника в радиусе, включая себя
 	var patient: Soldier = null
 	var lowest_ratio: float = 1.0
+	var r2 = data.heal_radius * data.heal_radius
 	for ally in SoldierRegistry.get_alive_soldiers_of_team(team):
-		if global_position.distance_to(ally.global_position) > data.heal_radius:
+		if global_position.distance_squared_to(ally.global_position) > r2:
 			continue
 		var ratio = ally.current_hp / ally.max_hp
 		if ratio < lowest_ratio:
@@ -411,7 +411,7 @@ func get_aura_damage_bonus() -> float:
 			continue
 		if a.aura_tag != "" and not (a.aura_tag in data.tags):
 			continue
-		if global_position.distance_to(ally.global_position) <= a.aura_radius:
+		if global_position.distance_squared_to(ally.global_position) <= a.aura_radius * a.aura_radius:
 			best = a.aura_damage_bonus
 	return best
 
@@ -464,7 +464,7 @@ func _get_nearest(units: Array) -> Soldier:
 	var closest: Soldier = null
 	var min_dist: float = INF
 	for u in units:
-		var d = global_position.distance_to(u.global_position)
+		var d = global_position.distance_squared_to(u.global_position)
 		if d < min_dist:
 			min_dist = d
 			closest = u
@@ -474,7 +474,7 @@ func _get_farthest(units: Array) -> Soldier:
 	var farthest: Soldier = null
 	var max_dist: float = -INF
 	for u in units:
-		var d = global_position.distance_to(u.global_position)
+		var d = global_position.distance_squared_to(u.global_position)
 		if d > max_dist:
 			max_dist = d
 			farthest = u

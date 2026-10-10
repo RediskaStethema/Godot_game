@@ -27,3 +27,20 @@ extends Resource
 @export var upgrade_type: String = ""   # "hp_boost", "damage_boost"
 @export var upgrade_value: float = 0.0  # 0.2 = +20%
 @export var affects_tag: String = ""    # "marine", "chaos" — кого затрагивает
+
+# Куда класть карту в бою — подсказка для магазина и скамейки. Новый тип карты:
+# строка здесь + обработчик в BattleScene._card_handlers
+const PLAY_HINTS = {
+	"upgrade": "на свой отряд",
+	"building": "здание → на клетку",
+}
+
+func get_play_hint() -> String:
+	return PLAY_HINTS.get(card_type, "")
+
+# Строка состава/характеристик отряда («×3  HP 100  УРН 12  ДАЛ 250»), пусто — не отряд
+func get_stats_line() -> String:
+	if card_type != "squad":
+		return ""
+	var u = UnitFactory.create(unit_factory_id)
+	return "×%d   HP %d   УРН %d   ДАЛ %d" % [unit_count, u.hp, u.damage, u.attack_range]

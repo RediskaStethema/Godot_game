@@ -173,7 +173,6 @@ func is_wounded() -> bool:
 # -------------------------------------------------------
 func _on_soldier_died(soldier: Soldier) -> void:
 	soldiers.erase(soldier)
-	print("Squad: боец погиб, осталось %d" % soldiers.size())
 
 	# Если все бойцы мертвы — отряд уничтожен
 	if soldiers.is_empty():

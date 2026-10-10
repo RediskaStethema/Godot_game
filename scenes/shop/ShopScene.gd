@@ -39,9 +39,11 @@ func _ready() -> void:
 	# Загружаем выживших
 	for unit in BattleManager.player_units:
 		surviving_units.append(unit)
-	# Карты, не выложенные в прошлом бою, остаются в руке
+	# Карты, не выложенные в прошлом бою, остаются в руке. Рука магазина — тот же
+	# массив, что BattleManager.pending_cards: сохранение видит покупки сразу
 	for card in BattleManager.pending_cards:
 		purchased_cards.append(card)
+	BattleManager.pending_cards = purchased_cards
 	print("ShopScene: загружено выживших: %d, карт в руке: %d" % [surviving_units.size(), purchased_cards.size()])
 
 	_update_requisition_label(EconomyManager.requisition)
@@ -53,6 +55,7 @@ func _ready() -> void:
 	ShopManager.open_shop()
 	if ShopManager.free_cards_left > 0:
 		_show_message("Первая волна: одна карта бесплатно")
+	SaveManager.save_run()
 
 func _populate_shop(offers: Array) -> void:
 	for child in shop_slots.get_children():
@@ -87,6 +90,7 @@ func _on_purchase_requested(slot_index: int) -> void:
 	_update_army_label()
 	_refresh_hand()
 	_populate_shop(ShopManager.current_offers)
+	SaveManager.save_run()
 
 # -------------------------------------------------------
 # РУКА И ПРОДАЖА
@@ -103,6 +107,7 @@ func _sell_card(card: CardData) -> void:
 	_update_army_label()
 	_refresh_hand()
 	_populate_shop(ShopManager.current_offers)
+	SaveManager.save_run()
 
 func _refresh_hand() -> void:
 	if hand_row == null:
@@ -193,6 +198,7 @@ func _on_reroll_pressed() -> void:
 		_show_message("Не хватает Requisition: обновление стоит %d" % cost)
 		return
 	_show_message("Набор обновлён (−%d Req), следующее обновление — %d Req" % [cost, ShopManager.get_reroll_cost()])
+	SaveManager.save_run()
 
 func _refresh_reroll_button() -> void:
 	if reroll_button == null:
@@ -210,8 +216,13 @@ func _build_layout() -> void:
 	var bg = UITheme.make_background()
 	add_child(bg)
 	move_child(bg, 0)
+	_build_hud()
+	_build_shop_panel()
+	_build_hand_panel()
+	_build_bottom_bar()
 
-	# --- HUD сверху ---
+# Шапка: название, сообщение, волна, Req, цитадель
+func _build_hud() -> void:
 	var hud = PanelContainer.new()
 	hud.theme_type_variation = "HudPanel"
 	hud.set_anchors_preset(Control.PRESET_TOP_WIDE)
@@ -239,7 +250,8 @@ func _build_layout() -> void:
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	$TopBar.hide()
 
-	# --- Магазин по центру ---
+# Магазин по центру: заголовок + кнопка обновления набора, слоты карт
+func _build_shop_panel() -> void:
 	var shop_panel: VBoxContainer = $ShopPanel
 	shop_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shop_panel.offset_top = UITheme.HUD_HEIGHT + 10
@@ -262,7 +274,8 @@ func _build_layout() -> void:
 	shop_slots.add_theme_constant_override("separation", 18)
 	shop_slots.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
-	# --- Рука: карты с кнопкой продажи ---
+# Рука: карты с кнопкой продажи
+func _build_hand_panel() -> void:
 	var hand_panel = PanelContainer.new()
 	hand_panel.theme_type_variation = "HudPanel"
 	hand_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
@@ -289,7 +302,8 @@ func _build_layout() -> void:
 	hand_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.add_child(hand_row)
 
-	# --- Нижняя панель: армия + кнопка боя ---
+# Нижняя панель: армия + кнопка боя
+func _build_bottom_bar() -> void:
 	var bottom = PanelContainer.new()
 	bottom.theme_type_variation = "HudPanel"
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
