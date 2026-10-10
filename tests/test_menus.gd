@@ -134,7 +134,7 @@ func _main() -> void:
 	battle.pause_menu.open()
 	battle.pause_menu._leave(battle.pause_menu._to_main_menu)
 	await _frames(2)
-	var leave_dialog = battle.pause_menu._leave_dialog
+	var leave_dialog = battle.pause_menu._dialog
 	_check("бой: выход → окно «выйти / сдаться», бой на паузе", leave_dialog != null \
 		and current_scene == battle and paused and bm.is_battle_running())
 	var eco = root.get_node("EconomyManager")
@@ -147,6 +147,38 @@ func _main() -> void:
 		and not sv.has_save() and not current_scene.continue_button.visible)
 	_check("сдался → доход не начислен, волна та же", eco.requisition == req_before \
 		and eco.round_number == round_at_surrender)
+
+	# 8. «Сдаться» в паузе: подтверждение; в магазине — забег окончен, главное меню
+	bm.reset_run()
+	root.get_node("RunManager").advance()
+	await _frames(4)
+	sv.save_run()
+	var shop_pause = null
+	for c in current_scene.get_children():
+		if _is(c, "PauseMenu"):
+			shop_pause = c
+	shop_pause.open()
+	shop_pause._confirm_surrender()
+	var confirm = shop_pause._dialog
+	_check("магазин: «Сдаться» → подтверждение, забег цел", confirm != null and _is(confirm, "ConfirmDialog") \
+		and current_scene.name == "ShopScene" and sv.has_save())
+	confirm._on_yes()
+	await _frames(4)
+	_check("магазин: сдался → главное меню, сохранения нет", current_scene.name == "MainMenu" and not paused \
+		and not sv.has_save() and not current_scene.continue_button.visible)
+
+	# 9. «Сдаться» в паузе посреди схватки — экран итога боя, сцена не меняется
+	battle = await _battle_scene()
+	battle._on_start_pressed()
+	await _frames(10)
+	battle.pause_menu.open()
+	battle.pause_menu._confirm_surrender()
+	battle.pause_menu._dialog._on_yes()
+	await _frames(4)
+	var end_screen = battle.get_node("UI").get_children().any(func(c): return _is(c, "RunEndScreen"))
+	_check("бой: сдался из паузы → экран конца забега, пауза снята, сохранения нет", current_scene == battle \
+		and end_screen and not paused and not bm.is_battle_running() and not sv.has_save() \
+		and not battle.pause_menu.enabled)
 
 	sv.delete_save()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_CONFIG_PATH))

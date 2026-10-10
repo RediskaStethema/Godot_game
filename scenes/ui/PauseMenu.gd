@@ -5,13 +5,15 @@ extends CanvasLayer
 # (get_tree().paused — бой, таймеры, анимации), поверх — меню.
 # Прогресс уже в автосохранении, поэтому «В главное меню» и «Выход» без вопросов —
 # кроме выхода посреди схватки: выйти (бой начнётся заново) или сдаться.
+# «Сдаться» — конец забега (после подтверждения): в схватке — BattleManager.surrender()
+# и экран итога боя, вне её — RunManager.abandon_run() (сохранение удаляется, в меню).
 
 const LAYER: int = 10   # поверх UI сцены
 
 var enabled: bool = true   # выключается на экране конца забега
 var _menu: ModalOverlay = null
 var _settings: SettingsPanel = null
-var _leave_dialog: ModalOverlay = null
+var _dialog: ModalOverlay = null
 
 func _init() -> void:
 	layer = LAYER
@@ -23,8 +25,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 	if _settings:
 		_settings.close()
-	elif _leave_dialog:
-		_leave_dialog.close()
+	elif _dialog:
+		_dialog.close()
 	elif _menu:
 		resume()
 	elif enabled:
@@ -41,12 +43,13 @@ func open() -> void:
 	_menu.add_title("ПАУЗА")
 	_menu.add_button("ПРОДОЛЖИТЬ", resume, "PrimaryButton")
 	_menu.add_button("Настройки", _open_settings)
+	_menu.add_button("Сдаться", _confirm_surrender)
 	_menu.add_button("В главное меню", _leave.bind(_to_main_menu))
 	_menu.add_button("Выход из игры", _leave.bind(_quit))
 
 func resume() -> void:
-	if _leave_dialog:
-		_leave_dialog.close()
+	if _dialog:
+		_dialog.close()
 	if _menu:
 		_menu.close()
 		_menu = null
@@ -63,15 +66,32 @@ func _leave(exit: Callable) -> void:
 	if not BattleManager.is_battle_running():
 		exit.call()
 		return
-	_leave_dialog = ModalOverlay.new()
-	add_child(_leave_dialog)
-	_leave_dialog.build_frame(440.0)
-	_leave_dialog.add_title("Идёт бой", "HeaderLabel")
-	_leave_dialog.add_title("Выйти — при «Продолжить» бой начнётся заново.\nСдаться — забег окончен, сохранение удаляется.", "DimLabel")
-	_leave_dialog.add_button("Выйти", exit, "PrimaryButton")
-	_leave_dialog.add_button("Сдаться", _surrender_and.bind(exit))
-	_leave_dialog.add_button("Отмена", _leave_dialog.close)
-	_leave_dialog.tree_exited.connect(func(): _leave_dialog = null)
+	_dialog = ModalOverlay.new()
+	add_child(_dialog)
+	_dialog.build_frame(440.0)
+	_dialog.add_title("Идёт бой", "HeaderLabel")
+	_dialog.add_title("Выйти — при «Продолжить» бой начнётся заново.\nСдаться — забег окончен, сохранение удаляется.", "DimLabel")
+	_dialog.add_button("Выйти", exit, "PrimaryButton")
+	_dialog.add_button("Сдаться", _surrender_and.bind(exit))
+	_dialog.add_button("Отмена", _dialog.close)
+	var leave = _dialog
+	leave.tree_exited.connect(func(): if _dialog == leave: _dialog = null)
+
+func _confirm_surrender() -> void:
+	var confirm = ConfirmDialog.new()
+	_dialog = confirm
+	add_child(confirm)
+	confirm.setup("Сдаться? Забег будет окончен, сохранение удалится.", "Сдаться")
+	confirm.confirmed.connect(_surrender)
+	confirm.tree_exited.connect(func(): if _dialog == confirm: _dialog = null)
+
+func _surrender() -> void:
+	if BattleManager.is_battle_running():
+		BattleManager.surrender()   # экран итога покажет сцена боя
+		resume()
+	else:
+		resume()
+		RunManager.abandon_run()
 
 func _surrender_and(exit: Callable) -> void:
 	BattleManager.surrender()
