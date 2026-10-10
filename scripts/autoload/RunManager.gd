@@ -13,6 +13,7 @@ extends Node
 
 const SHOP_SCENE: String = "res://scenes/shop/ShopScene.tscn"
 const BATTLE_SCENE: String = "res://scenes/battle/BattleScene.tscn"
+const MENU_SCENE: String = "res://scenes/menu/MainMenu.tscn"
 
 signal run_started
 signal node_entered(node: RunMapNode)
@@ -88,6 +89,14 @@ func advance() -> void:
 	var id = get_next_id()
 	if id < 0 or not enter_node(id):
 		push_warning("RunManager: следующего шага нет")
+
+# В главное меню посреди забега (пауза / экран конца забега). Прогресс уже
+# в автосохранении; идущий бой останавливается, чтобы BattleManager не тикал
+# отряды удалённой сцены
+func goto_main_menu() -> void:
+	get_tree().paused = false
+	BattleManager.stop_battle()
+	get_tree().change_scene_to_file(MENU_SCENE)
 
 # Продолжить загруженный забег (SaveManager.load_run): незавершённый шаг —
 # открыть его заново (бой — с расстановки), завершённый — перейти к следующему

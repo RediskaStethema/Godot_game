@@ -61,6 +61,15 @@ func _block_top(i: float, j: float, level: int) -> Vector2:
 	var sub = Vector2(IsoGrid.TILE_WIDTH, IsoGrid.TILE_HEIGHT) * BLOCK_SCALE / 2.0
 	return Vector2((i - j) * sub.x, (i + j - 1) * sub.y) - Vector2(0, TerrainTiles.LEVEL_HEIGHT * BLOCK_SCALE * level)
 
+# Область экрана (мировые координаты), которую закрывают блоки здания —
+# OcclusionFader делает здание полупрозрачным, если за ним стоит боец
+func get_occlusion_rect() -> Rect2:
+	var rect = Rect2()
+	for b in BLOCKS.get(building_type, []):
+		var r = TerrainTiles.block_rect(_block_top(b[1], b[2], b[3]), BLOCK_SCALE)
+		rect = r if rect.size == Vector2.ZERO else rect.merge(r)
+	return Rect2(rect.position + global_position, rect.size)
+
 # -------------------------------------------------------
 # БОЙ
 # -------------------------------------------------------

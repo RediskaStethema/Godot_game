@@ -8,6 +8,8 @@ extends SceneTree
 const TEST_SAVE_PATH: String = "user://test_run_save.json"
 
 func _initialize() -> void:
+	# Скорость боя игрока (GameSettings) не должна влиять на тест
+	root.get_node("GameSettings").battle_speed = 1.0
 	root.get_node("SaveManager").save_path = TEST_SAVE_PATH
 	_main()
 

@@ -31,6 +31,7 @@ func _ready() -> void:
 	# Магазин — главная сцена: при запуске игры он же первый шаг забега
 	RunManager.ensure_started()
 	_build_layout()
+	add_child(PauseMenu.new())
 	EconomyManager.requisition_changed.connect(_update_requisition_label)
 	ShopManager.shop_refreshed.connect(_populate_shop)
 	battle_button.pressed.connect(_on_battle_pressed)

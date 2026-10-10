@@ -56,8 +56,12 @@ static func hash_cell(cell: Vector2i, salt: int = 0) -> int:
 static func draw_block(canvas: CanvasItem, tex: Texture2D, top_center: Vector2, modulate: Color = Color.WHITE, scale_mult: float = 1.0) -> void:
 	if tex == null:
 		return
+	canvas.draw_texture_rect(tex, block_rect(top_center, scale_mult), false, modulate)
+
+# Прямоугольник, который занимает на экране блок draw_block (для проверки перекрытия)
+static func block_rect(top_center: Vector2, scale_mult: float = 1.0) -> Rect2:
 	var s = SCALE * scale_mult
-	canvas.draw_texture_rect(tex, Rect2(top_center - TOP_CENTER_PX * s, SPRITE_PX * s), false, modulate)
+	return Rect2(top_center - TOP_CENTER_PX * s, SPRITE_PX * s)
 
 # Декор стоит «ногами» (низом спрайта) в точке foot
 static func draw_decoration(canvas: CanvasItem, tex: Texture2D, foot: Vector2) -> void:

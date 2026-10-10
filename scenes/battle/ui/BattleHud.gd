@@ -10,6 +10,7 @@ var _requisition: Label
 var _citadel: Label
 var _synergy_panel: PanelContainer
 var _synergy_label: Label
+var _speed_button: Button   # скорость боя ×1/×2 (GameSettings.battle_speed)
 
 func setup(wave_text: String, message_label: Label, start_button: Button, synergy_width: float) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -44,6 +45,13 @@ func _build_header(wave_text: String, message_label: Label, start_button: Button
 	_message.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+	_speed_button = UITheme.make_button("", "", GameSettings.cycle_battle_speed)
+	_speed_button.custom_minimum_size = Vector2(64, 0)
+	_speed_button.tooltip_text = "Скорость боя"
+	row.add_child(_speed_button)
+	GameSettings.changed.connect(_update_speed_button)
+	_update_speed_button()
 
 	start_button.reparent(row)
 	start_button.theme_type_variation = "PrimaryButton"
@@ -86,6 +94,9 @@ func show_synergies() -> void:
 	var marines = SynergyManager.tag_counts.get(SynergyManager.INCOME_TAG, 0)
 	lines.append("Marine: %d · доход синергии +%d Req" % [marines, SynergyManager.income_bonus])
 	_synergy_label.text = "\n".join(lines)
+
+func _update_speed_button() -> void:
+	_speed_button.text = "×%d" % GameSettings.battle_speed
 
 func _on_requisition_changed(amount: int) -> void:
 	_requisition.text = "%d Req" % amount

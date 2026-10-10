@@ -32,6 +32,7 @@
 /.claude/
 /skills/
 /docs/task-briefs/
+/docs/TDD.md
 
 # Мусор ОС и редакторов
 .DS_Store
