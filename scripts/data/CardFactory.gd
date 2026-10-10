@@ -34,30 +34,17 @@ static func assault_squad() -> CardData:
 	c.unit_count = 2
 	return c
 
-static func chaos_warband() -> CardData:
-	var c = CardData.new()
-	c.id = "chaos_warband"
-	c.title = "Chaos Warband"
-	c.description = "Берсерки Хаоса жаждут крови"
-	c.faction = "chaos"
-	c.cost = 5
-	c.rarity = "common"
-	c.card_type = "squad"
-	c.unit_factory_id = "chaos_marine"
-	c.unit_count = 4
-	return c
-
 static func scout_squad() -> CardData:
 	var c = CardData.new()
 	c.id = "scout_squad"
 	c.title = "Scout Squad"
 	c.description = "Быстрые стрелки, добивают раненых"
 	c.faction = "space_marines"
-	c.cost = 3
+	c.cost = 4
 	c.rarity = "common"
 	c.card_type = "squad"
 	c.unit_factory_id = "scout_marine"
-	c.unit_count = 4
+	c.unit_count = 3
 	return c
 
 static func devastator_squad() -> CardData:
@@ -83,7 +70,7 @@ static func terminator_squad() -> CardData:
 	c.rarity = "rare"
 	c.card_type = "squad"
 	c.unit_factory_id = "terminator"
-	c.unit_count = 1
+	c.unit_count = 2
 	return c
 
 static func apothecary_card() -> CardData:
@@ -99,6 +86,71 @@ static func apothecary_card() -> CardData:
 	c.unit_count = 1
 	return c
 
+static func librarian_card() -> CardData:
+	var c = CardData.new()
+	c.id = "librarian"
+	c.title = "Librarian"
+	c.description = "Псайкер: после каста удар оглушает цель на 1 с"
+	c.faction = "space_marines"
+	c.cost = 10
+	c.rarity = "rare"
+	c.card_type = "squad"
+	c.unit_factory_id = "librarian"
+	c.unit_count = 1
+	return c
+
+static func chaplain_card() -> CardData:
+	var c = CardData.new()
+	c.id = "chaplain"
+	c.title = "Chaplain"
+	c.description = "Аура: союзники ближнего боя рядом +20% урона"
+	c.faction = "space_marines"
+	c.cost = 8
+	c.rarity = "rare"
+	c.card_type = "squad"
+	c.unit_factory_id = "chaplain"
+	c.unit_count = 1
+	return c
+
+static func land_speeder_card() -> CardData:
+	var c = CardData.new()
+	c.id = "land_speeder"
+	c.title = "Land Speeder"
+	c.description = "Быстрая техника: налетает на дальний тыл врага"
+	c.faction = "space_marines"
+	c.cost = 9
+	c.rarity = "rare"
+	c.card_type = "squad"
+	c.unit_factory_id = "land_speeder"
+	c.unit_count = 1
+	return c
+
+static func dreadnought_card() -> CardData:
+	var c = CardData.new()
+	c.id = "dreadnought"
+	c.title = "Dreadnought"
+	c.description = "Шагающая машина: удар отбрасывает врага"
+	c.faction = "space_marines"
+	c.cost = 14
+	c.rarity = "epic"
+	c.card_type = "squad"
+	c.unit_factory_id = "dreadnought"
+	c.unit_count = 1
+	return c
+
+static func chapter_master_card() -> CardData:
+	var c = CardData.new()
+	c.id = "chapter_master"
+	c.title = "Chapter Master"
+	c.description = "Командир: +15% урона всей армии"
+	c.faction = "space_marines"
+	c.cost = 16
+	c.rarity = "epic"
+	c.card_type = "squad"
+	c.unit_factory_id = "chapter_master"
+	c.unit_count = 1
+	return c
+
 # -------------------------------------------------------
 # КАРТЫ ЗДАНИЙ (building)
 # -------------------------------------------------------
@@ -107,17 +159,16 @@ static func bolter_turret() -> CardData:
 	var c = CardData.new()
 	c.id = "bolter_turret"
 	c.title = "Bolter Turret"
-	c.description = "Автоматическая турель. Атакует ближайшего врага."
+	c.description = "Турель: стреляет в ближайшего врага. Стоит между раундами."
 	c.faction = "space_marines"
-	c.cost = 2
+	c.cost = 7   # в TDD турели нет — Rare по шкале цен TDD
 	c.rarity = "rare"
 	c.card_type = "building"
 	c.building_type = "tower"
 	c.building_stats = {
-		"hp": 200.0,
 		"damage": 15.0,
 		"attack_speed": 1.5,
-		"attack_range": 300.0
+		"attack_range": 300.0,
 	}
 	return c
 
@@ -125,14 +176,17 @@ static func fortress_wall() -> CardData:
 	var c = CardData.new()
 	c.id = "fortress_wall"
 	c.title = "Fortress Wall"
-	c.description = "Замедляет врагов. Принимает урон вместо цитадели."
+	c.description = "Щит цитадели +200 в каждом бою. Замедляет врагов рядом на 40%."
 	c.faction = "space_marines"
-	c.cost = 15
+	c.cost = 5   # TDD: Common 3–5
 	c.rarity = "common"
 	c.card_type = "building"
 	c.building_type = "wall"
+	# TDD: «+20 HP базе» при базе 100 → у нас 20% от HP цитадели (1000), щитом на каждый бой
 	c.building_stats = {
-		"hp": 500.0,
+		"shield": 200.0,
+		"slow_mult": 0.6,
+		"slow_radius": 130.0,
 	}
 	return c
 
@@ -144,13 +198,13 @@ static func blessed_armour() -> CardData:
 	var c = CardData.new()
 	c.id = "blessed_armour"
 	c.title = "Blessed Armour"
-	c.description = "Отряд Marines: +20% HP"
+	c.description = "Отряд Marines: +25% HP"
 	c.faction = "space_marines"
-	c.cost = 10
+	c.cost = 7
 	c.rarity = "rare"
 	c.card_type = "upgrade"
 	c.upgrade_type = "hp_boost"
-	c.upgrade_value = 0.2
+	c.upgrade_value = 0.25
 	c.affects_tag = "marine"
 	return c
 
@@ -158,13 +212,13 @@ static func battle_fury() -> CardData:
 	var c = CardData.new()
 	c.id = "battle_fury"
 	c.title = "Battle Fury"
-	c.description = "Отряд Marines: +15% урона"
+	c.description = "Отряд Marines: +20% урона"
 	c.faction = "space_marines"
-	c.cost = 12
+	c.cost = 7
 	c.rarity = "rare"
 	c.card_type = "upgrade"
 	c.upgrade_type = "damage_boost"
-	c.upgrade_value = 0.15
+	c.upgrade_value = 0.20
 	c.affects_tag = "marine"
 	return c
 
@@ -174,19 +228,26 @@ static func battle_fury() -> CardData:
 # ShopManager будет брать карты отсюда.
 # Карты с большим весом появляются чаще.
 
-# Веса по TDD: common ~60%, rare ~30%, epic ~10% (epic-карт пока нет).
-# Здания не кладём в пул, пока их drop на тайл не реализован (BattleScene: building → pass).
+# Веса по TDD: common 60% (18), rare 30% (9), epic 10% (3) — из 30 копий.
 static func build_pool() -> Array:
 	var pool = []
-	# Common — 12 копий
-	for i in range(4): pool.append(tactical_squad())
-	for i in range(3): pool.append(assault_squad())
-	for i in range(3): pool.append(scout_squad())
-	for i in range(2): pool.append(chaos_warband())
-	# Rare — 6 копий
-	for i in range(2): pool.append(devastator_squad())
+	# Common — 18 копий
+	# Враги (chaos_*) в пул игрока не входят
+	for i in range(7): pool.append(tactical_squad())
+	for i in range(5): pool.append(assault_squad())
+	for i in range(4): pool.append(scout_squad())
+	for i in range(2): pool.append(fortress_wall())
+	# Rare — 9 копий
+	pool.append(devastator_squad())
 	pool.append(terminator_squad())
 	pool.append(apothecary_card())
+	pool.append(librarian_card())
+	pool.append(chaplain_card())
+	pool.append(land_speeder_card())
+	pool.append(bolter_turret())
 	pool.append(blessed_armour())
 	pool.append(battle_fury())
+	# Epic — 3 копии
+	for i in range(2): pool.append(dreadnought_card())
+	pool.append(chapter_master_card())
 	return pool

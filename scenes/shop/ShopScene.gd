@@ -8,14 +8,11 @@ extends Control
 
 const SHOP_SLOT_SCENE = preload("res://scenes/shop/ShopSlot.tscn")
 
-# Лимит юнитов на поле: 9 + (round/3)*3, максимум 18
-const BASE_MAX_UNITS: int = 9
-const CAP_MAX_UNITS: int = 18
-
-# Высоты нижних панелей магазина
-const BOTTOM_BAR_HEIGHT: float = 92.0
-const HAND_PANEL_HEIGHT: float = 150.0
-const HAND_CARD_SIZE = Vector2(118, 112)
+# Высоты нижних панелей магазина. Подобраны под минимальную высоту окна 648:
+# HUD + заголовок + карта (ShopSlot.CARD_SIZE) + рука + нижняя панель
+const BOTTOM_BAR_HEIGHT: float = 80.0
+const HAND_PANEL_HEIGHT: float = 124.0
+const HAND_CARD_SIZE = Vector2(118, 96)
 
 # «Рука» — карты, ещё не выложенные на поле: купленные сейчас +
 # оставшиеся на скамейке с прошлого боя. Не больше BattleManager.MAX_HAND_SIZE.
@@ -26,12 +23,18 @@ var army_details: Label = null   # список отрядов-ветерано�
 var hand_title: Label = null
 var hand_row: HBoxContainer = null
 var message_label: Label = null
+var citadel_label: Label = null
+var reroll_button: Button = null   # обновить набор карт (ShopManager.try_reroll)
+var _empty_army_warned: bool = false   # уход без армии — со второго нажатия
 
 func _ready() -> void:
+	# Магазин — главная сцена: при запуске игры он же первый шаг забега
+	RunManager.ensure_started()
 	_build_layout()
 	EconomyManager.requisition_changed.connect(_update_requisition_label)
 	ShopManager.shop_refreshed.connect(_populate_shop)
 	battle_button.pressed.connect(_on_battle_pressed)
+	reroll_button.pressed.connect(_on_reroll_pressed)
 
 	# Загружаем выживших
 	for unit in BattleManager.player_units:
@@ -44,8 +47,12 @@ func _ready() -> void:
 	_update_requisition_label(EconomyManager.requisition)
 	_update_army_label()
 	_refresh_hand()
-	round_label.text = "Раунд %d" % EconomyManager.round_number
-	ShopManager.refresh_shop()
+	round_label.text = "Волна %d/%d" % [mini(EconomyManager.round_number, RunManager.get_total_waves()),
+		RunManager.get_total_waves()]
+	# Каждый новый магазин — новый набор, цена обновления снова базовая
+	ShopManager.open_shop()
+	if ShopManager.free_cards_left > 0:
+		_show_message("Первая волна: одна карта бесплатно")
 
 func _populate_shop(offers: Array) -> void:
 	for child in shop_slots.get_children():
@@ -56,35 +63,21 @@ func _populate_shop(offers: Array) -> void:
 		slot.setup(offers[i], i)
 		slot.set_hand_full(_is_hand_full())
 		slot.purchase_requested.connect(_on_purchase_requested)
+	_refresh_reroll_button()
 
 func _on_purchase_requested(slot_index: int) -> void:
-	# Сначала смотрим что за карта — без списания денег
 	if slot_index >= ShopManager.current_offers.size():
 		return
-	var card_preview = ShopManager.current_offers[slot_index]
 
-	# Проверяем лимиты ДО покупки — деньги не списываем вообще
+	# Проверяем лимит руки ДО покупки — деньги не списываем вообще
 	if _is_hand_full():
 		_show_message("Рука полна (%d/%d) — продайте лишние карты" % [purchased_cards.size(), BattleManager.MAX_HAND_SIZE])
 		return
-	if card_preview.card_type == "squad":
-		var current_count = _count_units()
-		var max_units = _get_max_units()
-		if current_count + card_preview.unit_count > max_units:
-			_show_message("Превышен лимит армии (%d/%d)" % [current_count, max_units])
-			return
 
-	# Скидка синергии (elite x2) на Epic карту — списываем цену со скидкой,
-	# а в карте оставляем изначальную (от неё считается цена продажи)
-	var original_cost = card_preview.cost
-	card_preview.cost = SynergyManager.get_discounted_cost(card_preview)
-
-	# Только теперь покупаем
+	# Цену (бесплатная карта 1-й волны, скидка Epic) считает ShopManager
 	var card = ShopManager.try_purchase(slot_index)
-	card_preview.cost = original_cost
 	if not card:
 		return
-	SynergyManager.consume_discount(card)
 
 	# Все типы карт идут в руку: отряды и здания выкладываются на тайл,
 	# улучшения — бросаются на свой отряд в бою
@@ -175,22 +168,38 @@ func _count_units() -> int:
 
 func _update_army_label() -> void:
 	var count = _count_units()
-	army_label.text = "Армия: %d / %d" % [count, _get_max_units()]
-	army_label.add_theme_color_override("font_color",
-		UITheme.RED_BRIGHT if count >= _get_max_units() else UITheme.GOLD_BRIGHT)
+	# Лимита армии нет — ограничена только рука (MAX_HAND_SIZE)
+	army_label.text = "Армия: %d бойцов" % count
+	army_label.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT)
 	if army_details:
 		var parts: Array[String] = []
 		for unit in surviving_units:
 			var ups = " [%s]" % ", ".join(unit.applied_upgrades) if not unit.applied_upgrades.is_empty() else ""
-			parts.append("%s ×%d%s" % [unit.unit_name, unit.saved_hp.size(), ups])
+			var lvl = " ур.%d" % unit.squad_level if unit.squad_level > 0 else ""
+			parts.append("%s ×%d%s%s" % [unit.unit_name, unit.saved_hp.size(), lvl, ups])
 		army_details.text = ("Ветераны: " + "   ·   ".join(parts)) if not parts.is_empty() \
 			else "Ветеранов нет — купите отряды и выложите их в бою"
 
-func _get_max_units() -> int:
-	return min(BASE_MAX_UNITS + (EconomyManager.round_number / 3) * 3, CAP_MAX_UNITS)
-
 func _update_requisition_label(amount: int) -> void:
 	requisition_label.text = "%d Req" % amount
+	_refresh_reroll_button()
+
+# -------------------------------------------------------
+# ОБНОВЛЕНИЕ НАБОРА
+# -------------------------------------------------------
+func _on_reroll_pressed() -> void:
+	var cost = ShopManager.get_reroll_cost()
+	if not ShopManager.try_reroll():
+		_show_message("Не хватает Requisition: обновление стоит %d" % cost)
+		return
+	_show_message("Набор обновлён (−%d Req), следующее обновление — %d Req" % [cost, ShopManager.get_reroll_cost()])
+
+func _refresh_reroll_button() -> void:
+	if reroll_button == null:
+		return
+	var cost = ShopManager.get_reroll_cost()
+	reroll_button.text = "Обновить · %d Req" % cost
+	reroll_button.disabled = not EconomyManager.can_afford(cost)
 
 # -------------------------------------------------------
 # ВЁРСТКА (ноды из .tscn переставляем кодом, .tscn вручную не трогаем)
@@ -222,7 +231,11 @@ func _build_layout() -> void:
 	round_label.theme_type_variation = "HeaderLabel"
 	requisition_label.reparent(hud_row)
 	requisition_label.theme_type_variation = "ValueLabel"
-	for l in [round_label, requisition_label]:
+	citadel_label = UITheme.make_label("Цитадель %d/%d" % [ceili(BattleManager.citadel_hp), int(BattleManager.CITADEL_MAX_HP)], "ValueLabel")
+	if BattleManager.citadel_hp <= BattleManager.CITADEL_MAX_HP / 4:
+		citadel_label.add_theme_color_override("font_color", UITheme.RED_BRIGHT)
+	hud_row.add_child(citadel_label)
+	for l in [round_label, requisition_label, citadel_label]:
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	$TopBar.hide()
 
@@ -237,6 +250,15 @@ func _build_layout() -> void:
 	var title: Label = $ShopPanel/ShopTitle
 	title.text = "РЕКВИЗИЦИЯ"
 	title.theme_type_variation = "HeaderLabel"
+	# Заголовок магазина + кнопка обновления набора справа
+	var header = HBoxContainer.new()
+	shop_panel.add_child(header)
+	shop_panel.move_child(header, title.get_index())
+	title.reparent(header)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reroll_button = Button.new()
+	reroll_button.custom_minimum_size = Vector2(200, 40)
+	header.add_child(reroll_button)
 	shop_slots.add_theme_constant_override("separation", 18)
 	shop_slots.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
@@ -291,13 +313,19 @@ func _build_layout() -> void:
 	battle_button.text = "В БОЙ"
 	battle_button.custom_minimum_size = Vector2(220, 60)
 
+# Уход из магазина — сразу в бой волны: шаг магазина пройден, следующий шаг
+# цепочки — бой. Без армии — предупреждение, со второго нажатия уходим всё
+# равно (иначе без денег и карт можно застрять в магазине).
 func _on_battle_pressed() -> void:
-	if _count_units() == 0 and surviving_units.is_empty():
-		_show_message("Нет юнитов для боя — купите отряд")
+	if _count_units() == 0 and surviving_units.is_empty() and not _empty_army_warned:
+		_empty_army_warned = true
+		_show_message("Армии нет — купите отряд или нажмите ещё раз, чтобы уйти без неё")
 		return
-	# Передаём всё в BattleManager: рука → скамейка
+	# Передаём всё в BattleManager: рука → скамейка следующего боя
 	BattleManager.pending_cards = purchased_cards
 	BattleManager.player_units.clear()
 	for unit in surviving_units:
 		BattleManager.player_units.append(unit)
-	get_tree().change_scene_to_file("res://scenes/battle/BattleScene.tscn")
+	if RunManager.is_shop_node_active():
+		RunManager.complete_current_node()
+	RunManager.advance()

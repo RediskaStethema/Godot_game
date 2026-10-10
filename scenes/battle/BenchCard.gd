@@ -3,7 +3,9 @@ extends PanelContainer
 @onready var card_image: TextureRect = $VBoxContainer/CardImage
 @onready var info_label: Label = $VBoxContainer/InfoLabel
 
-const CARD_SIZE = Vector2(108, 140)
+const CARD_SIZE = Vector2(120, 140)
+# Текст не длиннее — иначе карта вытягивается за панель скамейки (полное описание — в подсказке)
+const INFO_MAX_LINES: int = 3
 
 var card_data: CardData = null
 var is_dragging: bool = false
@@ -17,7 +19,7 @@ func setup(data: CardData) -> void:
 	custom_minimum_size = CARD_SIZE
 	add_theme_stylebox_override("panel", UITheme.card_style(data.rarity))
 	mouse_default_cursor_shape = Control.CURSOR_DRAG
-	tooltip_text = data.description
+	tooltip_text = "%s\n%s" % [data.title, data.description]
 
 	# Портрет юнита вместо огромной картинки 1029×309
 	card_image.texture = UITheme.card_portrait(data)
@@ -33,14 +35,16 @@ func setup(data: CardData) -> void:
 	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	info_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Текст зависит от типа карты
+	info_label.max_lines_visible = INFO_MAX_LINES
+	info_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	# Текст зависит от типа карты: коротко, что это и куда класть
 	match data.card_type:
 		"squad":
-			info_label.text = "%s\n×%d" % [data.title, data.unit_count]
+			info_label.text = "%s ×%d" % [data.title, data.unit_count]
 		"building":
-			info_label.text = "%s\n\nЗдание:\nна пустой тайл" % data.title
+			info_label.text = "%s\nздание → на клетку" % data.title
 		"upgrade":
-			info_label.text = "%s\n\n%s\nна свой отряд" % [data.title, data.description]
+			info_label.text = "%s\nна свой отряд" % data.title
 
 	mouse_entered.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity, true)))
 	mouse_exited.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity)))

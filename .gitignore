@@ -17,11 +17,21 @@
 /godot_agent-*/
 /open_godot_mcp/
 
+# Временные тест-скрипты агентов в корне (постоянные тесты — в tests/)
+/_tmp_*.gd
+/_tmp_*.gd.uid
+
 # История чатов godot_agent, если аддон когда-нибудь поставят в addons/
 /addons/godot_agent/conversations/
 
-# Локальные настройки Claude Code
-.claude/settings.local.json
+# Работа с ИИ: дизайн-документ, промпты и инструкции Claude Code, субагенты,
+# справочники и брифы для агентов — только локально, не в репозиторий
+/WH40K_TDD.docx
+/CLAUDE.md
+/CLAUDE_CODE_PROMPT.md
+/.claude/
+/skills/
+/docs/task-briefs/
 
 # Мусор ОС и редакторов
 .DS_Store

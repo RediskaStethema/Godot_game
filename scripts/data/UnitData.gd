@@ -6,6 +6,7 @@ extends Resource
 @export var sprite_path: String = "res://assets/sprites/space_marine"  # "res://assets/sprites/space_marine"
 
 # --- Идентификация ---
+@export var factory_id: String = ""   # id из UnitFactory.create (= CardData.unit_factory_id)
 @export var unit_name: String = ""
 @export var faction: String = ""
 @export var tags: Array = []  
@@ -27,6 +28,17 @@ extends Resource
 # --- Поддержка (Apothecary) ---
 @export var heal_per_second: float = 0.0   # > 0 — лечит раненого союзника рядом
 @export var heal_radius: float = 0.0       # пиксели
+
+# --- Способности (0 = выключено) ---
+@export var on_hit_stun: float = 0.0        # сек оглушения цели при попадании (Librarian)
+@export var on_hit_knockback: float = 0.0   # сила отбрасывания цели, px/сек (Dreadnought)
+# Аура: союзники с тегом aura_tag в радиусе бьют сильнее (Chaplain). Не суммируется
+# с другими такими же аурами — берётся самая сильная.
+@export var aura_damage_bonus: float = 0.0  # 0.15 = +15% урона
+@export var aura_radius: float = 0.0        # пиксели
+@export var aura_tag: String = ""
+# Командир: +урон всем союзникам на старте боя (Chapter Master). Не суммируется.
+@export var commander_damage_bonus: float = 0.0
 
 # --- Визуал ---
 # Пока у новых юнитов нет своих спрайтов — различаем их тинтом и размером
@@ -51,13 +63,49 @@ extends Resource
 # Базовые hp/damage не трогаем. Живут вместе с отрядом между раундами.
 @export var hp_multiplier: float = 1.0
 @export var damage_multiplier: float = 1.0
+@export var attack_speed_multiplier: float = 1.0
 @export var applied_upgrades: Array[String] = []   # названия карт — для UI
+# Полный состав отряда (CardData.unit_count) — до него лечение возвращает павших
+@export var squad_size: int = 0
+# Уровень отряда: сколько раз его улучшили картой того же отряда (0..MAX_SQUAD_LEVEL)
+@export var squad_level: int = 0
 
 func get_max_hp() -> float:
 	return hp * hp_multiplier
 
 func get_damage() -> float:
 	return damage * damage_multiplier
+
+func get_attack_speed() -> float:
+	return attack_speed * attack_speed_multiplier
+
+# Карта того же отряда: улучшить можно, пока не достигнут максимальный уровень
+func can_merge_upgrade() -> bool:
+	return squad_level < UnitFactory.MAX_SQUAD_LEVEL
+
+# Улучшение картой того же отряда — множители накапливаются, как у карт-улучшений
+func apply_merge_upgrade() -> void:
+	var b = UnitFactory.get_merge_bonuses(faction)
+	damage_multiplier *= 1.0 + b["damage"]
+	hp_multiplier *= 1.0 + b["hp"]
+	attack_speed_multiplier *= 1.0 + b["attack_speed"]
+	squad_level += 1
+
+# Отряд пал целиком в выигранном бою: возрождается полным составом с полным HP,
+# на уровень ниже и без карт-улучшений (с базового уровня — просто возрождается).
+func respawn_after_wipe() -> void:
+	var new_level = maxi(squad_level - 1, 0)
+	hp_multiplier = 1.0
+	damage_multiplier = 1.0
+	attack_speed_multiplier = 1.0
+	applied_upgrades.clear()
+	squad_level = 0
+	for i in range(new_level):
+		apply_merge_upgrade()
+	var hp_list: Array[float] = []
+	for i in range(maxi(squad_size, 1)):
+		hp_list.append(1.0)
+	saved_hp = hp_list
 
 # Может ли карта-улучшение быть применена к этому отряду
 func can_apply_upgrade(card: CardData) -> bool:

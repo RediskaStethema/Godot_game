@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="WH40KINGS"
-run/main_scene="uid://b4b13vxi38gy3"
+run/main_scene="res://scenes/shop/ShopScene.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -23,6 +23,7 @@ ShopManager="*uid://yojx10edd6be"
 SoldierRegistry="*uid://8t36wymn2u4x"
 SquadRegistry="*uid://dm35nd2j3qgfu"
 SynergyManager="*res://scripts/autoload/SynergyManager.gd"
+RunManager="*res://scripts/autoload/RunManager.gd"
 
 [display]
 

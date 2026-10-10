@@ -5,8 +5,8 @@ extends PanelContainer
 @onready var card_desc: Label = $VBoxContainer/UnitStats
 @onready var buy_button: Button = $VBoxContainer/BuyButton
 
-const CARD_SIZE = Vector2(230, 290)
-const PORTRAIT_HEIGHT = 84.0
+const CARD_SIZE = Vector2(220, 270)
+const PORTRAIT_HEIGHT = 70.0
 
 var slot_index: int = 0
 var card_data: CardData = null
@@ -48,6 +48,8 @@ func setup(data: CardData, index: int) -> void:
 			text = "×%d   HP %d   УРН %d   ДАЛ %d\n%s" % [data.unit_count, u.hp, u.damage, u.attack_range, data.description]
 		"upgrade":
 			text = "%s\n(перетащите на свой отряд в бою)" % data.description
+		"building":
+			text = "%s\n(ставится на клетку королевства)" % data.description
 	card_desc.text = text
 	card_desc.theme_type_variation = "SmallLabel"
 	card_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -84,7 +86,7 @@ func _make_portrait(data: CardData) -> Control:
 	return frame
 
 func _cost() -> int:
-	return SynergyManager.get_discounted_cost(card_data)
+	return ShopManager.get_price(card_data)
 
 func set_hand_full(full: bool) -> void:
 	hand_full = full
@@ -96,7 +98,7 @@ func _refresh_button() -> void:
 		buy_button.text = "Рука полна"
 		buy_button.disabled = true
 		return
-	buy_button.text = "Купить · %d Req" % cost
+	buy_button.text = "Взять бесплатно" if cost == 0 else "Купить · %d Req" % cost
 	buy_button.disabled = not EconomyManager.can_afford(cost)
 
 func _on_buy_pressed() -> void:
