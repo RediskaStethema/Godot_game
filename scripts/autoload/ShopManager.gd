@@ -8,15 +8,25 @@ extends Node
 # дороже на REROLL_COST_GROWTH (+13%); в новом магазине цена снова базовая.
 # В магазине 1-й волны FIRST_WAVE_FREE_CARDS карт бесплатно (первые покупки).
 # Случайность — от RunManager.rng (повторяемость по сиду забега).
+# Подкрепление (BattleManager.catch_up_pending): выбор одной из CATCH_UP_CHOICES
+# разных Common карт бесплатно, набор можно поменять CATCH_UP_REROLLS раз.
+# Невзятый выбор не сгорает — ждёт в следующих магазинах.
 const SHOP_SIZE: int = 4
 const REROLL_BASE_COST: int = 5
 const REROLL_COST_GROWTH: float = 1.13
 const FIRST_WAVE_FREE_CARDS: int = 1
+const CATCH_UP_CHOICES: int = 3
+const CATCH_UP_REROLLS: int = 1
 
 var current_offers: Array = []
 var rerolls_done: int = 0          # обновлений в текущем магазине
 var free_cards_left: int = 0       # бесплатных покупок в текущем магазине
 var shop_node_id: int = -1         # шаг забега, для которого открыт текущий набор
+var catch_up_offers: Array = []    # выбор подкрепления (пусто — выбора нет)
+var catch_up_rerolls_left: int = 0
+# Выбор выдан этим магазином: окно открывается само только тогда (дальше — по
+# кнопке в шапке). Не сохраняется: после «Продолжить» окно само не всплывает
+var catch_up_just_issued: bool = false
 
 signal shop_refreshed(offers: Array)
 signal card_purchased(card_data: CardData)
@@ -30,6 +40,13 @@ func open_shop() -> void:
 	shop_node_id = RunManager.current_node_id
 	rerolls_done = 0
 	free_cards_left = FIRST_WAVE_FREE_CARDS if EconomyManager.round_number == 1 else 0
+	catch_up_just_issued = false
+	if BattleManager.catch_up_pending:
+		BattleManager.catch_up_pending = false
+		if catch_up_offers.is_empty():
+			catch_up_rerolls_left = CATCH_UP_REROLLS
+			_roll_catch_up()
+			catch_up_just_issued = true
 	refresh_shop()
 
 # Новый забег: номера шагов снова с нуля — старый набор не должен подхватиться
@@ -38,6 +55,9 @@ func reset() -> void:
 	rerolls_done = 0
 	free_cards_left = 0
 	shop_node_id = -1
+	catch_up_offers.clear()
+	catch_up_rerolls_left = 0
+	catch_up_just_issued = false
 
 func refresh_shop() -> void:
 	current_offers.clear()
@@ -63,6 +83,8 @@ func save_state() -> Dictionary:
 		"offers": CardFactory.ids_of(current_offers),
 		"rerolls_done": rerolls_done,
 		"free_cards_left": free_cards_left,
+		"catch_up_offers": CardFactory.ids_of(catch_up_offers),
+		"catch_up_rerolls_left": catch_up_rerolls_left,
 	}
 
 func load_state(d: Dictionary) -> void:
@@ -70,6 +92,8 @@ func load_state(d: Dictionary) -> void:
 	current_offers = CardFactory.create_many(d["offers"])
 	rerolls_done = int(d["rerolls_done"])
 	free_cards_left = int(d["free_cards_left"])
+	catch_up_offers = CardFactory.create_many(d.get("catch_up_offers", []))
+	catch_up_rerolls_left = int(d.get("catch_up_rerolls_left", 0))
 
 # -------------------------------------------------------
 # ОБНОВЛЕНИЕ НАБОРА
@@ -112,3 +136,45 @@ func try_purchase(slot_index: int) -> CardData:
 	emit_signal("card_purchased", card_data)
 	print("ShopManager: куплена карта '%s' за %d Req" % [card_data.title, price])
 	return card_data
+
+# -------------------------------------------------------
+# ПОДКРЕПЛЕНИЕ (catch-up)
+# -------------------------------------------------------
+func has_catch_up() -> bool:
+	return not catch_up_offers.is_empty()
+
+# CATCH_UP_CHOICES разных Common карт из пула (веса копий пула сохраняются).
+# При смене набора сначала берутся карты, которых в прошлом наборе не было
+func _roll_catch_up() -> void:
+	var previous = CardFactory.ids_of(catch_up_offers)
+	catch_up_offers.clear()
+	var commons: Array = CardFactory.build_pool().filter(func(c): return c.rarity == "common")
+	var fresh: Array = commons.filter(func(c): return not previous.has(c.id))
+	var seen: Array = commons.filter(func(c): return previous.has(c.id))
+	for group in [fresh, seen]:
+		_take_distinct(group)
+
+func _take_distinct(group: Array) -> void:
+	var rng: RandomNumberGenerator = RunManager.rng
+	while catch_up_offers.size() < CATCH_UP_CHOICES and not group.is_empty():
+		var card: CardData = group[rng.randi_range(0, group.size() - 1)]
+		group = group.filter(func(c): return c.id != card.id)   # без повторов
+		catch_up_offers.append(card)
+
+func try_reroll_catch_up() -> bool:
+	if not has_catch_up() or catch_up_rerolls_left <= 0:
+		return false
+	catch_up_rerolls_left -= 1
+	_roll_catch_up()
+	return true
+
+# Взять карту выбора: выбор закрывается целиком (лимит руки проверяет магазин)
+func take_catch_up(index: int) -> CardData:
+	if index < 0 or index >= catch_up_offers.size():
+		return null
+	var card: CardData = catch_up_offers[index]
+	catch_up_offers.clear()
+	catch_up_rerolls_left = 0
+	catch_up_just_issued = false
+	print("ShopManager: подкрепление — '%s' бесплатно" % card.title)
+	return card

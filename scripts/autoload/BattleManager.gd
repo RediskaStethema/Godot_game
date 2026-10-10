@@ -38,6 +38,13 @@ var surrendered: bool = false
 var battle_in_progress: bool = false
 # Щит цитадели на текущий бой (Fortress Wall): урон штурма сначала снимает его
 var citadel_shield: float = 0.0
+# Подкрепление (catch-up, решение пользователя): цитадель получила урон в бою и
+# после него у неё меньше CATCH_UP_HP_RATIO от максимума — в следующем магазине
+# выбор одной Common карты из нескольких бесплатно (ShopManager.open_shop
+# забирает флаг). Не копится: пока выбор не взят, новый не выдаётся.
+const CATCH_UP_HP_RATIO: float = 0.5
+var catch_up_pending: bool = false
+var _citadel_hp_at_start: float = CITADEL_MAX_HP
 
 # Здания: стоят между раундами на своих клетках (CardData → Vector2i)
 var player_buildings: Dictionary = {}
@@ -70,6 +77,7 @@ func start_battle() -> void:
 	_accumulator = 0.0
 	siege_started = false
 	surrendered = false
+	_citadel_hp_at_start = citadel_hp
 	emit_signal("battle_started")
 	print("BattleManager: бой начался")
 
@@ -149,6 +157,7 @@ func _check_battle_end() -> void:
 		return
 
 	phase = BattlePhase.FINISHED
+	_check_catch_up()
 
 	if player_alive and not team1_alive:
 		winner_team = GameConstants.TEAM_PLAYER   # в т.ч. цитадель отбила штурм
@@ -204,9 +213,17 @@ func heal_citadel(amount: float) -> float:
 	emit_signal("citadel_hp_changed", citadel_hp)
 	return citadel_hp - before
 
+# Итог боя: цитадель ранена и ниже порога — подкрепление в следующем магазине
+func _check_catch_up() -> void:
+	if citadel_hp > 0.0 and citadel_hp < _citadel_hp_at_start \
+			and citadel_hp < CITADEL_MAX_HP * CATCH_UP_HP_RATIO:
+		catch_up_pending = true
+		print("BattleManager: цитадель ниже %d%% — подкрепление в магазине" % int(CATCH_UP_HP_RATIO * 100))
+
 # Новый забег: цитадель, королевство, армия, рука, экономика, синергии, цепочка забега
 func reset_run() -> void:
 	battle_in_progress = false
+	catch_up_pending = false
 	citadel_hp = CITADEL_MAX_HP
 	emit_signal("citadel_hp_changed", citadel_hp)
 	citadel_shield = 0.0
@@ -284,6 +301,7 @@ func save_state() -> Dictionary:
 		"buildings": builds,
 		"hand": CardFactory.ids_of(pending_cards),
 		"in_progress": battle_in_progress,
+		"catch_up_pending": catch_up_pending,
 	}
 
 func load_state(d: Dictionary) -> void:
@@ -304,6 +322,7 @@ func load_state(d: Dictionary) -> void:
 			player_buildings[card] = _arr_to_v2i(entry["tile"])
 	pending_cards = CardFactory.create_many(d["hand"])
 	battle_in_progress = bool(d.get("in_progress", false))
+	catch_up_pending = bool(d.get("catch_up_pending", false))
 	emit_signal("citadel_hp_changed", citadel_hp)
 
 static func _v2i_to_arr(v: Vector2i) -> Array:
