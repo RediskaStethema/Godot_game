@@ -65,6 +65,13 @@ extends Resource
 @export var damage_multiplier: float = 1.0
 @export var attack_speed_multiplier: float = 1.0
 @export var applied_upgrades: Array[String] = []   # названия карт — для UI
+# Карты-улучшения со своими эффектами (живут с отрядом, сбрасываются при возрождении):
+# Iron Halo — щит каждому бойцу в начале боя (доля max HP), Combat Stimms — бег
+# быстрее, Chapter Banner — аура урона союзникам рядом (не суммируется с другими аурами)
+@export var shield_ratio: float = 0.0
+@export var move_speed_multiplier: float = 1.0
+@export var banner_aura_bonus: float = 0.0
+const BANNER_RADIUS: float = 160.0
 # Полный состав отряда (CardData.unit_count) — до него лечение возвращает павших
 @export var squad_size: int = 0
 # Уровень отряда: сколько раз его улучшили картой того же отряда (0..MAX_SQUAD_LEVEL)
@@ -78,6 +85,9 @@ func get_damage() -> float:
 
 func get_attack_speed() -> float:
 	return attack_speed * attack_speed_multiplier
+
+func get_move_speed() -> float:
+	return move_speed * move_speed_multiplier
 
 # Карта того же отряда: улучшить можно, пока не достигнут максимальный уровень
 func can_merge_upgrade() -> bool:
@@ -98,6 +108,9 @@ func respawn_after_wipe() -> void:
 	hp_multiplier = 1.0
 	damage_multiplier = 1.0
 	attack_speed_multiplier = 1.0
+	shield_ratio = 0.0
+	move_speed_multiplier = 1.0
+	banner_aura_bonus = 0.0
 	applied_upgrades.clear()
 	squad_level = 0
 	for i in range(new_level):
@@ -117,6 +130,9 @@ func save_state() -> Dictionary:
 		"dmg_mult": damage_multiplier,
 		"as_mult": attack_speed_multiplier,
 		"upgrades": Array(applied_upgrades),
+		"shield": shield_ratio,
+		"move_mult": move_speed_multiplier,
+		"banner": banner_aura_bonus,
 		"squad_size": squad_size,
 		"level": squad_level,
 	}
@@ -134,13 +150,19 @@ static func from_save_state(d: Dictionary) -> UnitData:
 	for s in d["upgrades"]:
 		ups.append(str(s))
 	u.applied_upgrades = ups
+	u.shield_ratio = float(d.get("shield", 0.0))
+	u.move_speed_multiplier = float(d.get("move_mult", 1.0))
+	u.banner_aura_bonus = float(d.get("banner", 0.0))
 	u.squad_size = int(d["squad_size"])
 	u.squad_level = int(d["level"])
 	return u
 
 # Может ли карта-улучшение быть применена к этому отряду
 func can_apply_upgrade(card: CardData) -> bool:
-	return card.card_type == "upgrade" and (card.affects_tag == "" or card.affects_tag in tags)
+	if card.card_type != "upgrade" or not (card.affects_tag == "" or card.affects_tag in tags):
+		return false
+	# Знамя не складывается — второе такое же на отряд ничего бы не дало
+	return not (card.upgrade_type == "banner" and banner_aura_bonus >= card.upgrade_value)
 
 # Улучшение отряда — множитель накапливается (две карты = ×1.2 × 1.2)
 func apply_upgrade(card: CardData) -> void:
@@ -149,4 +171,11 @@ func apply_upgrade(card: CardData) -> void:
 			hp_multiplier *= 1.0 + card.upgrade_value
 		"damage_boost":
 			damage_multiplier *= 1.0 + card.upgrade_value
+		"shield":   # Iron Halo — щиты складываются
+			shield_ratio += card.upgrade_value
+		"stimms":   # Combat Stimms — бег и скорострельность
+			move_speed_multiplier *= 1.0 + card.upgrade_value
+			attack_speed_multiplier *= 1.0 + card.upgrade_value
+		"banner":   # Chapter Banner — аура, берётся сильнейшая
+			banner_aura_bonus = maxf(banner_aura_bonus, card.upgrade_value)
 	applied_upgrades.append(card.title)

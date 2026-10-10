@@ -14,6 +14,7 @@ const KNOCKBACK_STOP_SPEED: float = 5.0
 # спрайты разного исходного размера (marine 197 px, chaos 170 px) приводим к одной высоте.
 const TARGET_SPRITE_HEIGHT: float = 62.0
 const HP_BAR_SIZE = Vector2(26, 4)
+const SHIELD_BAR_COLOR = Color(0.45, 0.75, 1.0)
 const HP_BAR_GAP: float = 6.0
 const LEVEL_PIP_R: float = 3.0
 const LEVEL_PIP_STEP: float = 8.0
@@ -31,6 +32,8 @@ var current_hp: float
 var max_hp: float
 var current_damage: float
 var current_move_speed: float
+# Щит Iron Halo на этот бой: снимается уроном раньше HP (runtime, из data.shield_ratio)
+var shield: float = 0.0
 var current_attack_range: float
 var current_attack_speed: float
 var current_heal_per_second: float
@@ -64,7 +67,8 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 	max_hp = data.get_max_hp()
 	current_damage = data.get_damage()
 	current_hp = max_hp * clampf(start_hp_ratio, 0.01, 1.0)
-	current_move_speed = data.move_speed
+	current_move_speed = data.get_move_speed()
+	shield = max_hp * data.shield_ratio
 	current_attack_range = data.attack_range
 	current_attack_speed = data.get_attack_speed()
 	current_heal_per_second = data.heal_per_second
@@ -307,6 +311,8 @@ func refresh_stats_from_data() -> void:
 	current_hp = max_hp * ratio
 	current_damage = data.get_damage()
 	current_attack_speed = data.get_attack_speed()
+	current_move_speed = data.get_move_speed()
+	shield = max_hp * data.shield_ratio
 	queue_redraw()
 
 func heal(amount: float) -> void:
@@ -327,6 +333,9 @@ func _draw() -> void:
 	var ratio = clampf(current_hp / max_hp, 0.0, 1.0)
 	var color = UITheme.GREEN if team == GameConstants.TEAM_PLAYER else UITheme.RED_BRIGHT
 	draw_rect(Rect2(rect.position, Vector2(rect.size.x * ratio, rect.size.y)), color)
+	if shield > 0.0:   # щит Iron Halo — голубая полоска под HP
+		var s_ratio = clampf(shield / max_hp, 0.0, 1.0)
+		draw_rect(Rect2(rect.position + Vector2(0, rect.size.y + 1), Vector2(rect.size.x * s_ratio, 2)), SHIELD_BAR_COLOR)
 	# Уровень отряда — золотые ромбики над полоской HP
 	for i in data.squad_level:
 		var c = Vector2((i - (data.squad_level - 1) / 2.0) * LEVEL_PIP_STEP, top - LEVEL_PIP_GAP)
@@ -413,11 +422,21 @@ func get_aura_damage_bonus() -> float:
 			continue
 		if global_position.distance_squared_to(ally.global_position) <= a.aura_radius * a.aura_radius:
 			best = a.aura_damage_bonus
+	# Chapter Banner — аура карты-улучшения: всем союзникам в радиусе
+	for ally in SoldierRegistry.get_alive_soldiers_of_team(team):
+		var b: float = ally.data.banner_aura_bonus
+		if b > best and global_position.distance_squared_to(ally.global_position) \
+				<= UnitData.BANNER_RADIUS * UnitData.BANNER_RADIUS:
+			best = b
 	return best
 
 func take_damage(amount: float) -> void:
 	if current_state == State.DEAD:
 		return
+	if shield > 0.0:
+		var absorbed = minf(shield, amount)
+		shield -= absorbed
+		amount -= absorbed
 	current_hp -= amount
 	queue_redraw()
 	if current_hp <= 0.0:

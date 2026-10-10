@@ -76,6 +76,9 @@ func _main() -> void:
 	var s = UnitFactory.create("scout_marine")
 	s.squad_size = 3
 	s.saved_hp = [0.5] as Array[float]
+	s.apply_upgrade(CardFactory.iron_halo())
+	s.apply_upgrade(CardFactory.combat_stimms())
+	s.apply_upgrade(CardFactory.chapter_banner())
 	bm.player_units = [t, s] as Array[UnitData]
 	bm.player_placements[t] = Vector2i(1, 1)
 	bm.player_placements[s] = Vector2i(3, 0)
@@ -83,6 +86,7 @@ func _main() -> void:
 	wall.level_up_building()
 	bm.player_buildings[wall] = Vector2i(0, 2)
 	bm.pending_cards = [CardFactory.battle_fury(), CardFactory.tactical_squad()] as Array[CardData]
+	bm.armed_events.append("orbital_strike")
 	sv.save_run()
 	bm.reset_run()
 	_check("загрузка", sv.load_run())
@@ -95,7 +99,7 @@ func _main() -> void:
 		and is_equal_approx(lt.hp_multiplier, 1.5) and is_equal_approx(lt.damage_multiplier, 1.2) \
 		and is_equal_approx(lt.attack_speed_multiplier, 1.15) and lt.applied_upgrades == ["Blessed Armour"] \
 		and lt.saved_hp == [1.0, 0.35] and lt.squad_size == 2 and bm.player_placements.get(lt) == Vector2i(1, 1))
-	_check("раненый отряд на купленной клетке", ls.saved_hp == [0.5] and bm.player_placements.get(ls) == Vector2i(3, 0))
+	_check("раненый отряд на купленной клетке, щит / стимуляторы / знамя, заряд удара", ls.saved_hp == [0.5] 		and bm.player_placements.get(ls) == Vector2i(3, 0) and is_equal_approx(ls.shield_ratio, 0.3) 		and is_equal_approx(ls.move_speed_multiplier, 1.2) and is_equal_approx(ls.banner_aura_bonus, 0.15) 		and Array(bm.armed_events) == ["orbital_strike"])
 	var bkeys = bm.player_buildings.keys()
 	_check("здания (уровень 2) и рука", bkeys.size() == 1 and bkeys[0].id == "fortress_wall" and bkeys[0].building_level == 2 \
 		and bm.player_buildings[bkeys[0]] == Vector2i(0, 2) and _ids(bm.pending_cards) == "battle_fury,tactical_squad")
