@@ -98,6 +98,12 @@ func goto_main_menu() -> void:
 	BattleManager.stop_battle()
 	get_tree().change_scene_to_file(MENU_SCENE)
 
+# Сдача вне схватки (магазин, расстановка, итог боя) — конец забега без экрана
+# итога: сохранение удаляется, в главное меню. В схватке — BattleManager.surrender()
+func abandon_run() -> void:
+	SaveManager.delete_save()
+	goto_main_menu()
+
 # Продолжить загруженный забег (SaveManager.load_run): незавершённый шаг —
 # открыть его заново (бой — с расстановки), завершённый — перейти к следующему
 func resume() -> void:
