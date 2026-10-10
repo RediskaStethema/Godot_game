@@ -7,12 +7,15 @@ extends Node
 # Только визуал: опрос REFRESH_INTERVAL раз в секунду, альфа плавно тянется к
 # цели каждый кадр. Гасится self_modulate — дочерние узлы (HP-бар цитадели) яркие.
 # Новая постройка подхватывается сама, если у неё есть get_occlusion_rect().
+# Только на расстановке (решение пользователя): в бою BattleScene выключает
+# enabled — постройки плавно возвращаются к полной непрозрачности.
 
 const FADE_ALPHA: float = 0.35
 const FADE_SPEED: float = 4.0            # единиц альфы в секунду
 const REFRESH_INTERVAL: float = 0.1
 const SOLDIER_HALF_WIDTH: float = 18.0   # полуширина спрайта бойца, px мира
 
+var enabled: bool = true
 var _targets: Dictionary = {}   # постройка → целевая альфа
 var _refresh_left: float = 0.0
 
@@ -37,7 +40,7 @@ func _update_targets() -> void:
 	var soldiers = SoldierRegistry.get_all_alive_soldiers()
 	for occ in _occluders():
 		if occ.has_method("get_occlusion_rect"):
-			_targets[occ] = FADE_ALPHA if _hides_anyone(occ, soldiers) else 1.0
+			_targets[occ] = FADE_ALPHA if enabled and _hides_anyone(occ, soldiers) else 1.0
 
 func _hides_anyone(occ: Node2D, soldiers: Array) -> bool:
 	var area: Rect2 = occ.get_occlusion_rect()

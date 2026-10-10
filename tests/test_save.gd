@@ -79,7 +79,9 @@ func _main() -> void:
 	bm.player_units = [t, s] as Array[UnitData]
 	bm.player_placements[t] = Vector2i(1, 1)
 	bm.player_placements[s] = Vector2i(3, 0)
-	bm.player_buildings[CardFactory.fortress_wall()] = Vector2i(0, 2)
+	var wall = CardFactory.fortress_wall()
+	wall.level_up_building()
+	bm.player_buildings[wall] = Vector2i(0, 2)
 	bm.pending_cards = [CardFactory.battle_fury(), CardFactory.tactical_squad()] as Array[CardData]
 	sv.save_run()
 	bm.reset_run()
@@ -95,7 +97,7 @@ func _main() -> void:
 		and lt.saved_hp == [1.0, 0.35] and lt.squad_size == 2 and bm.player_placements.get(lt) == Vector2i(1, 1))
 	_check("раненый отряд на купленной клетке", ls.saved_hp == [0.5] and bm.player_placements.get(ls) == Vector2i(3, 0))
 	var bkeys = bm.player_buildings.keys()
-	_check("здания и рука", bkeys.size() == 1 and bkeys[0].id == "fortress_wall" \
+	_check("здания (уровень 2) и рука", bkeys.size() == 1 and bkeys[0].id == "fortress_wall" and bkeys[0].building_level == 2 \
 		and bm.player_buildings[bkeys[0]] == Vector2i(0, 2) and _ids(bm.pending_cards) == "battle_fury,tactical_squad")
 
 	# 4. «Продолжить» после пройденного боя → магазин следующей волны
