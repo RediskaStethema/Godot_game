@@ -6,6 +6,7 @@ extends ModalOverlay
 signal confirmed
 
 func setup(question: String, yes_text: String, no_text: String = "Отмена") -> void:
+	close_on_cancel = true
 	build_frame(440.0)
 	add_title(question, "HeaderLabel")
 	add_button(yes_text, _on_yes, "PrimaryButton")

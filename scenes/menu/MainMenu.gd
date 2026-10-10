@@ -146,17 +146,25 @@ func _on_continue_pressed() -> void:
 		return
 	RunManager.resume()
 
+# Новый забег: при сохранении — подтверждение, затем выбор расы
 func _on_new_run_pressed() -> void:
 	if not SaveManager.has_save():
-		_start_new_run()
+		_open_race_select()
 		return
 	var dialog = ConfirmDialog.new()
 	add_child(dialog)
 	dialog.setup("Начать новый забег? Сохранённый забег будет потерян.", "НАЧАТЬ ЗАНОВО")
-	dialog.confirmed.connect(_start_new_run)
+	dialog.confirmed.connect(_open_race_select)
 
-func _start_new_run() -> void:
+func _open_race_select() -> void:
+	var dialog = RaceSelectDialog.new()
+	add_child(dialog)
+	dialog.setup()
+	dialog.chosen.connect(_start_new_run)
+
+func _start_new_run(faction: String) -> void:
 	BattleManager.reset_run()
+	RunManager.player_faction = faction
 	SaveManager.delete_save()
 	RunManager.advance()
 

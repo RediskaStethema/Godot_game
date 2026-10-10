@@ -8,6 +8,9 @@ extends ColorRect
 const DIM_COLOR = Color(0, 0, 0, 0.65)
 
 var content: VBoxContainer
+# Esc (ui_cancel) закрывает окно. Включают окна-вопросы (подтверждение, выбор расы,
+# настройки); меню паузы — нет, Esc там обрабатывает PauseMenu (снимает паузу)
+var close_on_cancel: bool = false
 
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -52,6 +55,11 @@ static func focus_later(c: Control) -> void:
 	(func():
 		if is_instance_valid(c) and c.is_inside_tree():
 			c.grab_focus()).call_deferred()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if close_on_cancel and event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		close()
 
 func close() -> void:
 	queue_free()
