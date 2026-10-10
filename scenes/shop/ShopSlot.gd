@@ -11,12 +11,14 @@ const PORTRAIT_HEIGHT = 70.0
 var slot_index: int = 0
 var card_data: CardData = null
 var hand_full: bool = false
+var free: bool = false   # карта подкрепления — всегда бесплатно
 
 signal purchase_requested(slot_index: int)
 
-func setup(data: CardData, index: int) -> void:
+func setup(data: CardData, index: int, is_free: bool = false) -> void:
 	card_data = data
 	slot_index = index
+	free = is_free
 	custom_minimum_size = CARD_SIZE
 	add_theme_stylebox_override("panel", UITheme.card_style(data.rarity))
 	$VBoxContainer.add_theme_constant_override("separation", 6)
@@ -81,7 +83,7 @@ func _make_portrait(data: CardData) -> Control:
 	return frame
 
 func _cost() -> int:
-	return ShopManager.get_price(card_data)
+	return 0 if free else ShopManager.get_price(card_data)
 
 func set_hand_full(full: bool) -> void:
 	hand_full = full

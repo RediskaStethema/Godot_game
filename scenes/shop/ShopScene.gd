@@ -25,6 +25,8 @@ var hand_row: HBoxContainer = null
 var message_label: Label = null
 var citadel_label: Label = null
 var reroll_button: Button = null   # обновить набор карт (ShopManager.try_reroll)
+var catch_up_button: Button = null   # снова открыть выбор подкрепления
+var catch_up_picker: CatchUpPicker = null
 var _empty_army_warned: bool = false   # уход без армии — со второго нажатия
 
 func _ready() -> void:
@@ -57,6 +59,9 @@ func _ready() -> void:
 	if ShopManager.free_cards_left > 0:
 		_show_message("Первая волна: одна карта бесплатно")
 	SaveManager.save_run()
+	_refresh_catch_up_button()
+	if ShopManager.catch_up_just_issued:
+		_open_catch_up()
 
 func _populate_shop(offers: Array) -> void:
 	for child in shop_slots.get_children():
@@ -105,6 +110,7 @@ func _sell_card(card: CardData) -> void:
 	purchased_cards.erase(card)
 	var refund = EconomyManager.sell_card(card)
 	_show_message("Продано: %s (+%d Req)" % [card.title, refund])
+	_refresh_catch_up_picker()
 	_update_army_label()
 	_refresh_hand()
 	_populate_shop(ShopManager.current_offers)
@@ -191,6 +197,50 @@ func _update_requisition_label(amount: int) -> void:
 	_refresh_reroll_button()
 
 # -------------------------------------------------------
+# ПОДКРЕПЛЕНИЕ (ShopManager.catch_up_offers)
+# -------------------------------------------------------
+func _open_catch_up() -> void:
+	if catch_up_picker or not ShopManager.has_catch_up():
+		return
+	catch_up_picker = CatchUpPicker.new()
+	add_child(catch_up_picker)
+	catch_up_picker.setup()
+	catch_up_picker.picked.connect(_on_catch_up_picked)
+	catch_up_picker.reroll_requested.connect(_on_catch_up_reroll)
+	catch_up_picker.tree_exited.connect(func(): catch_up_picker = null)
+	_refresh_catch_up_picker()
+
+func _refresh_catch_up_picker() -> void:
+	if catch_up_picker:
+		catch_up_picker.refresh(ShopManager.catch_up_offers, ShopManager.catch_up_rerolls_left, _is_hand_full())
+
+func _refresh_catch_up_button() -> void:
+	if catch_up_button:
+		catch_up_button.visible = ShopManager.has_catch_up()
+
+func _on_catch_up_picked(index: int) -> void:
+	if _is_hand_full():
+		_show_message("Рука полна (%d/%d) — продайте лишние карты" % [purchased_cards.size(), BattleManager.MAX_HAND_SIZE])
+		return
+	var card = ShopManager.take_catch_up(index)
+	if card == null:
+		return
+	purchased_cards.append(card)
+	_show_message("Подкрепление: %s" % card.title)
+	if catch_up_picker:
+		catch_up_picker.close()
+	_refresh_catch_up_button()
+	_update_army_label()
+	_refresh_hand()
+	_populate_shop(ShopManager.current_offers)
+	SaveManager.save_run()
+
+func _on_catch_up_reroll() -> void:
+	if ShopManager.try_reroll_catch_up():
+		_refresh_catch_up_picker()
+		SaveManager.save_run()
+
+# -------------------------------------------------------
 # ОБНОВЛЕНИЕ НАБОРА
 # -------------------------------------------------------
 func _on_reroll_pressed() -> void:
@@ -269,6 +319,9 @@ func _build_shop_panel() -> void:
 	shop_panel.move_child(header, title.get_index())
 	title.reparent(header)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	catch_up_button = UITheme.make_button("Подкрепление", "PrimaryButton", _open_catch_up)
+	catch_up_button.custom_minimum_size = Vector2(200, 40)
+	header.add_child(catch_up_button)
 	reroll_button = Button.new()
 	reroll_button.custom_minimum_size = Vector2(200, 40)
 	header.add_child(reroll_button)
