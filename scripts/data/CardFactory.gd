@@ -233,6 +233,38 @@ static func fortress_wall() -> CardData:
 	c.building_level_bonuses = {"shield": 0.50, "slow_radius": 0.20}
 	return c
 
+# TDD: «+2 Req/волна» (Rare 7–10). Доход после каждого боя, при любом итоге
+static func plasma_generatorium() -> CardData:
+	var c = CardData.new()
+	c.id = "plasma_generatorium"
+	c.title = "Plasma Generatorium"
+	c.description = "+2 Req после каждого боя. Стоит между раундами."
+	c.faction = "space_marines"
+	c.cost = 8
+	c.rarity = "rare"
+	c.card_type = "building"
+	c.building_type = "generator"
+	c.building_stats = {"income": 2.0}
+	# Уровень: +50% дохода (2 → 3 → 4.5 ≈ 5)
+	c.building_level_bonuses = {"income": 0.50}
+	return c
+
+# TDD: «Reanimation 15%». Павший рядом боец игрока встаёт с 30% HP (раз за бой)
+static func apothecarion() -> CardData:
+	var c = CardData.new()
+	c.id = "apothecarion"
+	c.title = "Apothecarion"
+	c.description = "Павший рядом боец встаёт с 30% HP (шанс 15%, раз за бой)."
+	c.faction = "space_marines"
+	c.cost = 8
+	c.rarity = "rare"
+	c.card_type = "building"
+	c.building_type = "apothecarion"
+	c.building_stats = {"revive_chance": 0.15, "revive_radius": 260.0, "revive_hp": 0.3}
+	# Уровень: +33% шанса (15% → 20% → 26.6%)
+	c.building_level_bonuses = {"revive_chance": 0.33}
+	return c
+
 # -------------------------------------------------------
 # КАРТЫ УЛУЧШЕНИЙ (upgrade)
 # -------------------------------------------------------
@@ -346,7 +378,7 @@ static func orbital_strike() -> CardData:
 # ShopManager будет брать карты отсюда.
 # Карты с большим весом появляются чаще.
 
-# Веса по TDD ~60/30/10: common 24, rare 13, epic 4 — из 41 копии.
+# Веса по TDD ~60/30/10: common 26, rare 15, epic 4 — из 45 копий.
 # Новая карта по id (сохранения). Все карты игрока есть в пуле магазина.
 static func create(id: String) -> CardData:
 	for card in build_pool():
@@ -377,15 +409,16 @@ static func create_many(ids: Array) -> Array[CardData]:
 
 static func build_pool() -> Array:
 	var pool = []
-	# Common — 24 копии (базовые — как в main, сверху 3 Emergency Reinforcements из MVP TDD)
+	# Common — 27 копий: доли ~60/30/10 держатся — на 6 новых Rare базовых отрядов по +1 (на одобрение цифр)
 	# Враги (chaos_*) в пул игрока не входят
-	for i in range(7): pool.append(tactical_squad())
-	for i in range(5): pool.append(assault_squad())
-	for i in range(4): pool.append(scout_squad())
+	for i in range(8): pool.append(tactical_squad())
+	for i in range(6): pool.append(assault_squad())
+	for i in range(5): pool.append(scout_squad())
 	for i in range(2): pool.append(fortress_wall())
 	for i in range(3): pool.append(barracks())
 	for i in range(3): pool.append(emergency_reinforcements())
-	# Rare — 14 копий (по одной; новые MVP: Iron Halo, Combat Stimms, Chapter Banner, Orbital Strike)
+	# Rare — 16 копий (по одной; MVP: Iron Halo, Combat Stimms, Chapter Banner, Orbital Strike,
+	# здания TDD: Plasma Generatorium, Apothecarion)
 	pool.append(devastator_squad())
 	pool.append(terminator_squad())
 	pool.append(apothecary_card())
@@ -400,7 +433,9 @@ static func build_pool() -> Array:
 	pool.append(combat_stimms())
 	pool.append(chapter_banner())
 	pool.append(orbital_strike())
-	# Epic — 3 копии
+	pool.append(plasma_generatorium())
+	pool.append(apothecarion())
+	# Epic — 4 копии
 	for i in range(2): pool.append(dreadnought_card())
-	pool.append(chapter_master_card())
+	for i in range(2): pool.append(chapter_master_card())
 	return pool

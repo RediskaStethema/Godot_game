@@ -46,6 +46,17 @@ func calculate_victory_bonuses(synergy_income: int, flawless: bool, elite_kills:
 
 # Вызывается один раз в конце каждого боя — единственное место,
 # где растёт round_number.
+# Доход зданий после боя (Plasma Generatorium: building_stats "income" по уровню)
+# при любом итоге боя; отдельно от дохода волны — round_number не трогает.
+# buildings — BattleManager.player_buildings (CardData → клетка). Возвращает сумму
+func collect_building_income(buildings: Dictionary) -> int:
+	var income = 0
+	for card in buildings:
+		income += roundi(card.get_building_stats().get("income", 0.0))
+	if income > 0:
+		add_requisition(income)
+	return income
+
 func give_round_income(won: bool, bonuses: int = 0) -> int:
 	var income: int
 	if won:

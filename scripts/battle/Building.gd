@@ -10,6 +10,8 @@ extends Node2D
 #           площади только по врагам, перезарядка cooldown (готово в начале боя)
 #   wall  — стена: щит цитадели на каждый бой + замедляет врагов рядом
 #           (статус slowed без стаков, держится WALL_SLOW_LINGER после выхода из радиуса)
+#   generator   — Plasma Generatorium: +Req после каждого боя (EconomyManager.collect_building_income)
+#   apothecarion — Apothecarion: павший рядом боец игрока может встать (revive_chance_at)
 
 const BLOCK_SCALE: float = 0.5
 # Блоки по building_type: [Tiles/Slice N, i, j, ярус]; (i, j) — подклетка 2×2,
@@ -19,6 +21,13 @@ const BLOCKS = {
 	"wall":  [[12, 0, 1, 1], [12, 1, 0, 1]],   # низкая стена поперёк клетки
 	"artillery": [[30, 0.5, 0.5, 1], [31, 0.5, 0.5, 2]],   # приземистая башня с длинным стволом
 	"barracks": [[30, 0, 1, 1], [30, 1, 0, 1], [31, 0.5, 0.5, 2]],   # широкое низкое здание с надстройкой
+	"generator": [[1, 0.5, 0.5, 1], [3, 0.5, 0.5, 2]],   # кубы с решётками — реактор
+	"apothecarion": [[8, 0.5, 0.5, 1], [5, 0.5, 0.5, 2]],  # гладкий блок с плитой
+}
+# Оттенок блоков по типу (свои спрайты — потом): генератор холодный, госпиталь светлый
+const BLOCK_TINT = {
+	"generator": Color(0.75, 0.9, 1.25),
+	"apothecarion": Color(1.15, 1.25, 1.1),
 }
 const ARTILLERY_LEVELS: int = 2
 const ARTILLERY_BARREL_LENGTH: float = 40.0
@@ -73,8 +82,9 @@ func _draw() -> void:
 	if building_type == "wall" and stats.get("slow_radius", 0.0) > 0.0:
 		draw_circle(Vector2.ZERO, stats["slow_radius"], SLOW_AURA_COLOR)
 		draw_arc(Vector2.ZERO, stats["slow_radius"], 0.0, TAU, 48, SLOW_AURA_LINE, 1.5, true)
+	var tint: Color = BLOCK_TINT.get(building_type, Color.WHITE)
 	for b in BLOCKS.get(building_type, []):
-		TerrainTiles.draw_block(self, TerrainTiles.tile(b[0]), _block_top(b[1], b[2], b[3]), Color.WHITE, BLOCK_SCALE)
+		TerrainTiles.draw_block(self, TerrainTiles.tile(b[0]), _block_top(b[1], b[2], b[3]), tint, BLOCK_SCALE)
 	if building_type == "tower":
 		var muzzle = _block_top(0.5, 0.5, TOWER_LEVELS)
 		draw_line(muzzle, muzzle + aim.normalized() * BARREL_LENGTH, BARREL_COLOR, 6.0)
@@ -249,3 +259,16 @@ func _tick_slow_aura() -> void:
 	for e in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY):
 		if global_position.distance_to(e.global_position) <= r:
 			e.apply_status(StatusEffects.SLOWED, power, WALL_SLOW_LINGER, false)
+
+# Шанс поднять павшего бойца игрока в точке: самый сильный Apothecarion рядом.
+# Возвращает {"chance", "hp"} (доля HP после подъёма); нет — chance 0
+static func revive_at(point: Vector2) -> Dictionary:
+	var best = {"chance": 0.0, "hp": 0.0}
+	for b in BattleManager.buildings:
+		if not is_instance_valid(b):
+			continue
+		var r = b.stats.get("revive_radius", 0.0)
+		var c = b.stats.get("revive_chance", 0.0)
+		if r > 0.0 and c > best["chance"] and point.distance_to(b.global_position) <= r:
+			best = {"chance": c, "hp": b.stats.get("revive_hp", 0.3)}
+	return best

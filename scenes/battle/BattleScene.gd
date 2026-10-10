@@ -622,6 +622,9 @@ func _on_battle_ended(winner_team: int) -> void:
 	# Живые до итога: store_survivors возрождает павшие отряды, Казармы пополняют — потери считать раньше
 	var alive_at_end := SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER).size()
 	var result_text := _resolve_battle(winner_team)
+	var building_income := EconomyManager.collect_building_income(BattleManager.player_buildings)
+	if building_income > 0:
+		result_text += " · генераторы +%d Req" % building_income
 	hud.set_message(result_text)
 	hud.show_result(_result_title(winner_team), result_text + "\n" + _battle_summary(alive_at_end), won)
 	_play_finale_slowmo()

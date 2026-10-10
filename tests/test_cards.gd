@@ -49,7 +49,7 @@ func _main() -> void:
 		ids[c.id] = true
 		by_rarity[c.rarity] += 1
 	var share = func(r): return float(by_rarity[r]) / pool.size()
-	_check("пул: %d разных карт, доли ~60/30/10 (%d / %d / %d копий)" % [ids.size(), by_rarity["common"], by_rarity["rare"], by_rarity["epic"]], ids.size() == 22 \
+	_check("пул: %d разных карт (17 прежних + 5 MVP + 2 здания TDD), доли ~60/30/10 (%d / %d / %d копий)" % [ids.size(), by_rarity["common"], by_rarity["rare"], by_rarity["epic"]], ids.size() == 24 \
 		and absf(share.call("common") - 0.6) < 0.05 and absf(share.call("rare") - 0.3) < 0.05 \
 		and absf(share.call("epic") - 0.1) < 0.03)
 	_check("новые карты в пуле", ["iron_halo", "combat_stimms", "chapter_banner",

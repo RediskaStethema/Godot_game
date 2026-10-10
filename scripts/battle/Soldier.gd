@@ -67,6 +67,7 @@ var current_damage: float
 var current_move_speed: float
 # Щит Iron Halo на этот бой: снимается уроном раньше HP (runtime, из data.shield_ratio)
 var shield: float = 0.0
+var has_revived: bool = false   # Apothecarion поднимает бойца не больше раза за бой
 var current_attack_range: float
 var current_attack_speed: float
 var current_heal_per_second: float
@@ -138,6 +139,7 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 	has_retreated = false
 	status_effects.clear()
 	battle_cry_used = false
+	has_revived = false
 
 	_load_animations()
 
@@ -671,6 +673,8 @@ func take_damage(amount: float, flash: bool = true) -> void:
 			_float_text("%d" % roundi(amount),
 				FLOAT_HIT_TO_PLAYER if team == GameConstants.TEAM_PLAYER else FLOAT_HIT_TO_ENEMY)
 	if current_hp <= 0.0:
+		if _try_revive():
+			return
 		_die()
 		return
 	if not has_retreated and current_hp / max_hp < data.retreat_hp_threshold \
@@ -695,6 +699,19 @@ func _flash_hit() -> void:
 	get_tree().create_timer(HIT_FLASH_TIME, false).timeout.connect(func():
 		if is_instance_valid(self) and _hit_flash_id == id:
 			sprite.material = null)
+
+# Apothecarion рядом: шанс встать с долей HP (один раз за бой, только игрок)
+func _try_revive() -> bool:
+	if team != GameConstants.TEAM_PLAYER or has_revived:
+		return false
+	var r = Building.revive_at(global_position)
+	if r["chance"] <= 0.0 or randf() >= r["chance"]:
+		return false
+	has_revived = true
+	current_hp = max_hp * r["hp"]
+	if BattleManager.is_battle_running():
+		_float_text("Встал!", FLOAT_HEAL)   # иначе подъём на поле незаметен
+	return true
 
 func _die() -> void:
 	if current_state == State.DEAD:
