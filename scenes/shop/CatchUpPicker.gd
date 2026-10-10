@@ -30,6 +30,7 @@ func setup() -> void:
 	buttons.add_child(_reroll_button)
 	var later = UITheme.make_button("Позже", "", close)
 	later.custom_minimum_size = Vector2(160, 46)
+	ModalOverlay.focus_later(later)   # фокус в окне, не на кнопке магазина под ним
 	buttons.add_child(later)
 
 # Карты выбора и кнопка смены; hand_full — карты нельзя взять (рука полна)
