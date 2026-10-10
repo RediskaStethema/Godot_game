@@ -67,7 +67,7 @@ func _leave(exit: Callable) -> void:
 	add_child(_leave_dialog)
 	_leave_dialog.build_frame(440.0)
 	_leave_dialog.add_title("Идёт бой", "HeaderLabel")
-	_leave_dialog.add_title("Выйти — при «Продолжить» бой начнётся заново.\nСдаться — поражение: армия потеряна, половина дохода.", "DimLabel")
+	_leave_dialog.add_title("Выйти — при «Продолжить» бой начнётся заново.\nСдаться — забег окончен, сохранение удаляется.", "DimLabel")
 	_leave_dialog.add_button("Выйти", exit, "PrimaryButton")
 	_leave_dialog.add_button("Сдаться", _surrender_and.bind(exit))
 	_leave_dialog.add_button("Отмена", _leave_dialog.close)

@@ -31,8 +31,7 @@ const CITADEL_MAX_HP: float = 1000.0
 var citadel_hp: float = CITADEL_MAX_HP
 var citadel: Node2D = null          # цитадель текущего боя (ставит BattleScene)
 var siege_started: bool = false     # армия игрока пала, враги штурмуют цитадель
-# Игрок сдался в текущем бою: подписчик battle_ended не уходит в магазин —
-# игрок покидает бой сам (в меню или из игры)
+# Игрок сдался в текущем бою: подписчик battle_ended заканчивает забег
 var surrendered: bool = false
 # «В БОЙ» нажата, итога ещё нет. Сохраняется: «Продолжить» ставит армию как была
 # и сразу запускает бой (без повторной расстановки)
@@ -78,9 +77,9 @@ func start_battle() -> void:
 func is_battle_running() -> bool:
 	return phase == BattlePhase.RUNNING
 
-# Сдача посреди боя (решение пользователя): поражение без штурма — армия
-# потеряна, половина дохода, цитадель не страдает. Итог (доход, шаг забега,
-# сохранение) обрабатывает подписчик battle_ended синхронно.
+# Сдача посреди боя (решение пользователя) — конец забега: battle_ended
+# (поражение) с флагом surrendered, подписчик (BattleScene) синхронно
+# показывает итог и удаляет сохранение.
 func surrender() -> void:
 	if phase != BattlePhase.RUNNING:
 		return

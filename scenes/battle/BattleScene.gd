@@ -396,6 +396,11 @@ func _on_battle_ended(winner_team: int) -> void:
 	if BattleManager.citadel_hp <= 0:
 		_end_run(false, "Цитадель пала!")
 		return
+	# Сдача — конец забега (решение пользователя): сохранение удаляется,
+	# игрок сам уходит из боя (в меню или из игры)
+	if BattleManager.surrendered:
+		_end_run(false, "Вы сдались")
+		return
 	var won = winner_team == GameConstants.TEAM_PLAYER
 	if battle_type == RunMapNode.BOSS and won:
 		RunManager.complete_current_node()
@@ -412,9 +417,6 @@ func _on_battle_ended(winner_team: int) -> void:
 		return
 	# Итог боя сохранён: при загрузке — сразу магазин следующей волны
 	SaveManager.save_run()
-	# Сдался — игрок сам уходит из боя (в меню или из игры), в магазин не ведём
-	if BattleManager.surrendered:
-		return
 	# Таймер не тикает на паузе (иначе ушли бы в магазин с открытым меню паузы)
 	await get_tree().create_timer(2.0, false).timeout
 	RunManager.advance()

@@ -23,17 +23,17 @@ func _is(node: Node, class_name_str: String) -> bool:
 func _check(label: String, ok: bool) -> void:
 	print("%s %s" % ["PASS" if ok else "FAIL", label])
 
-func _battle_scene(wave: int = 3) -> Node:
+func _battle_scene() -> Node:
 	var bm = root.get_node("BattleManager")
 	var rm = root.get_node("RunManager")
 	bm.reset_run()
 	rm.new_run(3)
 	for n in rm.map.nodes:
-		if n.is_battle() and n.wave == wave:
+		if n.is_battle() and n.wave == 3:
 			rm.current_node_id = n.id
 			rm.current_completed = false
 			break
-	root.get_node("EconomyManager").round_number = wave
+	root.get_node("EconomyManager").round_number = 3
 	var units: Array[UnitData] = []
 	for i in range(3):
 		var d = UnitFactory.create("tactical_marine")
@@ -129,29 +129,24 @@ func _main() -> void:
 	await _frames(2)
 	_check("расстановка: выход без вопроса", current_scene.name == "MainMenu")
 	battle = await _battle_scene()
-	var eco = root.get_node("EconomyManager")
-	var rm = root.get_node("RunManager")
-	var req_before = eco.requisition
-	var hp_before = bm.citadel_hp
 	battle._on_start_pressed()
 	await _frames(10)
 	battle.pause_menu.open()
 	battle.pause_menu._leave(battle.pause_menu._to_main_menu)
 	await _frames(2)
 	var leave_dialog = battle.pause_menu._leave_dialog
-	_check("бой: выход → окно «выйти / сдаться», бой на паузе", leave_dialog != null 		and current_scene == battle and paused and bm.is_battle_running())
+	_check("бой: выход → окно «выйти / сдаться», бой на паузе", leave_dialog != null \
+		and current_scene == battle and paused and bm.is_battle_running())
+	var eco = root.get_node("EconomyManager")
+	var req_before = eco.requisition
+	var round_at_surrender = eco.round_number
 	battle.pause_menu._surrender_and(battle.pause_menu._to_main_menu)
 	await _frames(4)
-	_check("сдался: поражение — армия потеряна, половина дохода, цитадель цела, шаг пройден", 		current_scene.name == "MainMenu" and not paused and bm.player_units.is_empty() 		and eco.round_number == 4 and eco.requisition - req_before == int(eco.calculate_wave_income(3) * eco.LOSS_INCOME_MULT) 		and is_equal_approx(bm.citadel_hp, hp_before) and rm.current_completed 		and not bm.battle_in_progress and sv.has_save())
-
-	# 8. Сдача в бою с главным боссом — забег проигран, сохранение удалено
-	battle = await _battle_scene(15)
-	battle._on_start_pressed()
-	await _frames(5)
-	battle.pause_menu.open()
-	battle.pause_menu._surrender_and(battle.pause_menu._to_main_menu)
-	await _frames(4)
-	_check("сдался боссу → забег окончен, сохранения нет", current_scene.name == "MainMenu" 		and not sv.has_save() and not current_scene.continue_button.visible)
+	_check("сдался → забег окончен: главное меню, сохранения нет, «Продолжить» скрыта", \
+		current_scene.name == "MainMenu" and not paused and not bm.battle_in_progress \
+		and not sv.has_save() and not current_scene.continue_button.visible)
+	_check("сдался → доход не начислен, волна та же", eco.requisition == req_before \
+		and eco.round_number == round_at_surrender)
 
 	sv.delete_save()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_CONFIG_PATH))
