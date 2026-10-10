@@ -187,6 +187,12 @@ static func describe(squad: Squad) -> String:
 	for b in [[d.hp_multiplier, "HP"], [d.damage_multiplier, "урона"], [d.attack_speed_multiplier, "скорострельности"]]:
 		if b[0] > 1.001:
 			bonuses.append("+%d%% %s" % [roundi((b[0] - 1.0) * 100.0), b[1]])
+	if d.move_speed_multiplier > 1.001:
+		bonuses.append("+%d%% скорости бега" % roundi((d.move_speed_multiplier - 1.0) * 100.0))
+	if d.shield_ratio > 0.0:
+		bonuses.append("щит %d%% HP" % roundi(d.shield_ratio * 100.0))
+	if d.banner_aura_bonus > 0.0:
+		bonuses.append("знамя: +%d%% урона рядом" % roundi(d.banner_aura_bonus * 100.0))
 	lines.append("Бонусы: " + (", ".join(bonuses) if not bonuses.is_empty() else "нет"))
 	if not d.applied_upgrades.is_empty():
 		lines.append("Улучшения: " + ", ".join(d.applied_upgrades))

@@ -39,10 +39,12 @@ const UPGRADES: Array[String] = ["blessed_armour", "battle_fury"]
 const CAMPAIGN_PRIORITY = {
 	"tactical": ["tactical_squad", "blessed_armour", "battle_fury"],
 	"mixed": ["tactical_squad", "assault_squad", "devastator_squad", "terminator_squad",
-		"bolter_turret", "thunderfire_cannon", "barracks", "apothecary", "dreadnought", "chaplain", "chapter_master",
-		"fortress_wall", "librarian", "land_speeder", "scout_squad", "blessed_armour", "battle_fury"],
+		"orbital_strike", "bolter_turret", "thunderfire_cannon", "barracks", "apothecary", "dreadnought", "chaplain", "chapter_master",
+		"fortress_wall", "librarian", "land_speeder", "emergency_reinforcements", "scout_squad",
+		"iron_halo", "blessed_armour", "battle_fury", "combat_stimms", "chapter_banner"],
 	"elite": ["terminator_squad", "devastator_squad", "dreadnought", "librarian", "chaplain",
-		"apothecary", "chapter_master", "land_speeder", "tactical_squad", "blessed_armour", "battle_fury"],
+		"apothecary", "chapter_master", "land_speeder", "orbital_strike", "tactical_squad",
+		"iron_halo", "blessed_armour", "battle_fury", "combat_stimms", "chapter_banner"],
 }
 const CAMPAIGN_REROLLS: int = 2        # обновлений набора за магазин, если брать нечего
 const CAMPAIGN_REROLL_RESERVE: int = 5 # обновляет, только если после него останется столько Req
@@ -426,6 +428,12 @@ func _campaign_useful(card: CardData) -> bool:
 			return bm.player_buildings.keys().any(func(b): return b.id == card.id and b.can_level_up_building())
 		"upgrade":
 			return bm.player_units.any(func(d): return d.can_apply_upgrade(card) and not d.applied_upgrades.has(card.title))
+		"event":
+			match card.event_type:
+				"reinforcements":
+					return _campaign_free_tiles() > 0
+				"orbital_strike":
+					return bm.armed_events.is_empty()   # один удар на бой
 	return false
 
 # Карта сразу на поле: новая клетка, если есть, иначе улучшение такого же
@@ -460,6 +468,14 @@ func _campaign_apply(card: CardData) -> void:
 				if d.can_apply_upgrade(card) and not d.applied_upgrades.has(card.title):
 					d.apply_upgrade(card)
 					return
+		"event":
+			match card.event_type:
+				"reinforcements":
+					var rm = root.get_node("RunManager")
+					var squad_card = CardFactory.random_squad_card(card.event_stats.get("rarity", "common"), rm.rng)
+					_campaign_apply(squad_card)   # как карта отряда: на свободную клетку
+				"orbital_strike":
+					bm.armed_events.append(card.id)
 
 # Здание — на последнюю свободную клетку (передние остаются отрядам)
 # Свободная клетка под здание: с конца королевства; Казармы — рядом с наибольшим числом отрядов

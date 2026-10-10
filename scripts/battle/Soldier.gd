@@ -65,6 +65,8 @@ var current_hp: float
 var max_hp: float
 var current_damage: float
 var current_move_speed: float
+# Щит Iron Halo на этот бой: снимается уроном раньше HP (runtime, из data.shield_ratio)
+var shield: float = 0.0
 var current_attack_range: float
 var current_attack_speed: float
 var current_heal_per_second: float
@@ -121,7 +123,8 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 	max_hp = data.get_max_hp()
 	current_damage = data.get_damage()
 	current_hp = max_hp * clampf(start_hp_ratio, 0.01, 1.0)
-	current_move_speed = data.move_speed
+	current_move_speed = data.get_move_speed()
+	shield = max_hp * data.shield_ratio
 	current_attack_range = data.attack_range
 	current_attack_speed = data.get_attack_speed()
 	current_heal_per_second = data.heal_per_second
@@ -444,6 +447,8 @@ func refresh_stats_from_data() -> void:
 	current_hp = max_hp * ratio
 	current_damage = data.get_damage()
 	current_attack_speed = data.get_attack_speed()
+	current_move_speed = data.get_move_speed()
+	shield = max_hp * data.shield_ratio
 	queue_redraw()
 
 func heal(amount: float) -> void:
@@ -638,21 +643,26 @@ func _on_hit_status() -> Array:
 # Бонус урона от аур союзников рядом (Chaplain). Считается в момент удара —
 # runtime-поля не меняются, поэтому аура пропадает, как только отошли из радиуса.
 func get_aura_damage_bonus() -> float:
+	# Носители аур — кэш реестра: Chaplain (aura_damage_bonus, по тегу) и знамя Chapter Banner
+	# (banner_aura_bonus, всем в BANNER_RADIUS). Не суммируются — берётся сильнейшая
 	var best: float = 0.0
 	for ally in SoldierRegistry.get_aura_sources(team):
 		var a: UnitData = ally.data
-		if a.aura_damage_bonus <= best:
-			continue
-		if a.aura_tag != "" and not (a.aura_tag in data.tags):
-			continue
-		if global_position.distance_squared_to(ally.global_position) <= a.aura_radius * a.aura_radius:
+		var d2 := global_position.distance_squared_to(ally.global_position)
+		if a.aura_damage_bonus > best and (a.aura_tag == "" or a.aura_tag in data.tags) and d2 <= a.aura_radius * a.aura_radius:
 			best = a.aura_damage_bonus
+		if a.banner_aura_bonus > best and d2 <= UnitData.BANNER_RADIUS * UnitData.BANNER_RADIUS:
+			best = a.banner_aura_bonus
 	return best
 
 # flash = false — урон яда/огня: без вспышки каждые полсекунды
 func take_damage(amount: float, flash: bool = true) -> void:
 	if current_state == State.DEAD:
 		return
+	if shield > 0.0:
+		var absorbed = minf(shield, amount)
+		shield -= absorbed
+		amount -= absorbed
 	current_hp -= amount
 	queue_redraw()
 	if flash:

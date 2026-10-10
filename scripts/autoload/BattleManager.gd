@@ -50,6 +50,10 @@ var _citadel_hp_at_start: float = CITADEL_MAX_HP
 var next_battle_enemy_hp: float = 1.0
 var next_battle_note: String = ""
 
+# Заряженные карты-события (id карт): разыгрываются на расстановке, срабатывают
+# в начале боя (fire_armed_events). Сохраняются — «Продолжить» их не теряет
+var armed_events: Array[String] = []
+
 # Здания: стоят между раундами на своих клетках (CardData → Vector2i)
 var player_buildings: Dictionary = {}
 var buildings: Array = []           # узлы Building текущего боя (ставит BattleScene)
@@ -276,6 +280,7 @@ func _check_catch_up() -> void:
 # Новый забег: цитадель, королевство, армия, рука, экономика, синергии, цепочка забега
 func reset_run() -> void:
 	battle_in_progress = false
+	armed_events.clear()
 	catch_up_pending = false
 	next_battle_enemy_hp = 1.0
 	next_battle_note = ""
@@ -379,6 +384,7 @@ func save_state() -> Dictionary:
 		"catch_up_pending": catch_up_pending,
 		"next_enemy_hp": next_battle_enemy_hp,
 		"next_note": next_battle_note,
+		"armed_events": Array(armed_events.duplicate()),
 	}
 
 func load_state(d: Dictionary) -> void:
@@ -402,6 +408,9 @@ func load_state(d: Dictionary) -> void:
 	catch_up_pending = bool(d.get("catch_up_pending", false))
 	next_battle_enemy_hp = float(d.get("next_enemy_hp", 1.0))
 	next_battle_note = str(d.get("next_note", ""))
+	armed_events.clear()
+	for id in d.get("armed_events", []):
+		armed_events.append(str(id))
 	emit_signal("citadel_hp_changed", citadel_hp)
 
 static func _v2i_to_arr(v: Vector2i) -> Array:
@@ -409,6 +418,39 @@ static func _v2i_to_arr(v: Vector2i) -> Array:
 
 static func _arr_to_v2i(a: Array) -> Vector2i:
 	return Vector2i(int(a[0]), int(a[1]))
+
+# Начало боя: заряженные события срабатывают. Возвращает [{pos, radius}] —
+# куда пришёлся удар (вспышку рисует сцена)
+func fire_armed_events() -> Array:
+	var hits: Array = []
+	for id in armed_events:
+		var card = CardFactory.create(id)
+		if card and card.event_type == "orbital_strike":
+			var r: float = card.event_stats.get("radius", 0.0)
+			var pos = _densest_enemy_point(r)
+			if pos != null:
+				for e in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY).duplicate():
+					if e.global_position.distance_to(pos) <= r:
+						# Пехоту в толпе накрывает втрое больше бойцов — урон × доля юнита, как у взрывов
+						e.take_damage(card.event_stats.get("damage", 0.0) * e.data.unit_weight)
+				hits.append({"pos": pos, "radius": r})
+	armed_events.clear()
+	return hits
+
+# Точка удара: боец врага, вокруг которого в радиусе больше всего врагов
+func _densest_enemy_point(radius: float) -> Variant:
+	var enemies = SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY)
+	var best = null
+	var best_count = 0
+	for e in enemies:
+		var n = 0
+		for o in enemies:
+			if e.global_position.distance_to(o.global_position) <= radius:
+				n += 1
+		if n > best_count:
+			best_count = n
+			best = e.global_position
+	return best
 
 # Щит цитадели на бой — сумма от зданий (Fortress Wall)
 func prepare_citadel_shield() -> void:
