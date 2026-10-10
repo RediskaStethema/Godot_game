@@ -28,6 +28,10 @@ var run_won: bool = false            # босс повержен
 func _ready() -> void:
 	new_run()
 
+# Раса игрока на забег: от неё оформление поля и цитадели (FactionTheme).
+# Выбор расы — позже; новый забег её не сбрасывает (выбирается до new_run)
+var player_faction: String = FactionTheme.DEFAULT_FACTION
+
 func new_run(seed_value: int = 0) -> void:
 	if seed_value != 0:
 		rng.seed = seed_value
@@ -140,6 +144,7 @@ func save_state() -> Dictionary:
 		"rng_state": str(rng.state),
 		"current_node_id": current_node_id,
 		"current_completed": current_completed,
+		"player_faction": player_faction,
 	}
 
 func load_state(d: Dictionary) -> void:
@@ -147,6 +152,7 @@ func load_state(d: Dictionary) -> void:
 	rng.state = str(d["rng_state"]).to_int()
 	current_node_id = int(d["current_node_id"])
 	current_completed = bool(d["current_completed"])
+	player_faction = str(d.get("player_faction", FactionTheme.DEFAULT_FACTION))
 
 # -------------------------------------------------------
 # ДЛЯ БОЯ

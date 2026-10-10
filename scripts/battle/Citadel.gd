@@ -1,7 +1,9 @@
 class_name Citadel
 extends Node2D
 
-# Цитадель игрока — башня из блоков лунного тайлсета на клетке IsoGrid.citadel_tile.
+# Цитадель игрока на клетке IsoGrid.citadel_tile. Вид — по теме расы игрока
+# (FactionTheme.current()["citadel"]): башня из блоков тайлсета или анимированный
+# лист кадров (стоит / стреляет / ранена / рушится).
 # Позиция узла = центр клетки (верх пола), башня растёт вверх.
 # HP хранится в BattleManager.citadel_hp (живёт весь забег).
 # Во время штурма (армия игрока пала) цитадель — боевая сторона: бьёт из
@@ -41,9 +43,14 @@ var shot_timer: float = 0.0
 # self_modulate, а дочерние узлы его не наследуют — бар остаётся ярким
 var _hp_bar: Node2D
 var shot_target: Vector2 = Vector2.ZERO   # в глобальных координатах
+# Лист кадров темы (null — башня из блоков). Гасится вместе с цитаделью
+# (OcclusionFader меняет self_modulate — переносим его на спрайт)
+var _sprite: AnimatedSprite2D = null
+var _sheet: Dictionary = {}
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	apply_theme(FactionTheme.current().get("citadel", {}))
 	_hp_bar = Node2D.new()
 	_hp_bar.draw.connect(_draw_hp_bar)
 	add_child(_hp_bar)
@@ -53,10 +60,77 @@ func _exit_tree() -> void:
 	if BattleManager.citadel == self:
 		BattleManager.citadel = null
 
+# Вид цитадели из темы: пусто — блоки, "sheet" — анимированный лист кадров
+func apply_theme(citadel_theme: Dictionary) -> void:
+	if _sprite:
+		_sprite.queue_free()
+		_sprite = null
+	_sheet = citadel_theme
+	if not _sheet.has("sheet"):
+		queue_redraw()
+		return
+	var tex = FactionTheme.load_texture(_sheet["sheet"])
+	if tex == null:
+		push_warning("Citadel: нет листа кадров %s — башня из блоков" % _sheet["sheet"])
+		_sheet = {}
+		queue_redraw()
+		return
+	var frame: Vector2i = _sheet["frame_size"]
+	var frames = SpriteFrames.new()
+	frames.remove_animation("default")
+	for anim in _sheet["rows"]:
+		var row: Array = _sheet["rows"][anim]
+		frames.add_animation(anim)
+		frames.set_animation_speed(anim, _sheet.get("fps", 8.0))
+		frames.set_animation_loop(anim, anim == "idle")
+		for i in range(int(row[1])):
+			var at = AtlasTexture.new()
+			at.atlas = tex
+			at.region = Rect2(i * frame.x, int(row[0]) * frame.y, frame.x, frame.y)
+			frames.add_frame(anim, at)
+	_sprite = AnimatedSprite2D.new()
+	_sprite.sprite_frames = frames
+	_sprite.centered = false
+	var k: float = _sheet.get("scale", 1.0)
+	_sprite.scale = Vector2(k, k)
+	_sprite.position = -Vector2(_sheet.get("anchor", Vector2(frame.x / 2.0, frame.y))) * k
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_sprite.animation_finished.connect(_on_sprite_animation_finished)
+	add_child(_sprite)
+	move_child(_sprite, 0)   # под HP-баром
+	_sprite.play("idle" if BattleManager.citadel_hp > 0.0 else "fall")
+	queue_redraw()
+
+func has_sprite() -> bool:
+	return _sprite != null
+
+# Состояние листа кадров: рухнувшая остаётся рухнувшей; выстрел не перебивает
+# анимацию попадания; нет такой анимации в листе — ничего
+func play_state(anim: String) -> void:
+	if _sprite == null or not _sprite.sprite_frames.has_animation(anim):
+		return
+	if _sprite.animation == "fall":
+		return
+	if anim == "attack" and _sprite.animation == "hit" and _sprite.is_playing():
+		return
+	_sprite.play(anim)
+
+func get_sprite_animation() -> String:
+	return _sprite.animation if _sprite else ""
+
+func _on_sprite_animation_finished() -> void:
+	if _sprite.animation in ["attack", "hit"]:
+		_sprite.play("idle")
+
+func _process(_delta: float) -> void:
+	if _sprite:
+		_sprite.self_modulate = self_modulate
+
 func _draw() -> void:
 	# BLOCKS уже упорядочены от дальних подклеток к ближним, внутри — снизу вверх
-	for b in BLOCKS:
-		TerrainTiles.draw_block(self, TerrainTiles.tile(b[0]), _block_top(b[1], b[2], b[3]), Color.WHITE, BLOCK_SCALE)
+	if _sprite == null:
+		for b in BLOCKS:
+			TerrainTiles.draw_block(self, TerrainTiles.tile(b[0]), _block_top(b[1], b[2], b[3]), Color.WHITE, BLOCK_SCALE)
 	if shot_timer > Soldier.TIMER_EPSILON:
 		var a = shot_timer / SHOT_SHOW_TIME
 		var to = to_local(shot_target)
@@ -73,12 +147,17 @@ func _block_top(i: int, j: int, level: int) -> Vector2:
 	var sub = Vector2(IsoGrid.TILE_WIDTH, IsoGrid.TILE_HEIGHT) * BLOCK_SCALE / 2.0
 	return Vector2((i - j) * sub.x, (i + j - 1) * sub.y) - Vector2(0, TerrainTiles.LEVEL_HEIGHT * BLOCK_SCALE * level)
 
-# Верхняя точка донжона
+# Верхняя точка донжона (у листа кадров — верх кадра)
 func _top_y() -> float:
+	if _sprite:
+		return _sprite.position.y
 	return _block_top(0, 0, KEEP_LEVELS).y - IsoGrid.TILE_HEIGHT * BLOCK_SCALE / 2.0
 
 # Область экрана (мировые координаты), которую закрывают блоки цитадели
 func get_occlusion_rect() -> Rect2:
+	if _sprite:
+		var fs = Vector2(_sheet["frame_size"]) * _sprite.scale
+		return Rect2(_sprite.position + global_position, fs)
 	var rect = Rect2()
 	for b in BLOCKS:
 		var r = TerrainTiles.block_rect(_block_top(b[1], b[2], b[3]), BLOCK_SCALE)
@@ -132,11 +211,13 @@ func _fire_at(point: Vector2) -> void:
 			e.take_damage(DAMAGE)
 	shot_target = point
 	shot_timer = SHOT_SHOW_TIME
+	play_state("attack")
 	queue_redraw()
 
 # Враг атаковал цитадель
 func take_hit(amount: float) -> void:
 	BattleManager.damage_citadel(amount)
+	play_state("fall" if BattleManager.citadel_hp <= 0.0 else "hit")
 	modulate = FLASH_COLOR
 	create_tween().tween_property(self, "modulate", Color.WHITE, 0.25)
 

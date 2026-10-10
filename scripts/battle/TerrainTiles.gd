@@ -63,6 +63,26 @@ static func block_rect(top_center: Vector2, scale_mult: float = 1.0) -> Rect2:
 	var s = SCALE * scale_mult
 	return Rect2(top_center - TOP_CENTER_PX * s, SPRITE_PX * s)
 
+# Плитка темы расы: int — блок тайлсета, String — картинка ромба клетки целиком
+static func draw_theme_tile(canvas: CanvasItem, entry, top_center: Vector2, modulate: Color = Color.WHITE) -> void:
+	if entry is String:
+		draw_tile_texture(canvas, FactionTheme.load_texture(entry), top_center, modulate)
+	else:
+		draw_block(canvas, tile(int(entry)), top_center, modulate)
+
+# Картинка клетки целиком: ширина = ширина клетки, ромб верхней грани (2:1) —
+# в верхней части картинки, его центр — в top_center
+static func draw_tile_texture(canvas: CanvasItem, tex: Texture2D, top_center: Vector2, modulate: Color = Color.WHITE) -> void:
+	if tex == null:
+		return
+	var k: float = float(IsoGrid.TILE_WIDTH) / tex.get_width()   # не целочисленно: PNG любой ширины
+	var size = tex.get_size() * k
+	canvas.draw_texture_rect(tex, Rect2(top_center - Vector2(size.x / 2.0, IsoGrid.TILE_HEIGHT / 2.0), size), false, modulate)
+
+# Вариант для клетки (int или String) — как pick, но без приведения к int
+static func pick_any(variants: Array, cell: Vector2i, salt: int = 0) -> Variant:
+	return variants[hash_cell(cell, salt) % variants.size()]
+
 # Декор стоит «ногами» (низом спрайта) в точке foot
 static func draw_decoration(canvas: CanvasItem, tex: Texture2D, foot: Vector2) -> void:
 	if tex == null:
