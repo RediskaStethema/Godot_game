@@ -1,9 +1,9 @@
 class_name IsoGridRenderer
 extends Node2D
 
-# Рисует поле боя в духе 9 Kings: общая платформа из блоков лунного тайлсета
-# (TerrainTiles), на ней — техно-плиты королевства игрока, тёмные плиты зоны врага
-# и декор (камни, кратеры). Поверх — подсветка клеток (наведение, занято, покупка).
+# Рисует поле боя в духе 9 Kings: общая платформа, на ней — плиты королевства
+# игрока, плиты зоны врага и декор. Плитки и декор — из темы расы игрока
+# (FactionTheme.current()). Поверх — подсветка клеток (наведение, занято, покупка).
 
 var grid: IsoGrid
 
@@ -37,9 +37,11 @@ var expansion_tiles: Array[Vector2i] = []
 var expansion_cost: int = 0
 
 var _floor: Node2D = null   # пол рисуется один раз, отдельно от подсветки плотов
+var theme: Dictionary = {}  # FactionTheme расы игрока
 
 func setup(iso_grid: IsoGrid) -> void:
 	grid = iso_grid
+	theme = FactionTheme.current()
 	_floor = Node2D.new()
 	_floor.show_behind_parent = true
 	_floor.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # пиксель-арт без размытия
@@ -84,11 +86,11 @@ func _draw_floor() -> void:
 	for c in cells:
 		var top = grid.lattice_to_screen(c.x, c.y)
 		if grid.is_valid_tile(c):
-			TerrainTiles.draw_block(_floor, TerrainTiles.tile(TerrainTiles.pick(TerrainTiles.KINGDOM, c)), top)
+			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["kingdom"], c), top)
 		elif _is_enemy_cell(c):
-			TerrainTiles.draw_block(_floor, TerrainTiles.tile(TerrainTiles.pick(TerrainTiles.ENEMY, c)), top, FLOOR_TINT)
+			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["enemy"], c), top, FLOOR_TINT)
 		else:
-			TerrainTiles.draw_block(_floor, TerrainTiles.tile(TerrainTiles.pick(TerrainTiles.FLOOR, c)), top, FLOOR_TINT)
+			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["floor"], c), top, FLOOR_TINT)
 
 	# Декор — поверх пола. В боевой полосе только плоские кратеры, и не на клетках королевства
 	for c in cells:
@@ -98,7 +100,9 @@ func _draw_floor() -> void:
 		var roll = TerrainTiles.hash_cell(c, 7) % 100
 		if roll >= (DECOR_FLAT_CHANCE if in_strip else DECOR_CHANCE):
 			continue
-		var options = TerrainTiles.DECORATIONS.filter(func(d): return d[1] or not in_strip)
+		var options = theme["decorations"].filter(func(d): return d[1] or not in_strip)
+		if options.is_empty():
+			continue
 		var deco = options[TerrainTiles.hash_cell(c, 13) % options.size()]
 		var jitter = Vector2((TerrainTiles.hash_cell(c, 21) % 41) - 20, (TerrainTiles.hash_cell(c, 29) % 17) - 8)
 		TerrainTiles.draw_decoration(_floor, TerrainTiles.decoration(deco[0]), grid.lattice_to_screen(c.x, c.y) + jitter)
