@@ -6,6 +6,9 @@ extends SceneTree
 #   godot --headless --path . -s tests/balance_sim.gd -- [стратегия] [прогонов] [с волны] [по волну]
 # Стратегии: tactical (только Tactical), mixed (смешанная армия), elite (Rare/Epic), all (все).
 #
+# Забег целиком (реалистичнее, см. «ЗАБЕГ ЦЕЛИКОМ» ниже):
+#   godot --headless --path . -s tests/balance_sim.gd -- campaign [стратегия|all] [забегов]
+#
 # Модель игрока (оптимистичная — верхняя оценка силы):
 #   * каждую волну выигрывает, бонус к доходу BONUS_NORMAL / BONUS_BOSS;
 #   * тратит весь Requisition, магазин всегда даёт нужные карты;
@@ -32,6 +35,18 @@ const STRATEGIES = {
 }
 # Карты-улучшения: по одной каждого вида на отряд
 const UPGRADES: Array[String] = ["blessed_armour", "battle_fury"]
+# Забег целиком: приоритет карт (что игрок берёт из выпавшего набора магазина)
+const CAMPAIGN_PRIORITY = {
+	"tactical": ["tactical_squad", "blessed_armour", "battle_fury"],
+	"mixed": ["tactical_squad", "assault_squad", "devastator_squad", "terminator_squad",
+		"bolter_turret", "apothecary", "dreadnought", "chaplain", "chapter_master",
+		"fortress_wall", "librarian", "land_speeder", "scout_squad", "blessed_armour", "battle_fury"],
+	"elite": ["terminator_squad", "devastator_squad", "dreadnought", "librarian", "chaplain",
+		"apothecary", "chapter_master", "land_speeder", "tactical_squad", "blessed_armour", "battle_fury"],
+}
+const CAMPAIGN_REROLLS: int = 2        # обновлений набора за магазин, если брать нечего
+const CAMPAIGN_REROLL_RESERVE: int = 5 # обновляет, только если после него останется столько Req
+const CAMPAIGN_SEED_BASE: int = 5000
 # Клетки сверх стартовых 3×3 — в порядке покупки (рамка 4×4)
 const EXTRA_TILES: Array[Vector2i] = [Vector2i(3, 0), Vector2i(3, 1), Vector2i(3, 2),
 	Vector2i(0, 3), Vector2i(1, 3), Vector2i(2, 3), Vector2i(3, 3)]
@@ -65,6 +80,9 @@ func _main() -> void:
 	var args = OS.get_cmdline_user_args()
 	em = root.get_node("EconomyManager")
 	bm = root.get_node("BattleManager")
+	if args.size() > 0 and args[0] == "campaign":
+		await _main_campaign(args)
+		return
 	var strategy: String = args[0] if args.size() > 0 else "all"
 	var runs: int = int(args[1]) if args.size() > 1 else 3
 	first_wave = int(args[2]) if args.size() > 2 else 1
@@ -251,3 +269,236 @@ func _battle(wave: int, units: Array[UnitData], bought: int) -> Dictionary:
 	current_scene = null
 	await process_frame
 	return res
+
+# -------------------------------------------------------
+# ЗАБЕГ ЦЕЛИКОМ (campaign)
+# -------------------------------------------------------
+# Волны 1..15 подряд одним забегом, без сброса между боями: выжившие с их HP,
+# возрождение павших отрядов, доход по итогу боя, HP цитадели, здания с
+# уровнями и подкрепление — настоящей логикой игры (BattleScene._on_battle_ended,
+# BattleManager, ShopManager). Магазин — случайные 4 карты от RunManager.rng:
+# игрок берёт лучшее по CAMPAIGN_PRIORITY из выпавшего (неидеальный игрок),
+# обновляет набор, только если брать нечего. Лечение слиянием не использует.
+# Клетку королевства (волны расширения) покупает после карт, если остались Req —
+# как в игре, где расширение идёт на расстановке после магазина.
+# Забег кончается падением цитадели, боем с главным боссом или таймаутом боя.
+func _main_campaign(args: Array) -> void:
+	var strategy: String = args[1] if args.size() > 1 else "all"
+	var runs: int = int(args[2]) if args.size() > 2 else 5
+	for c in CardFactory.build_pool():
+		cards[c.id] = c
+	Engine.time_scale = TIME_SCALE
+	var names = CAMPAIGN_PRIORITY.keys() if strategy == "all" else [strategy]
+	for s in names:
+		await _run_campaign(s, runs)
+	Engine.time_scale = 1.0
+	quit()
+
+func _run_campaign(strategy: String, runs: int) -> void:
+	var rm = root.get_node("RunManager")
+	var sm = root.get_node("ShopManager")
+	print("\n=== Забег целиком: %s, забегов: %d ===" % [strategy, runs])
+	var reached: Array[int] = []
+	var won_runs = 0
+	var catch_ups = 0
+	var hp_by_wave := {}
+	for r in range(runs):
+		bm.reset_run()
+		rm.new_run(CAMPAIGN_SEED_BASE + r)
+		var last_wave = 0
+		var outcome = "?"
+		print("\n-- забег %d (сид %d)" % [r + 1, CAMPAIGN_SEED_BASE + r])
+		print("волна | тип      | Req до | клет | отр | здан | итог | цит. HP | Req после | армия")
+		for wave in range(1, WAVES + 1):
+			rm.current_node_id = 2 * (wave - 1)   # магазин перед волной
+			rm.current_completed = false
+			sm.open_shop()
+			if sm.catch_up_just_issued:
+				catch_ups += 1
+			var req_before = em.requisition
+			var picked = _campaign_shop(strategy, wave)
+			rm.current_node_id = 2 * (wave - 1) + 1   # бой волны
+			rm.current_completed = false
+			var w = await _campaign_battle()
+			last_wave = wave
+			hp_by_wave[wave] = hp_by_wave.get(wave, 0.0) + bm.citadel_hp
+			print("%5d | %-8s | %6d | %4d | %3d | %4d | %4s | %7.0f | %9d | %s%s" % [
+				wave, RunMapData.get_battle_type_for_wave(wave), req_before, bm.kingdom_tiles.size(),
+				bm.player_units.size(), bm.player_buildings.size(),
+				{0: "поб", 1: "пор", -1: "нич", -2: "тайм"}.get(w, "?"), bm.citadel_hp, em.requisition,
+				_campaign_army_desc(), " + подкр. " + picked if picked != "" else ""])
+			if w == -2:
+				outcome = "таймаут боя на волне %d (итог не засчитан)" % wave
+				break
+			if bm.citadel_hp <= 0.0:
+				outcome = "цитадель пала на волне %d" % wave
+				break
+			if wave == WAVES:
+				outcome = "ПОБЕДА" if w == GameConstants.TEAM_PLAYER else "босс не побеждён"
+				if w == GameConstants.TEAM_PLAYER:
+					won_runs += 1
+		reached.append(last_wave)
+		print("итог: %s" % outcome)
+	reached.sort()
+	var avg_hp: Array[String] = []
+	for wave in range(1, WAVES + 1):
+		var alive = reached.filter(func(x): return x >= wave).size()
+		if alive > 0:
+			avg_hp.append("%d:%.0f" % [wave, hp_by_wave.get(wave, 0.0) / alive])
+	print("\nСВОДКА %s: побед в забеге %d/%d; дошли до волн %s; подкреплений выдано %d" % [
+		strategy, won_runs, runs, reached, catch_ups])
+	print("средний HP цитадели после волны (среди дошедших): %s" % ", ".join(avg_hp))
+
+# Покупки в магазине волны; возвращает id взятой карты подкрепления (или "")
+func _campaign_shop(strategy: String, wave: int) -> String:
+	var sm = root.get_node("ShopManager")
+	var prio: Array = CAMPAIGN_PRIORITY[strategy]
+	var picked = ""
+	if sm.has_catch_up():
+		var best = _campaign_best(sm.catch_up_offers, prio, false)
+		if best >= 0:
+			var card: CardData = sm.take_catch_up(best)
+			_campaign_apply(card)
+			picked = card.id
+	var rerolls = 0
+	while true:
+		var i = _campaign_best(sm.current_offers, prio, true)
+		if i >= 0:
+			var card: CardData = sm.try_purchase(i)
+			if card == null:
+				break
+			_campaign_apply(card)
+			continue
+		# Полезное есть, но не по карману — копит; полезного нет — обновляет набор
+		if _campaign_best(sm.current_offers, prio, false) >= 0:
+			break
+		if rerolls < CAMPAIGN_REROLLS and em.requisition >= sm.get_reroll_cost() + CAMPAIGN_REROLL_RESERVE:
+			sm.try_reroll()
+			rerolls += 1
+			continue
+		break
+	if wave % bm.EXPANSION_EVERY == 0:
+		_campaign_buy_tile()
+	return picked
+
+func _campaign_buy_tile() -> void:
+	for t in EXTRA_TILES:
+		if not bm.kingdom_tiles.has(t):
+			if bm.get_tile_cost() <= em.requisition:
+				bm.try_buy_tile(t)
+			return
+
+# Индекс лучшей карты набора по приоритету; need_afford — только по карману
+func _campaign_best(offers: Array, prio: Array, need_afford: bool) -> int:
+	var sm = root.get_node("ShopManager")
+	var best = -1
+	var best_rank = 1 << 30
+	for i in range(offers.size()):
+		var card: CardData = offers[i]
+		var rank = prio.find(card.id)
+		if rank < 0 or rank >= best_rank or not _campaign_useful(card):
+			continue
+		if need_afford and sm.get_price(card) > em.requisition:
+			continue
+		best = i
+		best_rank = rank
+	return best
+
+func _campaign_free_tiles() -> int:
+	return bm.kingdom_tiles.size() - bm.player_units.size() - bm.player_buildings.size()
+
+func _campaign_useful(card: CardData) -> bool:
+	match card.card_type:
+		"squad":
+			if _campaign_free_tiles() > 0:
+				return true
+			return bm.player_units.any(func(d): return d.factory_id == card.unit_factory_id and d.can_merge_upgrade())
+		"building":
+			if _campaign_free_tiles() > 0:
+				return true
+			return bm.player_buildings.keys().any(func(b): return b.id == card.id and b.can_level_up_building())
+		"upgrade":
+			return bm.player_units.any(func(d): return d.can_apply_upgrade(card) and not d.applied_upgrades.has(card.title))
+	return false
+
+# Карта сразу на поле: новая клетка, если есть, иначе улучшение такого же
+func _campaign_apply(card: CardData) -> void:
+	match card.card_type:
+		"squad":
+			if _campaign_free_tiles() > 0:
+				var d = UnitFactory.create(card.unit_factory_id)
+				d.squad_size = card.unit_count
+				var hp: Array[float] = []
+				for j in range(card.unit_count):
+					hp.append(1.0)
+				d.saved_hp = hp
+				bm.player_units.append(d)   # клетку назначит BattleScene
+			else:
+				for d in bm.player_units:
+					if d.factory_id == card.unit_factory_id and d.can_merge_upgrade():
+						d.apply_merge_upgrade()
+						return
+		"building":
+			if _campaign_free_tiles() > 0:
+				bm.player_buildings[card] = _campaign_building_tile()
+			else:
+				for b in bm.player_buildings:
+					if b.id == card.id and b.level_up_building():
+						return
+		"upgrade":
+			for d in bm.player_units:
+				if d.can_apply_upgrade(card) and not d.applied_upgrades.has(card.title):
+					d.apply_upgrade(card)
+					return
+
+# Здание — на последнюю свободную клетку (передние остаются отрядам)
+func _campaign_building_tile() -> Vector2i:
+	var used: Array = bm.player_buildings.values() + bm.player_placements.values()
+	for k in range(bm.kingdom_tiles.size() - 1, -1, -1):
+		var t: Vector2i = bm.kingdom_tiles[k]
+		if not used.has(t):
+			return t
+	return bm.kingdom_tiles[-1]
+
+func _campaign_army_desc() -> String:
+	var counts := {}
+	for d in bm.player_units:
+		var key = "%s L%d" % [d.factory_id.replace("_marine", ""), d.squad_level]
+		counts[key] = counts.get(key, 0) + 1
+	for b in bm.player_buildings:
+		var key = "%s L%d" % [b.id, b.building_level]
+		counts[key] = counts.get(key, 0) + 1
+	var parts: Array[String] = []
+	for key in counts:
+		parts.append("%s×%d" % [key, counts[key]])
+	return ", ".join(parts)
+
+# Бой текущего шага без сброса состояния; итог обрабатывает сама BattleScene
+func _campaign_battle() -> int:
+	ended = false
+	winner = -99
+	var scene = load("res://scenes/battle/BattleScene.tscn").instantiate()
+	root.add_child(scene)
+	current_scene = scene
+	await process_frame
+	bm.battle_ended.connect(_on_end)
+	scene._on_start_pressed()
+	var t0 = game_time
+	while not ended and game_time - t0 < MAX_GAME_SECONDS:
+		await process_frame
+	bm.battle_ended.disconnect(_on_end)
+	var w = winner if ended else -2
+	# Таймаут: итога не было — флаг «бой идёт» снимаем сами (иначе следующая
+	# сцена решит, что загружено сохранение посреди боя)
+	bm.battle_in_progress = false
+	bm.phase = bm.BattlePhase.IDLE
+	root.get_node("SquadRegistry").clear()
+	root.get_node("SoldierRegistry").clear()
+	# Переход в магазин сцена делает таймером (2 с игрового времени — при
+	# TIME_SCALE это доли реальной секунды): удаляем сразу, связь снимается
+	if is_instance_valid(scene):
+		root.remove_child(scene)
+		scene.free()
+	current_scene = null
+	await process_frame
+	return w
