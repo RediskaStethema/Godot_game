@@ -78,7 +78,7 @@ func _make_portrait(data: CardData) -> Control:
 		var l = UITheme.make_label(UITheme.TYPE_NAMES.get(data.card_type, "").to_upper(), "HeaderLabel")
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		l.add_theme_color_override("font_color", UITheme.GOLD_DIM)
+		l.add_theme_color_override("font_color", UITheme.TEXT_DIM)
 		frame.add_child(l)
 	return frame
 
