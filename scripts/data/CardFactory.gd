@@ -170,6 +170,8 @@ static func bolter_turret() -> CardData:
 		"attack_speed": 1.5,
 		"attack_range": 300.0,
 	}
+	# Уровень (такая же карта на турель): +25% урона, +20% скорострельности
+	c.building_level_bonuses = {"damage": 0.25, "attack_speed": 0.20}
 	return c
 
 static func fortress_wall() -> CardData:
@@ -188,6 +190,8 @@ static func fortress_wall() -> CardData:
 		"slow_mult": 0.6,
 		"slow_radius": 130.0,
 	}
+	# Уровень (такая же карта на стену): +50% щита, +20% радиуса замедления
+	c.building_level_bonuses = {"shield": 0.50, "slow_radius": 0.20}
 	return c
 
 # -------------------------------------------------------

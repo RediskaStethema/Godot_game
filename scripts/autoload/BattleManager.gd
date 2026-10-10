@@ -272,7 +272,7 @@ func save_state() -> Dictionary:
 		units.append(u)
 	var builds: Array = []
 	for card in player_buildings:
-		builds.append({"card": card.id, "tile": _v2i_to_arr(player_buildings[card])})
+		builds.append({"card": card.id, "tile": _v2i_to_arr(player_buildings[card]), "level": card.building_level})
 	var kingdom: Array = []
 	for t in kingdom_tiles:
 		kingdom.append(_v2i_to_arr(t))
@@ -300,6 +300,7 @@ func load_state(d: Dictionary) -> void:
 	for entry in d["buildings"]:
 		var card = CardFactory.create(entry["card"])
 		if card:
+			card.building_level = clampi(int(entry.get("level", 1)), 1, CardData.MAX_BUILDING_LEVEL)
 			player_buildings[card] = _arr_to_v2i(entry["tile"])
 	pending_cards = CardFactory.create_many(d["hand"])
 	battle_in_progress = bool(d.get("in_progress", false))

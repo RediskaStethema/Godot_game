@@ -23,6 +23,7 @@ var hud: BattleHud = null
 var inspector: SquadInspector = null
 var merge_menu: MergeMenu = null   # выбор «улучшить / вылечить» отряд его картой
 var pause_menu: PauseMenu = null
+var fader: OcclusionFader = null   # прозрачность построек — только на расстановке
 # Скорость боя: Engine.time_scale = базовый × GameSettings.battle_speed, только
 # пока идёт бой; базовый — тот, что был до боя (тесты гоняют с ускорением)
 var _base_time_scale: float = 1.0
@@ -100,8 +101,9 @@ func _build_field() -> void:
 	renderer = IsoGridRenderer.new()
 	renderer.setup(iso_grid)
 	grid_renderer.add_child(renderer)
-	# Здания и цитадель полупрозрачны, пока за ними стоят бойцы
-	add_child(OcclusionFader.new())
+	# Здания и цитадель полупрозрачны, пока за ними стоят бойцы (только расстановка)
+	fader = OcclusionFader.new()
+	add_child(fader)
 	camera = BattleCamera.new()
 	add_child(camera)
 	camera.make_current()
@@ -289,7 +291,16 @@ func _play_upgrade_card(card: CardData, tile: Vector2i) -> bool:
 	_show_message("%s → %s (%s)" % [card.title, squad.data.unit_name, card.description])
 	return true
 
+# Здание на пустую клетку; такая же карта на своё здание — уровень +1
 func _play_building_card(card: CardData, tile: Vector2i) -> bool:
+	var own = _get_player_building_at(tile)
+	if own and own.card.id == card.id:
+		if not own.card.level_up_building():
+			_show_message("%s: максимальный уровень" % own.card.title)
+			return false
+		own.refresh_stats()
+		_show_message("%s улучшено до уровня %d/%d" % [own.card.title, own.card.building_level, CardData.MAX_BUILDING_LEVEL])
+		return true
 	if _is_tile_occupied(tile):
 		_show_message("Тайл занят")
 		return false
@@ -297,6 +308,12 @@ func _play_building_card(card: CardData, tile: Vector2i) -> bool:
 	BattleManager.player_buildings[card] = tile
 	_show_message("Построено: %s" % card.title)
 	return true
+
+func _get_player_building_at(tile: Vector2i) -> Building:
+	for b in BattleManager.buildings:
+		if is_instance_valid(b) and b.tile == tile:
+			return b
+	return null
 
 func _open_merge_menu(card: CardData, squad: Squad) -> void:
 	if not MergeMenu.has_options(squad):
@@ -349,6 +366,7 @@ func _save_placement() -> void:
 # -------------------------------------------------------
 func _on_start_pressed() -> void:
 	is_placement_phase = false
+	fader.enabled = false
 	start_button.disabled = true
 	_close_merge_menu()
 	# Армия перед боем — в забег и в сохранение. До синергий: они меняют max_hp

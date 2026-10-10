@@ -22,6 +22,10 @@ const SHOT_SHOW_TIME: float = 0.15
 const SHOT_COLOR = Color(1.0, 0.8, 0.4)
 const SLOW_AURA_COLOR = Color(0.45, 0.65, 0.95, 0.05)
 const SLOW_AURA_LINE = Color(0.45, 0.65, 0.95, 0.30)
+# Уровень здания — ромбики над ним (1-й уровень без отметки)
+const LEVEL_PIP_SIZE: float = 5.0
+const LEVEL_PIP_GAP: float = 14.0
+const LEVEL_PIP_COLOR = Color(1.0, 0.82, 0.35)
 
 var card: CardData
 var tile: Vector2i
@@ -37,8 +41,13 @@ func setup(building_card: CardData, grid_tile: Vector2i) -> void:
 	card = building_card
 	tile = grid_tile
 	building_type = card.building_type
-	stats = card.building_stats
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	refresh_stats()
+
+# Статы по уровню карты (после улучшения — пересчитать)
+func refresh_stats() -> void:
+	stats = card.get_building_stats()
+	queue_redraw()
 
 # -------------------------------------------------------
 # ВИД
@@ -55,6 +64,17 @@ func _draw() -> void:
 		if shot_timer > Soldier.TIMER_EPSILON:
 			var a = shot_timer / SHOT_SHOW_TIME
 			draw_line(muzzle + aim.normalized() * BARREL_LENGTH, to_local(shot_target), Color(SHOT_COLOR, a), 2.0, true)
+	_draw_level_pips()
+
+func _draw_level_pips() -> void:
+	if card.building_level <= 1:
+		return
+	var top = get_occlusion_rect().position.y - global_position.y - LEVEL_PIP_SIZE * 2.0
+	var x0 = -LEVEL_PIP_GAP * (card.building_level - 1) / 2.0
+	for i in range(card.building_level):
+		var c = Vector2(x0 + i * LEVEL_PIP_GAP, top)
+		draw_colored_polygon(PackedVector2Array([c + Vector2(0, -LEVEL_PIP_SIZE), c + Vector2(LEVEL_PIP_SIZE, 0),
+			c + Vector2(0, LEVEL_PIP_SIZE), c + Vector2(-LEVEL_PIP_SIZE, 0)]), LEVEL_PIP_COLOR)
 
 # Центр верхней грани блока подклетки (i, j) на ярусе level
 func _block_top(i: float, j: float, level: int) -> Vector2:
