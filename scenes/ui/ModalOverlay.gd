@@ -38,7 +38,20 @@ func add_button(text: String, on_pressed: Callable, variation: String = "") -> B
 	var b = UITheme.make_button(text, variation, on_pressed)
 	b.custom_minimum_size = Vector2(0, 46)
 	content.add_child(b)
+	# Фокус — на первую кнопку окна: иначе он остаётся на кнопке под затемнением
+	# (Enter / пробел нажали бы её — второе окно, выход из игры)
+	if not _focus_taken:
+		_focus_taken = true
+		ModalOverlay.focus_later(b)
 	return b
+
+var _focus_taken: bool = false
+
+# Фокус в следующем кадре — если окно к тому времени не закрыли вместе со сценой
+static func focus_later(c: Control) -> void:
+	(func():
+		if is_instance_valid(c) and c.is_inside_tree():
+			c.grab_focus()).call_deferred()
 
 func close() -> void:
 	queue_free()

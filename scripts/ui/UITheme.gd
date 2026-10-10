@@ -81,8 +81,59 @@ static func _build() -> Theme:
 	_button_styles(t, "Button", Color("2a1f18"), GOLD_DIM, 16, null)
 	t.set_type_variation("PrimaryButton", "Button")
 	_button_styles(t, "PrimaryButton", RED, GOLD, 20, serif)
+	_menu_button_styles(t)
 
 	return t
+
+# -------------------------------------------------------
+# МЕНЮ (главное меню, пауза) — по концепту assets_menu.png: холодный
+# тёмно-синий металл, скошенные углы, иконка слева; наведение и фокус —
+# золотая окантовка с подсветкой
+# -------------------------------------------------------
+const MENU_BG       = Color("0a0e15")
+const MENU_BG_LIGHT = Color("16202e")
+const MENU_STEEL    = Color("3b4350")
+const MENU_TEXT     = Color("b9c0c8")
+const MENU_AMBER    = Color("f0b04a")
+const MENU_AMBER_DIM = Color("a8742a")
+
+static func menu_button_style(bg: Color, border: Color, glow: float) -> StyleBoxFlat:
+	var s = panel_style(bg, border, 2, 12, 10)
+	s.corner_detail = 1   # прямой срез угла вместо скругления
+	s.content_margin_left = 18
+	s.content_margin_right = 18
+	if glow > 0.0:
+		s.shadow_color = Color(MENU_AMBER, glow)
+		s.shadow_size = 8
+	return s
+
+static func _menu_button_styles(t: Theme) -> void:
+	var type = "MainMenuButton"
+	t.set_type_variation(type, "Button")
+	t.set_stylebox("normal", type, menu_button_style(Color(MENU_BG, 0.92), MENU_STEEL, 0.0))
+	var hover = menu_button_style(Color("2b1d0d"), MENU_AMBER, 0.35)
+	t.set_stylebox("hover", type, hover)
+	t.set_stylebox("focus", type, hover)
+	t.set_stylebox("pressed", type, menu_button_style(Color("3b270f"), MENU_AMBER_DIM, 0.2))
+	t.set_stylebox("disabled", type, menu_button_style(Color(MENU_BG, 0.6), Color("262b33"), 0.0))
+	var font = SystemFont.new()
+	font.font_names = PackedStringArray(["Bahnschrift", "Segoe UI", "Arial", "sans-serif"])
+	font.font_weight = 600
+	t.set_font("font", type, font)
+	t.set_font_size("font_size", type, 18)
+	t.set_color("font_color", type, MENU_TEXT)
+	t.set_color("font_hover_color", type, MENU_AMBER)
+	t.set_color("font_focus_color", type, MENU_AMBER)
+	t.set_color("font_pressed_color", type, MENU_AMBER_DIM)
+	t.set_color("font_hover_pressed_color", type, MENU_AMBER)
+	t.set_color("font_disabled_color", type, Color("4a525c"))
+	t.set_color("icon_normal_color", type, Color("8f98a3"))
+	t.set_color("icon_hover_color", type, MENU_AMBER)
+	t.set_color("icon_focus_color", type, MENU_AMBER)
+	t.set_color("icon_pressed_color", type, MENU_AMBER_DIM)
+	t.set_color("icon_hover_pressed_color", type, MENU_AMBER)
+	t.set_constant("icon_max_width", type, 30)
+	t.set_constant("h_separation", type, 16)
 
 static func _label_variation(t: Theme, name: String, font: Font, size: int, color: Color, outline: int) -> void:
 	t.set_type_variation(name, "Label")
