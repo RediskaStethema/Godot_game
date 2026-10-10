@@ -48,6 +48,8 @@ func open() -> void:
 	_menu.add_button("Выход из игры", _leave.bind(_quit))
 
 func resume() -> void:
+	if _settings:
+		_settings.close()
 	if _dialog:
 		_dialog.close()
 	if _menu:

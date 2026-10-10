@@ -2,18 +2,19 @@ class_name UITheme
 extends RefCounted
 
 # -------------------------------------------------------
-# ПАЛИТРА — «grimdark»: чёрная бронза, тёмное золото, пергамент.
-# Взята с арта карт (assets/cards/card_default.png).
+# ПАЛИТРА — по концепту меню assets_menu.png: холодный тёмно-синий металл,
+# стальная окантовка, янтарь для акцентов (наведение, главное действие, цифры).
+# Имена исторические: GOLD* — янтарные акценты, GOLD_DIM — сталь рамок.
 # -------------------------------------------------------
-const BG_DEEP      = Color("0d0b0a")
-const BG_MID       = Color("231d18")
-const PANEL        = Color(0.105, 0.09, 0.078, 0.94)
-const PANEL_DARK   = Color(0.06, 0.05, 0.045, 0.96)
-const GOLD         = Color("c9a24a")
-const GOLD_BRIGHT  = Color("f0d58c")
-const GOLD_DIM     = Color("6e5a30")
-const TEXT         = Color("e6dcc8")
-const TEXT_DIM     = Color("9c907c")
+const BG_DEEP      = Color("0a0e15")
+const BG_MID       = Color("16202e")
+const PANEL        = Color(0.055, 0.075, 0.105, 0.99)
+const PANEL_DARK   = Color(0.035, 0.05, 0.075, 0.96)
+const GOLD         = Color("d39a3a")
+const GOLD_BRIGHT  = Color("f0b04a")
+const GOLD_DIM     = Color("3b4350")
+const TEXT         = Color("d5dae0")
+const TEXT_DIM     = Color("7f8893")
 const RED          = Color("8e2620")
 const RED_BRIGHT   = Color("c8463a")
 const BLUE         = Color("3f6fb0")
@@ -57,31 +58,41 @@ static func _build() -> Theme:
 	var serif = SystemFont.new()
 	serif.font_names = PackedStringArray(["Cambria", "Georgia", "Times New Roman", "serif"])
 	serif.font_weight = 600
+	var sans = ui_font()
 
 	# --- Label ---
 	t.set_color("font_color", "Label", TEXT)
 	t.set_color("font_outline_color", "Label", Color(0, 0, 0, 0.8))
 
-	_label_variation(t, "HeaderLabel", serif, 22, GOLD, 2)
-	_label_variation(t, "TitleLabel", serif, 30, GOLD_BRIGHT, 4)
-	_label_variation(t, "ValueLabel", serif, 20, GOLD_BRIGHT, 2)
+	# Заголовки окон и экранов — антиква, как «WH40KINGS» в меню; шапки и цифры — гротеск кнопок меню
+	_label_variation(t, "TitleLabel", serif, 30, TEXT, 4)
+	_label_variation(t, "HeaderLabel", sans, 20, GOLD, 2)
+	_label_variation(t, "ValueLabel", sans, 19, GOLD_BRIGHT, 2)
 	_label_variation(t, "DimLabel", null, 13, TEXT_DIM, 0)
 	_label_variation(t, "SmallLabel", null, 14, TEXT, 0)
 
-	# --- Панели ---
-	t.set_stylebox("panel", "PanelContainer", panel_style(PANEL, GOLD_DIM, 2, 6, 10))
-	t.set_stylebox("panel", "Panel", panel_style(PANEL, GOLD_DIM, 2, 6, 10))
+	# --- Панели: тёмный металл, стальная рамка, срезанные углы ---
+	t.set_stylebox("panel", "PanelContainer", panel_style(PANEL, GOLD_DIM, 2, 10, 10))
+	t.set_stylebox("panel", "Panel", panel_style(PANEL, GOLD_DIM, 2, 10, 10))
 	t.set_type_variation("HudPanel", "PanelContainer")
 	var hud = panel_style(PANEL_DARK, GOLD_DIM, 0, 0, 10)
 	hud.border_width_bottom = 2
 	hud.border_width_top = 2
 	t.set_stylebox("panel", "HudPanel", hud)
 
-	# --- Button ---
-	_button_styles(t, "Button", Color("2a1f18"), GOLD_DIM, 16, null)
+	# --- Кнопки: сталь (обычная) и янтарь (главное действие) ---
+	_button_styles(t, "Button", Color(BG_DEEP, 0.92), GOLD_DIM, 16, sans, 0.0)
 	t.set_type_variation("PrimaryButton", "Button")
-	_button_styles(t, "PrimaryButton", RED, GOLD, 20, serif)
+	_button_styles(t, "PrimaryButton", Color("2b1d0d"), GOLD, 19, sans, 0.25)
 	_menu_button_styles(t)
+
+	# --- Прочие контролы окон (настройки) ---
+	t.set_color("font_color", "CheckButton", TEXT)
+	t.set_color("font_hover_color", "CheckButton", GOLD_BRIGHT)
+	t.set_stylebox("slider", "HSlider", panel_style(PANEL_DARK, GOLD_DIM, 1, 3, 2))
+	var fill = panel_style(GOLD, GOLD, 0, 3, 2)
+	t.set_stylebox("grabber_area", "HSlider", fill)
+	t.set_stylebox("grabber_area_highlight", "HSlider", fill)
 
 	return t
 
@@ -90,16 +101,22 @@ static func _build() -> Theme:
 # тёмно-синий металл, скошенные углы, иконка слева; наведение и фокус —
 # золотая окантовка с подсветкой
 # -------------------------------------------------------
-const MENU_BG       = Color("0a0e15")
-const MENU_BG_LIGHT = Color("16202e")
-const MENU_STEEL    = Color("3b4350")
+const MENU_BG       = BG_DEEP
+const MENU_BG_LIGHT = BG_MID
+const MENU_STEEL    = GOLD_DIM
 const MENU_TEXT     = Color("b9c0c8")
-const MENU_AMBER    = Color("f0b04a")
+const MENU_AMBER    = GOLD_BRIGHT
 const MENU_AMBER_DIM = Color("a8742a")
+
+# Шрифт кнопок и шапок (гротеск, как в концепте)
+static func ui_font() -> SystemFont:
+	var font = SystemFont.new()
+	font.font_names = PackedStringArray(["Bahnschrift", "Segoe UI", "Arial", "sans-serif"])
+	font.font_weight = 600
+	return font
 
 static func menu_button_style(bg: Color, border: Color, glow: float) -> StyleBoxFlat:
 	var s = panel_style(bg, border, 2, 12, 10)
-	s.corner_detail = 1   # прямой срез угла вместо скругления
 	s.content_margin_left = 18
 	s.content_margin_right = 18
 	if glow > 0.0:
@@ -116,10 +133,7 @@ static func _menu_button_styles(t: Theme) -> void:
 	t.set_stylebox("focus", type, hover)
 	t.set_stylebox("pressed", type, menu_button_style(Color("3b270f"), MENU_AMBER_DIM, 0.2))
 	t.set_stylebox("disabled", type, menu_button_style(Color(MENU_BG, 0.6), Color("262b33"), 0.0))
-	var font = SystemFont.new()
-	font.font_names = PackedStringArray(["Bahnschrift", "Segoe UI", "Arial", "sans-serif"])
-	font.font_weight = 600
-	t.set_font("font", type, font)
+	t.set_font("font", type, ui_font())
 	t.set_font_size("font_size", type, 18)
 	t.set_color("font_color", type, MENU_TEXT)
 	t.set_color("font_hover_color", type, MENU_AMBER)
@@ -144,16 +158,22 @@ static func _label_variation(t: Theme, name: String, font: Font, size: int, colo
 	t.set_constant("outline_size", name, outline)
 	t.set_color("font_outline_color", name, Color(0, 0, 0, 0.85))
 
-static func _button_styles(t: Theme, type: String, base: Color, border: Color, size: int, font: Font) -> void:
-	t.set_stylebox("normal", type, panel_style(base, border, 2, 4, 8))
-	t.set_stylebox("hover", type, panel_style(base.lightened(0.15), GOLD_BRIGHT, 2, 4, 8))
-	t.set_stylebox("pressed", type, panel_style(base.darkened(0.3), GOLD, 2, 4, 8))
-	t.set_stylebox("disabled", type, panel_style(Color("1a1715"), Color("3e362c"), 2, 4, 8))
+# Кнопка как в меню: срезанные углы; наведение — янтарная рамка с подсветкой.
+# glow — подсветка в обычном состоянии (у главной кнопки — всегда немного)
+static func _button_styles(t: Theme, type: String, base: Color, border: Color, size: int, font: Font, glow: float) -> void:
+	var normal = panel_style(base, border, 2, 8, 8)
+	_add_glow(normal, glow)
+	t.set_stylebox("normal", type, normal)
+	var hover = panel_style(base.lightened(0.08) if glow == 0.0 else Color("3b270f"), GOLD_BRIGHT, 2, 8, 8)
+	_add_glow(hover, 0.35)
+	t.set_stylebox("hover", type, hover)
+	t.set_stylebox("pressed", type, panel_style(base.darkened(0.3), GOLD, 2, 8, 8))
+	t.set_stylebox("disabled", type, panel_style(Color(BG_DEEP, 0.6), Color("262b33"), 2, 8, 8))
 	t.set_stylebox("focus", type, StyleBoxEmpty.new())
-	t.set_color("font_color", type, TEXT)
+	t.set_color("font_color", type, TEXT if glow == 0.0 else GOLD_BRIGHT)
 	t.set_color("font_hover_color", type, GOLD_BRIGHT)
 	t.set_color("font_pressed_color", type, GOLD)
-	t.set_color("font_disabled_color", type, Color("5e554a"))
+	t.set_color("font_disabled_color", type, Color("4a525c"))
 	t.set_font_size("font_size", type, size)
 	if font:
 		t.set_font("font", type, font)
@@ -161,15 +181,22 @@ static func _button_styles(t: Theme, type: String, base: Color, border: Color, s
 # -------------------------------------------------------
 # ХЕЛПЕРЫ
 # -------------------------------------------------------
+# radius — размер среза угла (как у кнопок меню: прямой срез, не скругление)
 static func panel_style(bg: Color, border: Color, border_w: int, radius: int, margin: float) -> StyleBoxFlat:
 	var s = StyleBoxFlat.new()
 	s.bg_color = bg
 	s.border_color = border
 	s.set_border_width_all(border_w)
 	s.set_corner_radius_all(radius)
+	s.corner_detail = 1
 	s.set_content_margin_all(margin)
 	s.anti_aliasing = true
 	return s
+
+static func _add_glow(s: StyleBoxFlat, glow: float) -> void:
+	if glow > 0.0:
+		s.shadow_color = Color(GOLD_BRIGHT, glow)
+		s.shadow_size = 8
 
 static func rarity_color(rarity: String) -> Color:
 	return RARITY_COLORS.get(rarity, RARITY_COLORS["common"])
@@ -177,10 +204,10 @@ static func rarity_color(rarity: String) -> Color:
 # Рамка карты: цвет редкости, сверху — толстая полоса
 static func card_style(rarity: String, highlighted: bool = false) -> StyleBoxFlat:
 	var c = rarity_color(rarity)
-	var s = panel_style(PANEL, c.darkened(0.15) if not highlighted else c.lightened(0.3), 2, 6, 10)
-	s.border_width_top = 5
-	s.shadow_color = Color(0, 0, 0, 0.5)
-	s.shadow_size = 6
+	var s = panel_style(PANEL, c.darkened(0.25) if not highlighted else c.lightened(0.2), 2, 10, 10)
+	s.border_width_top = 4
+	s.shadow_color = Color(c, 0.35) if highlighted else Color(0, 0, 0, 0.5)
+	s.shadow_size = 8 if highlighted else 6
 	return s
 
 # Портрет для карты отряда — первый кадр idle юнита (null для зданий/улучшений)
@@ -200,7 +227,7 @@ static func card_tint(card: CardData) -> Color:
 		return Color.WHITE
 	return UnitFactory.create(card.unit_factory_id).tint
 
-# Фон-виньетка: светлее в центре, к краям в черноту
+# Фон-виньетка: холодная ночь — светлее в центре, к краям в черноту
 static func make_background() -> TextureRect:
 	var g = Gradient.new()
 	g.set_color(0, BG_MID)
