@@ -38,8 +38,8 @@ const UPGRADES: Array[String] = ["blessed_armour", "battle_fury"]
 # Забег целиком: приоритет карт (что игрок берёт из выпавшего набора магазина)
 const CAMPAIGN_PRIORITY = {
 	"tactical": ["tactical_squad", "blessed_armour", "battle_fury"],
-	"mixed": ["tactical_squad", "assault_squad", "devastator_squad", "terminator_squad",
-		"orbital_strike", "bolter_turret", "apothecary", "dreadnought", "chaplain", "chapter_master",
+	"mixed": ["tactical_squad", "plasma_generatorium", "assault_squad", "devastator_squad", "terminator_squad",
+		"orbital_strike", "bolter_turret", "apothecarion", "apothecary", "dreadnought", "chaplain", "chapter_master",
 		"fortress_wall", "librarian", "land_speeder", "emergency_reinforcements", "scout_squad",
 		"iron_halo", "blessed_armour", "battle_fury", "combat_stimms", "chapter_banner"],
 	"elite": ["terminator_squad", "devastator_squad", "dreadnought", "librarian", "chaplain",

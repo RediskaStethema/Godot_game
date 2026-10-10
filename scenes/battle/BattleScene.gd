@@ -460,7 +460,11 @@ func _on_battle_ended(winner_team: int) -> void:
 		RunManager.complete_current_node()
 		_end_run(true, "Босс повержен!")
 		return
-	hud.set_message(_resolve_battle(winner_team))
+	var result_text = _resolve_battle(winner_team)
+	var building_income = EconomyManager.collect_building_income(BattleManager.player_buildings)
+	if building_income > 0:
+		result_text += " · генераторы +%d Req" % building_income
+	hud.set_message(result_text)
 	# BattleManager.pending_cards НЕ очищаем: невыложенные карты остаются в руке
 	SquadRegistry.clear()
 	SoldierRegistry.clear()
