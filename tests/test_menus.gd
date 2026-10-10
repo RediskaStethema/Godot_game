@@ -103,9 +103,37 @@ func _main() -> void:
 	_check("новый забег при сохранении → подтверждение, сохранение цело", dialog != null and sv.has_save() \
 		and current_scene == menu)
 	dialog._on_yes()
+	await _frames(2)
+	var race = null
+	for c in menu.get_children():
+		if _is(c, "RaceSelectDialog"):
+			race = c
+	var marines = race.find_child("Race_space_marines", true, false) if race else null
+	var chaos = race.find_child("Race_chaos", true, false) if race else null
+	var tyranids = race.find_child("Race_tyranids", true, false) if race else null
+	_check("подтвердили → выбор расы: десант доступен и в фокусе, Хаос и Тираниды закрыты", race != null \
+		and marines != null and not marines.disabled and chaos.disabled and tyranids.disabled \
+		and root.get_viewport().gui_get_focus_owner() == marines and current_scene == menu)
+	menu._open_race_select()
+	await _frames(1)
+	var extra = null
+	for c in menu.get_children():
+		if _is(c, "RaceSelectDialog") and c != race:
+			extra = c
+	var esc = InputEventAction.new()
+	esc.action = "ui_cancel"
+	esc.pressed = true
+	extra._unhandled_input(esc)
+	await _frames(2)
+	_check("Esc закрывает окно выбора расы без старта", not is_instance_valid(extra) and current_scene == menu)
+	race.choose("chaos")   # закрытая раса — ничего
+	await _frames(2)
+	_check("закрытую расу не выбрать", current_scene == menu and is_instance_valid(race))
+	race.choose("space_marines")
 	await _frames(4)
-	_check("подтвердили → магазин волны 1, в магазине есть пауза", current_scene.name == "ShopScene" \
+	_check("выбрали десант → магазин волны 1, раса в забеге, в магазине есть пауза", current_scene.name == "ShopScene" \
 		and root.get_node("EconomyManager").round_number == 1 \
+		and root.get_node("RunManager").player_faction == "space_marines" \
 		and current_scene.get_children().any(func(c): return _is(c, "PauseMenu")))
 
 	# 6. Экран конца забега: пауза выключена, кнопка «В главное меню»

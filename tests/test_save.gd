@@ -37,6 +37,10 @@ func _main() -> void:
 	await _frames(3)
 	_check("меню без сохранения — «Продолжить» скрыта", not current_scene.continue_button.visible)
 	current_scene._on_new_run_pressed()
+	await _frames(2)
+	for c in current_scene.get_children():
+		if c.has_method("choose"):   # окно выбора расы
+			c.choose("space_marines")
 	await _frames(3)
 	var shop = current_scene
 	_check("новый забег → магазин шага 0, сохранение записано", shop.name == "ShopScene" and rm.current_node_id == 0 and sv.has_save())

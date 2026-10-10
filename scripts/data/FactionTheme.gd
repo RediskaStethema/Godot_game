@@ -3,7 +3,8 @@ extends RefCounted
 
 # Оформление поля боя и цитадели по расе ИГРОКА (решение пользователя: цитадель
 # только у игрока; все плитки поля — в стиле выбранной игроком расы, раса врага
-# на вид не влияет). Раса забега — RunManager.player_faction (выбор расы — позже).
+# на вид не влияет). Раса забега — RunManager.player_faction, выбирается в начале
+# нового забега (RaceSelectDialog из главного меню; пока доступен только Космодесант).
 #
 # Плитка (floor / kingdom / enemy) — вариант для клетки, выбирается по хэшу клетки:
 #   int    — номер Tiles/Slice N лунного тайлсета (блок, TerrainTiles.draw_block)
@@ -21,6 +22,26 @@ extends RefCounted
 # Новая раса — запись в THEMES; чистые спрайты рас — сюда же (пути к PNG).
 
 const DEFAULT_FACTION: String = "space_marines"
+
+# Расы в окне выбора нового забега (RaceSelectDialog), по порядку.
+# available = false — видна, но закрыта («Скоро»); открыть расу — true + тема и юниты
+const FACTIONS = [
+	{"id": "space_marines", "name": "Космодесант", "available": true,
+		"desc": "Ангелы Смерти: стойкие отряды и цитадель-бастион."},
+	{"id": "chaos", "name": "Хаос", "available": false,
+		"desc": "Предатели и демонические машины."},
+	{"id": "tyranids", "name": "Тираниды", "available": false,
+		"desc": "Рой, пожирающий миры."},
+]
+
+static func get_faction_info(faction: String) -> Dictionary:
+	for f in FACTIONS:
+		if f["id"] == faction:
+			return f
+	return {}
+
+static func is_available(faction: String) -> bool:
+	return get_faction_info(faction).get("available", false)
 
 const THEMES = {
 	"space_marines": {

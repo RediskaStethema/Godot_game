@@ -7,6 +7,7 @@ extends ModalOverlay
 var _speed_buttons: Array[Button] = []   # по GameSettings.BATTLE_SPEEDS — как радиокнопки
 
 func setup() -> void:
+	close_on_cancel = true
 	build_frame(420.0)
 	add_title("НАСТРОЙКИ")
 
