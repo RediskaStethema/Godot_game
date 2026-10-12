@@ -7,6 +7,7 @@ extends Node2D
 # Тикает BattleManager (FIXED_TICK) во время боя.
 #   tower — турель: бьёт ближайшего врага в радиусе
 #   wall  — стена: щит цитадели на каждый бой + замедляет врагов рядом
+#           (статус slowed без стаков, держится WALL_SLOW_LINGER после выхода из радиуса)
 
 const BLOCK_SCALE: float = 0.5
 # Блоки по building_type: [Tiles/Slice N, i, j, ярус]; (i, j) — подклетка 2×2,
@@ -19,6 +20,7 @@ const TOWER_LEVELS: int = 3
 const BARREL_LENGTH: float = 26.0
 const BARREL_COLOR = Color("1b1f24")
 const SHOT_PROJECTILE: String = "spark"   # снаряд турели (Projectile.EFFECTS), урон — при попадании
+const WALL_SLOW_LINGER: float = 0.5        # сек замедления после выхода из ауры стены
 const SLOW_AURA_COLOR = Color(0.45, 0.65, 0.95, 0.05)
 const SLOW_AURA_LINE = Color(0.45, 0.65, 0.95, 0.30)
 # Уровень здания — ромбики над ним (1-й уровень без отметки)
@@ -88,6 +90,9 @@ func get_occlusion_rect() -> Rect2:
 # БОЙ
 # -------------------------------------------------------
 func tick(delta: float) -> void:
+	if building_type == "wall":
+		_tick_slow_aura()
+		return
 	if building_type != "tower":
 		return
 	attack_timer -= delta
@@ -118,13 +123,12 @@ func _find_target(attack_range: float) -> Soldier:
 func get_citadel_shield() -> float:
 	return stats.get("shield", 0.0)
 
-# Множитель скорости врага в точке: самая сильная аура замедления стен рядом
-static func slow_mult_at(point: Vector2) -> float:
-	var mult: float = 1.0
-	for b in BattleManager.buildings:
-		if not is_instance_valid(b):
-			continue
-		var r = b.stats.get("slow_radius", 0.0)
-		if r > 0.0 and point.distance_to(b.global_position) <= r:
-			mult = minf(mult, b.stats.get("slow_mult", 1.0))
-	return mult
+# Аура стены: врагам в радиусе — slowed силой 1 − slow_mult (×0.6 → 0.4), без стаков
+func _tick_slow_aura() -> void:
+	var r = stats.get("slow_radius", 0.0)
+	if r <= 0.0:
+		return
+	var power = 1.0 - stats.get("slow_mult", 1.0)
+	for e in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY):
+		if global_position.distance_to(e.global_position) <= r:
+			e.apply_status(StatusEffects.SLOWED, power, WALL_SLOW_LINGER, false)

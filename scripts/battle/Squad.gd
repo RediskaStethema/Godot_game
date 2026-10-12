@@ -100,7 +100,8 @@ func tick(delta: float) -> void:
 
 func _tick_marching(delta: float) -> void:
 	# Тикаем всех живых бойцов
-	for soldier in soldiers:
+	# Копия: боец может погибнуть в своём же тике (яд, огонь) и выйти из soldiers
+	for soldier in soldiers.duplicate():
 		if soldier.current_state != Soldier.State.DEAD:
 			soldier.tick(delta)
 
@@ -111,7 +112,8 @@ func _tick_marching(delta: float) -> void:
 			return
 
 func _tick_fighting(delta: float) -> void:
-	for soldier in soldiers:
+	# Копия: боец может погибнуть в своём же тике (яд, огонь) и выйти из soldiers
+	for soldier in soldiers.duplicate():
 		if soldier.current_state != Soldier.State.DEAD:
 			soldier.tick(delta)
 

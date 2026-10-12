@@ -18,6 +18,8 @@ const HP_BAR_GAP: float = 6.0
 const LEVEL_PIP_R: float = 3.0
 const LEVEL_PIP_STEP: float = 8.0
 const LEVEL_PIP_GAP: float = 5.0
+const STATUS_DOT_R: float = 2.0
+const STATUS_DOT_GAP: float = 4.0
 # Вспышка попадания: боец, получивший урон, на мгновение белеет (общий шейдер на всех)
 const HIT_FLASH_TIME: float = 0.1
 const HIT_FLASH_STRENGTH: float = 0.85   # доля белого поверх цвета спрайта (с тинтом)
@@ -53,6 +55,9 @@ var stun_timer: float = 0.0
 var retreat_timer: float = 0.0
 var has_retreated: bool = false   # отступаем максимум один раз за бой
 var knockback_velocity: Vector2 = Vector2.ZERO
+# Статус-эффекты (StatusEffects): имя → {stacks, power, time, duration, dot_timer, spread_timer}
+var status_effects: Dictionary = {}
+var battle_cry_used: bool = false
 
 # Позиция в строю — смещение относительно центра отряда
 var formation_offset: Vector2 = Vector2.ZERO
@@ -81,6 +86,8 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 	current_state = State.IDLE
 	previous_state = State.IDLE
 	has_retreated = false
+	status_effects.clear()
+	battle_cry_used = false
 
 	_load_animations()
 
@@ -147,6 +154,9 @@ func _play_animation(anim_name: String) -> void:
 # ГЛАВНЫЙ ТИК
 # -------------------------------------------------------
 func tick(delta: float) -> void:
+	_tick_status_effects(delta)
+	if current_state == State.DEAD:
+		return
 	_tick_support(delta)
 	match current_state:
 		State.IDLE:       _state_idle()
@@ -215,7 +225,7 @@ func _attack_citadel(delta: float) -> void:
 	_face(citadel.global_position - global_position)
 	attack_timer -= delta
 	if attack_timer <= TIMER_EPSILON:
-		attack_timer = 1.0 / current_attack_speed
+		attack_timer = 1.0 / (current_attack_speed * get_attack_speed_mult())
 		sprite.stop()
 		sprite.play("attack")
 		var shot := _shoot_projectile(citadel, Vector2(0.0, -40.0))
@@ -254,7 +264,7 @@ func _state_attack(delta: float) -> void:
 	_face(target.global_position - global_position)
 	attack_timer -= delta
 	if attack_timer <= TIMER_EPSILON:
-		attack_timer = 1.0 / current_attack_speed
+		attack_timer = 1.0 / (current_attack_speed * get_attack_speed_mult())
 		if data.cast_time > 0.0:
 			transition_to(State.CASTING)   # замах/каст перед ударом
 		else:
@@ -331,6 +341,8 @@ func refresh_stats_from_data() -> void:
 func heal(amount: float) -> void:
 	if current_state == State.DEAD:
 		return
+	if status_effects.has(StatusEffects.POISONED):
+		amount *= StatusEffects.POISON_HEAL_MULT
 	current_hp = min(current_hp + amount, max_hp)
 	queue_redraw()
 
@@ -351,15 +363,20 @@ func _draw() -> void:
 		var c = Vector2((i - (data.squad_level - 1) / 2.0) * LEVEL_PIP_STEP, top - LEVEL_PIP_GAP)
 		draw_colored_polygon(PackedVector2Array([c + Vector2(0, -LEVEL_PIP_R), c + Vector2(LEVEL_PIP_R, 0),
 			c + Vector2(0, LEVEL_PIP_R), c + Vector2(-LEVEL_PIP_R, 0)]), UITheme.GOLD_BRIGHT)
+	# Статус-эффекты — точки под полоской HP, по точке на стак
+	var dot_x = -HP_BAR_SIZE.x / 2.0
+	for effect in status_effects:
+		for i in status_effects[effect]["stacks"]:
+			draw_circle(Vector2(dot_x + STATUS_DOT_R, top + HP_BAR_SIZE.y + STATUS_DOT_GAP), STATUS_DOT_R,
+				StatusEffects.COLORS.get(effect, Color.WHITE))
+			dot_x += STATUS_DOT_R * 2.0 + 1.0
 
 # -------------------------------------------------------
 # ДВИЖЕНИЕ
 # -------------------------------------------------------
 func _move_towards(point: Vector2, delta: float) -> void:
 	var direction = (point - global_position).normalized()
-	var speed = current_move_speed
-	if team == GameConstants.TEAM_ENEMY:
-		speed *= Building.slow_mult_at(global_position)   # стены игрока замедляют
+	var speed = current_move_speed * get_move_speed_mult()   # замедление (стены игрока)
 	global_position += direction * speed * delta
 	_face(direction)
 	_play_animation("walk")
@@ -410,6 +427,9 @@ func _do_attack() -> void:
 		shot.damage = _roll_damage()
 		shot.stun = data.on_hit_stun
 		shot.knockback = data.on_hit_knockback
+		shot.status = data.on_hit_status
+		shot.status_power = data.on_hit_status_power
+		shot.status_duration = data.on_hit_status_duration
 		return
 	target.take_damage(_roll_damage())
 	_apply_on_hit_effects()
@@ -432,7 +452,7 @@ func _shoot_projectile(to: Node2D, aim_offset: Vector2) -> Projectile:
 
 # Урон одного удара: аура союзников + разброс damage_variance
 func _roll_damage() -> float:
-	var damage = current_damage * (1.0 + get_aura_damage_bonus())
+	var damage = current_damage * (1.0 + get_aura_damage_bonus()) * get_damage_mult()
 	var variance = damage * data.damage_variance
 	return randf_range(damage - variance, damage + variance)
 
@@ -442,6 +462,8 @@ func _apply_on_hit_effects() -> void:
 		return
 	if data.on_hit_stun > 0.0:
 		target.apply_stun(data.on_hit_stun)
+	if data.on_hit_status != "":
+		target.apply_status(data.on_hit_status, data.on_hit_status_power, data.on_hit_status_duration)
 	if data.on_hit_knockback > 0.0:
 		target.apply_knockback(target.global_position - global_position, data.on_hit_knockback)
 
@@ -459,12 +481,14 @@ func get_aura_damage_bonus() -> float:
 			best = a.aura_damage_bonus
 	return best
 
-func take_damage(amount: float) -> void:
+# flash = false — урон яда/огня: без вспышки каждые полсекунды
+func take_damage(amount: float, flash: bool = true) -> void:
 	if current_state == State.DEAD:
 		return
 	current_hp -= amount
 	queue_redraw()
-	_flash_hit()
+	if flash:
+		_flash_hit()
 	if current_hp <= 0.0:
 		_die()
 		return
@@ -495,8 +519,103 @@ func _die() -> void:
 	if current_state == State.DEAD:
 		return
 	transition_to(State.DEAD)
+	status_effects.clear()
 	queue_redraw()   # убрать полоску HP
 	emit_signal("died", self)
+
+# -------------------------------------------------------
+# СТАТУС-ЭФФЕКТЫ (StatusEffects) — поверх FSM, тикают с боем
+# -------------------------------------------------------
+# stackable: удар добавляет стак (до MAX_STACKS); аура (false) держит 1 стак.
+# Время обновляется, сила — наибольшая из наложенных.
+func apply_status(effect: String, power: float, duration: float, stackable: bool = true) -> void:
+	if current_state == State.DEAD or effect == "" or duration <= 0.0:
+		return
+	var e: Dictionary = status_effects.get(effect, {})
+	if e.is_empty():
+		e = {"stacks": 1, "power": power, "time": duration, "duration": duration,
+			"dot_timer": StatusEffects.DOT_TICK, "spread_timer": StatusEffects.BURN_SPREAD_EVERY}
+		status_effects[effect] = e
+	else:
+		if stackable:
+			e["stacks"] = mini(e["stacks"] + 1, StatusEffects.MAX_STACKS)
+		e["power"] = maxf(e["power"], power)
+		e["time"] = maxf(e["time"], duration)
+		e["duration"] = maxf(e["duration"], duration)
+	queue_redraw()
+
+func get_status_stacks(effect: String) -> int:
+	return status_effects[effect]["stacks"] if status_effects.has(effect) else 0
+
+# Сила эффекта с учётом стаков (0 — эффекта нет)
+func _status_amount(effect: String) -> float:
+	if not status_effects.has(effect):
+		return 0.0
+	var e: Dictionary = status_effects[effect]
+	return e["power"] * e["stacks"]
+
+func get_damage_mult() -> float:
+	return 1.0 + _status_amount(StatusEffects.EMPOWERED)
+
+func get_move_speed_mult() -> float:
+	return maxf(1.0 - _status_amount(StatusEffects.SLOWED), StatusEffects.MIN_SPEED_MULT)
+
+func get_attack_speed_mult() -> float:
+	return maxf(1.0 - _status_amount(StatusEffects.SLOWED) * StatusEffects.SLOW_ATTACK_SHARE,
+		StatusEffects.MIN_SPEED_MULT)
+
+func _tick_status_effects(delta: float) -> void:
+	if status_effects.is_empty() or current_state == State.DEAD:
+		return
+	var expired: Array[String] = []
+	for effect in status_effects.keys():
+		var e: Dictionary = status_effects[effect]
+		if StatusEffects.is_dot(effect):
+			e["dot_timer"] -= delta
+			if e["dot_timer"] <= TIMER_EPSILON:
+				e["dot_timer"] += StatusEffects.DOT_TICK
+				take_damage(e["power"] * e["stacks"] * StatusEffects.DOT_TICK, false)
+				if current_state == State.DEAD:
+					return
+		if effect == StatusEffects.BURNING:
+			e["spread_timer"] -= delta
+			if e["spread_timer"] <= TIMER_EPSILON:
+				e["spread_timer"] += StatusEffects.BURN_SPREAD_EVERY
+				_spread_burning(e)
+		e["time"] -= delta
+		if e["time"] <= TIMER_EPSILON:
+			expired.append(effect)
+	for effect in expired:
+		status_effects.erase(effect)
+	if not expired.is_empty():
+		queue_redraw()
+
+# Огонь перекидывается на ближайшего негорящего соседа своей команды (1 стак)
+# с остатком своего времени: цепочка гаснет, соседи не поджигают друг друга вечно
+func _spread_burning(e: Dictionary) -> void:
+	if e["time"] <= StatusEffects.BURN_SPREAD_EVERY + TIMER_EPSILON:
+		return
+	var best: Soldier = null
+	var best_d2: float = StatusEffects.BURN_SPREAD_RADIUS * StatusEffects.BURN_SPREAD_RADIUS
+	for ally in SoldierRegistry.get_alive_soldiers_of_team(team):
+		if ally == self or ally.status_effects.has(StatusEffects.BURNING):
+			continue
+		var d2 = global_position.distance_squared_to(ally.global_position)
+		if d2 <= best_d2:
+			best_d2 = d2
+			best = ally
+	if best:
+		best.apply_status(StatusEffects.BURNING, e["power"], e["time"], false)
+
+# Боевой клич (Chaplain): один раз за бой, при первом сближении с врагом
+func _try_battle_cry() -> void:
+	if battle_cry_used or data.battle_cry_status == "":
+		return
+	battle_cry_used = true
+	var r2 = data.battle_cry_radius * data.battle_cry_radius
+	for ally in SoldierRegistry.get_alive_soldiers_of_team(team):
+		if global_position.distance_squared_to(ally.global_position) <= r2:
+			ally.apply_status(data.battle_cry_status, data.battle_cry_power, data.battle_cry_duration)
 
 # -------------------------------------------------------
 # ПОИСК ЦЕЛИ
@@ -593,6 +712,7 @@ func _on_state_enter(state: State) -> void:
 		State.MOVE, State.CHASE, State.RETREATING:
 			_play_animation("walk")
 		State.ATTACK:
+			_try_battle_cry()
 			attack_timer = 0.0
 			sprite.stop()
 			sprite.play("attack")
