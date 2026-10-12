@@ -245,6 +245,7 @@ func _try_buy_tile(tile: Vector2i) -> void:
 	iso_grid.set_unlocked_tiles(BattleManager.kingdom_tiles)
 	_update_expansion()
 	_show_message("Королевство расширено (−%d Req), клеток: %d" % [cost, BattleManager.kingdom_tiles.size()])
+	_update_synergy_preview()   # новый ряд меняет, кто впереди и сзади
 	_save_placement()
 
 # -------------------------------------------------------
@@ -388,6 +389,7 @@ func _on_start_pressed() -> void:
 	var my_soldiers = SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER)
 	SynergyManager.calculate_synergies(my_soldiers)
 	SynergyManager.apply_synergies_to_soldiers(my_soldiers)
+	SynergyManager.apply_position_bonuses(SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
 	SynergyManager.apply_commander_bonus(my_soldiers)
 	hud.show_synergies()
 
