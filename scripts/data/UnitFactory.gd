@@ -104,6 +104,7 @@ static func chaos_marine() -> UnitData:
 static func chaos_champion() -> UnitData:
 	var d = chaos_marine()
 	d.unit_name = "Chaos Champion"
+	d.projectile = ""   # ближний бой — без снаряда Chaos Marine
 	d.tags = ["chaos", "melee", "elite"]
 	d.hp = 180.0
 	d.damage = 22.0
@@ -121,6 +122,7 @@ static func chaos_champion() -> UnitData:
 static func chaos_lord() -> UnitData:
 	var d = chaos_marine()
 	d.unit_name = "Chaos Lord"
+	d.projectile = ""   # ближний бой — без снаряда Chaos Marine
 	d.tags = ["chaos", "melee", "elite", "boss"]
 	d.hp = 2200.0
 	d.damage = 50.0
@@ -139,6 +141,7 @@ static func chaos_lord() -> UnitData:
 static func chaos_hellbrute() -> UnitData:
 	var d = chaos_marine()
 	d.unit_name = "Hellbrute"
+	d.projectile = ""   # ближний бой — без снаряда Chaos Marine
 	d.tags = ["chaos", "melee", "vehicle", "elite"]
 	d.hp = 600.0
 	d.damage = 30.0
