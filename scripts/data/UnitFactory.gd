@@ -360,7 +360,7 @@ static func land_speeder() -> UnitData:
 	var d = UnitData.new()
 	d.unit_name = "Land Speeder"
 	d.faction = "space_marines"
-	d.tags = ["marine", "vehicle", "fast"]
+	d.tags = ["marine", "ranged", "vehicle", "fast"]
 	d.hp = 380.0
 	d.damage = 70.0
 	d.attack_speed = 1.0

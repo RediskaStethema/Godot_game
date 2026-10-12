@@ -162,6 +162,10 @@ static func describe(squad: Squad) -> String:
 	var syn = SynergyManager.get_soldier_synergy_names(d.tags)
 	if not syn.is_empty():
 		lines.append("Синергии: " + ", ".join(syn))
+	var pos = SynergyManager.get_squad_position_bonus(squad)
+	if pos != "":
+		var p: Dictionary = SynergyManager.POSITION_BONUSES[pos]
+		lines.append("%s: %s" % [p["name"], p["desc"]])
 	return "\n".join(lines)
 
 # -------------------------------------------------------

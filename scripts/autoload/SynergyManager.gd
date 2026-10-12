@@ -22,6 +22,20 @@ const SYNERGY_DEFINITIONS = {
 	],
 }
 
+# Позиция в королевстве (TDD [frontline] / [backline]): ряд клеток по оси col —
+# ближний к врагу (наибольший col открытых клеток) и дальний (наименьший).
+# Средние ряды без бонуса; королевство в один ряд — бонусов нет.
+# Щит фронта из TDD заменён на +HP: поля щита в main пока нет (PR #9).
+# tag — бонус только бойцам с этим тегом ("" — всем)
+const FRONT: String = "front"
+const BACK: String = "back"
+const POSITION_BONUSES = {
+	FRONT: {"name": "Передний ряд", "bonus": {"hp_mult": 1.10}, "tag": "",
+		"desc": "+10% HP отрядам ближнего к врагу ряда"},
+	BACK: {"name": "Задний ряд", "bonus": {"damage_mult": 1.15}, "tag": "ranged",
+		"desc": "+15% урона стрелкам дальнего от врага ряда"},
+}
+
 # Доход TDD: «Синергия-бонус (3+ юнита фракции) — +2 за каждые 3 юнита»
 const INCOME_TAG: String = "marine"
 const INCOME_PER_GROUP: int = 2
@@ -98,6 +112,49 @@ func _apply_bonus(soldier, bonus: Dictionary) -> void:
 		if bonus.has(key):
 			soldier.set(BONUS_ADD_FIELDS[key], soldier.get(BONUS_ADD_FIELDS[key]) + bonus[key])
 	soldier.queue_redraw()
+
+# Ряд клетки королевства: FRONT, BACK или "" (средний ряд / королевство в один ряд)
+func get_tile_position(tile: Vector2i, kingdom: Array[Vector2i]) -> String:
+	if kingdom.is_empty():
+		return ""
+	var front = kingdom[0].x
+	var back = kingdom[0].x
+	for t in kingdom:
+		front = maxi(front, t.x)
+		back = mini(back, t.x)
+	if front == back:
+		return ""
+	if tile.x == front:
+		return FRONT
+	if tile.x == back:
+		return BACK
+	return ""
+
+# Бонус ряда отряду (или "", если его ряд или теги бонуса не дают)
+func get_squad_position_bonus(squad) -> String:
+	var pos = get_tile_position(squad.tile, BattleManager.kingdom_tiles)
+	if pos == "":
+		return ""
+	var tag: String = POSITION_BONUSES[pos]["tag"]
+	return pos if tag == "" or tag in squad.data.tags else ""
+
+# Один раз при старте боя, после синергий: бонусы рядов бойцам своих отрядов
+func apply_position_bonuses(squads: Array) -> void:
+	for squad in squads:
+		var pos = get_squad_position_bonus(squad)
+		if pos == "":
+			continue
+		for soldier in squad.soldiers:
+			_apply_bonus(soldier, POSITION_BONUSES[pos]["bonus"])
+
+# Сколько отрядов получат бонус каждого ряда — для панели синергий
+func count_position_bonuses(squads: Array) -> Dictionary:
+	var counts = {FRONT: 0, BACK: 0}
+	for squad in squads:
+		var pos = get_squad_position_bonus(squad)
+		if pos != "":
+			counts[pos] += 1
+	return counts
 
 # Командир (Chapter Master): +урон всем союзникам, один раз перед боем.
 # Несколько командиров не суммируются — берётся самый сильный бонус.

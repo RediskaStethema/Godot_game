@@ -91,6 +91,11 @@ func show_synergies() -> void:
 		lines.append("• %s — %s" % [s["name"], s["desc"]])
 	if lines.is_empty():
 		lines.append("Нет активных синергий (3+ Marine → +15% HP)")
+	var rows = SynergyManager.count_position_bonuses(
+		SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
+	for pos in [SynergyManager.FRONT, SynergyManager.BACK]:
+		var p: Dictionary = SynergyManager.POSITION_BONUSES[pos]
+		lines.append("• %s (%d отр.) — %s" % [p["name"], rows[pos], p["desc"]])
 	var marines = SynergyManager.tag_counts.get(SynergyManager.INCOME_TAG, 0)
 	lines.append("Marine: %d · доход синергии +%d Req" % [marines, SynergyManager.income_bonus])
 	_synergy_label.text = "\n".join(lines)
