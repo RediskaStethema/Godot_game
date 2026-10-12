@@ -94,6 +94,7 @@ const BONUS_MULT_FIELDS = {
 	"move_speed_mult": "current_move_speed",
 	"attack_speed_mult": "current_attack_speed",
 	"heal_mult": "current_heal_per_second",
+	"attack_range_mult": "current_attack_range",
 }
 const BONUS_ADD_FIELDS = {
 	"attack_range_add": "current_attack_range",
@@ -155,6 +156,20 @@ func count_position_bonuses(squads: Array) -> Dictionary:
 		if pos != "":
 			counts[pos] += 1
 	return counts
+
+# Орден забега (Chapters, RunManager.player_chapter): один раз при старте боя
+func apply_chapter_bonus(soldiers: Array) -> void:
+	var c: Dictionary = Chapters.get_chapter(RunManager.player_chapter)
+	if c.is_empty():
+		return
+	var tag: String = c.get("tag", "")
+	for s in soldiers:
+		if c.has("bonus") and (tag == "" or tag in s.data.tags):
+			_apply_bonus(s, c["bonus"])
+		if c.has("on_hit_status"):
+			s.extra_on_hit_status = c["on_hit_status"]
+			s.extra_on_hit_status_power = c["on_hit_status_power"]
+			s.extra_on_hit_status_duration = c["on_hit_status_duration"]
 
 # Командир (Chapter Master): +урон всем союзникам, один раз перед боем.
 # Несколько командиров не суммируются — берётся самый сильный бонус.

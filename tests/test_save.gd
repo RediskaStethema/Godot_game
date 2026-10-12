@@ -41,6 +41,10 @@ func _main() -> void:
 	for c in current_scene.get_children():
 		if c.has_method("choose"):   # окно выбора расы
 			c.choose("space_marines")
+	await _frames(2)
+	for c in current_scene.get_children():
+		if c.has_method("choose") and c.get("_chosen") == false:   # следом — окно выбора ордена
+			c.choose("ultramarines")
 	await _frames(3)
 	var shop = current_scene
 	_check("новый забег → магазин шага 0, сохранение записано", shop.name == "ShopScene" and rm.current_node_id == 0 and sv.has_save())
@@ -87,9 +91,12 @@ func _main() -> void:
 	wall.level_up_building()
 	bm.player_buildings[wall] = Vector2i(0, 2)
 	bm.pending_cards = [CardFactory.battle_fury(), CardFactory.tactical_squad()] as Array[CardData]
+	rm.player_chapter = "imperial_fists"
 	sv.save_run()
 	bm.reset_run()
+	rm.player_chapter = ""
 	_check("загрузка", sv.load_run())
+	_check("орден забега сохранён", rm.player_chapter == "imperial_fists")
 	var lt = bm.player_units[0]
 	var ls = bm.player_units[1]
 	_check("экономика и забег", em.requisition == 77 and em.round_number == 5 and em.wins == 4 \

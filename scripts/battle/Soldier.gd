@@ -58,6 +58,11 @@ var knockback_velocity: Vector2 = Vector2.ZERO
 # Статус-эффекты (StatusEffects): имя → {stacks, power, time, duration, dot_timer, spread_timer}
 var status_effects: Dictionary = {}
 var battle_cry_used: bool = false
+# Эффект при попадании от ордена (Salamanders) — если у юнита своего нет; ставит
+# SynergyManager.apply_chapter_bonus в начале боя
+var extra_on_hit_status: String = ""
+var extra_on_hit_status_power: float = 0.0
+var extra_on_hit_status_duration: float = 0.0
 
 # Позиция в строю — смещение относительно центра отряда
 var formation_offset: Vector2 = Vector2.ZERO
@@ -427,9 +432,10 @@ func _do_attack() -> void:
 		shot.damage = _roll_damage()
 		shot.stun = data.on_hit_stun
 		shot.knockback = data.on_hit_knockback
-		shot.status = data.on_hit_status
-		shot.status_power = data.on_hit_status_power
-		shot.status_duration = data.on_hit_status_duration
+		var st = _on_hit_status()
+		shot.status = st[0]
+		shot.status_power = st[1]
+		shot.status_duration = st[2]
 		return
 	target.take_damage(_roll_damage())
 	_apply_on_hit_effects()
@@ -462,10 +468,17 @@ func _apply_on_hit_effects() -> void:
 		return
 	if data.on_hit_stun > 0.0:
 		target.apply_stun(data.on_hit_stun)
-	if data.on_hit_status != "":
-		target.apply_status(data.on_hit_status, data.on_hit_status_power, data.on_hit_status_duration)
+	var st = _on_hit_status()
+	if st[0] != "":
+		target.apply_status(st[0], st[1], st[2])
 	if data.on_hit_knockback > 0.0:
 		target.apply_knockback(target.global_position - global_position, data.on_hit_knockback)
+
+# Эффект попадания: свой у юнита (Plague Marine, Havoc), иначе от ордена
+func _on_hit_status() -> Array:
+	if data.on_hit_status != "":
+		return [data.on_hit_status, data.on_hit_status_power, data.on_hit_status_duration]
+	return [extra_on_hit_status, extra_on_hit_status_power, extra_on_hit_status_duration]
 
 # Бонус урона от аур союзников рядом (Chaplain). Считается в момент удара —
 # runtime-поля не меняются, поэтому аура пропадает, как только отошли из радиуса.
