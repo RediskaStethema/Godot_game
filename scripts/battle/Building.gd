@@ -18,8 +18,7 @@ const BLOCKS = {
 const TOWER_LEVELS: int = 3
 const BARREL_LENGTH: float = 26.0
 const BARREL_COLOR = Color("1b1f24")
-const SHOT_SHOW_TIME: float = 0.15
-const SHOT_COLOR = Color(1.0, 0.8, 0.4)
+const SHOT_PROJECTILE: String = "spark"   # снаряд турели (Projectile.EFFECTS), урон — при попадании
 const SLOW_AURA_COLOR = Color(0.45, 0.65, 0.95, 0.05)
 const SLOW_AURA_LINE = Color(0.45, 0.65, 0.95, 0.30)
 # Уровень здания — ромбики над ним (1-й уровень без отметки)
@@ -33,8 +32,6 @@ var building_type: String
 var stats: Dictionary
 
 var attack_timer: float = 0.0
-var shot_timer: float = 0.0
-var shot_target: Vector2 = Vector2.ZERO   # глобальные координаты
 var aim: Vector2 = Vector2(1, 0.5)        # куда смотрит ствол (к врагу по умолчанию)
 
 func setup(building_card: CardData, grid_tile: Vector2i) -> void:
@@ -61,9 +58,6 @@ func _draw() -> void:
 	if building_type == "tower":
 		var muzzle = _block_top(0.5, 0.5, TOWER_LEVELS)
 		draw_line(muzzle, muzzle + aim.normalized() * BARREL_LENGTH, BARREL_COLOR, 6.0)
-		if shot_timer > Soldier.TIMER_EPSILON:
-			var a = shot_timer / SHOT_SHOW_TIME
-			draw_line(muzzle + aim.normalized() * BARREL_LENGTH, to_local(shot_target), Color(SHOT_COLOR, a), 2.0, true)
 	_draw_level_pips()
 
 func _draw_level_pips() -> void:
@@ -96,9 +90,6 @@ func get_occlusion_rect() -> Rect2:
 func tick(delta: float) -> void:
 	if building_type != "tower":
 		return
-	if shot_timer > Soldier.TIMER_EPSILON:
-		shot_timer -= delta
-		queue_redraw()
 	attack_timer -= delta
 	if attack_timer > Soldier.TIMER_EPSILON:
 		return
@@ -106,11 +97,12 @@ func tick(delta: float) -> void:
 	if target == null:
 		return
 	attack_timer = 1.0 / stats.get("attack_speed", 1.0)
-	target.take_damage(stats.get("damage", 0.0))
-	shot_target = target.global_position + Vector2(0, -Soldier.TARGET_SPRITE_HEIGHT / 2.0)
-	aim = shot_target - global_position
-	shot_timer = SHOT_SHOW_TIME
+	var aim_offset = Vector2(0, -Soldier.TARGET_SPRITE_HEIGHT / 2.0)
+	aim = target.global_position + aim_offset - global_position
 	queue_redraw()
+	var barrel_end = to_global(_block_top(0.5, 0.5, TOWER_LEVELS) + aim.normalized() * BARREL_LENGTH)
+	var shot = Projectile.launch(get_parent(), SHOT_PROJECTILE, barrel_end, target, aim_offset)
+	shot.damage = stats.get("damage", 0.0)
 
 func _find_target(attack_range: float) -> Soldier:
 	var best: Soldier = null

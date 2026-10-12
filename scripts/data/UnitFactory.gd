@@ -61,6 +61,7 @@ static func tactical_marine() -> UnitData:
 	d.cost = 5
 	d.rarity = GameConstants.RARITY_COMMON
 	d.sprite_path = "res://assets/sprites/space_marine"  # ← путь
+	d.projectile = "bolt"
 	return d
 
 
@@ -94,6 +95,8 @@ static func chaos_marine() -> UnitData:
 	d.cost = 5
 	d.rarity = GameConstants.RARITY_COMMON
 	d.sprite_path = "res://assets/sprites/chaos"  # ← временно тот же
+	d.projectile = "bolt"
+	d.projectile_warm = true
 	return d
 
 # Элита Хаоса (эскорт мини-босса): усиленный Chaos Marine ближнего боя.
@@ -101,6 +104,7 @@ static func chaos_marine() -> UnitData:
 static func chaos_champion() -> UnitData:
 	var d = chaos_marine()
 	d.unit_name = "Chaos Champion"
+	d.projectile = ""   # ближний бой — без снаряда Chaos Marine
 	d.tags = ["chaos", "melee", "elite"]
 	d.hp = 180.0
 	d.damage = 22.0
@@ -118,6 +122,7 @@ static func chaos_champion() -> UnitData:
 static func chaos_lord() -> UnitData:
 	var d = chaos_marine()
 	d.unit_name = "Chaos Lord"
+	d.projectile = ""   # ближний бой — без снаряда Chaos Marine
 	d.tags = ["chaos", "melee", "elite", "boss"]
 	d.hp = 2200.0
 	d.damage = 50.0
@@ -136,6 +141,7 @@ static func chaos_lord() -> UnitData:
 static func chaos_hellbrute() -> UnitData:
 	var d = chaos_marine()
 	d.unit_name = "Hellbrute"
+	d.projectile = ""   # ближний бой — без снаряда Chaos Marine
 	d.tags = ["chaos", "melee", "vehicle", "elite"]
 	d.hp = 600.0
 	d.damage = 30.0
@@ -167,6 +173,7 @@ static func scout_marine() -> UnitData:
 	d.sprite_path = "res://assets/sprites/space_marine"
 	d.tint = Color(0.75, 1.0, 0.75)
 	d.sprite_scale = 0.85
+	d.projectile = "spark"
 	return d
 
 # Тяжёлое оружие: медленный, бьёт редко и больно с большой дистанции
@@ -186,6 +193,7 @@ static func devastator() -> UnitData:
 	# TODO: свой спрайт devastator
 	d.sprite_path = "res://assets/sprites/space_marine"
 	d.tint = Color(0.6, 0.75, 1.0)
+	d.projectile = "charged"
 	return d
 
 # Элитный танк ближнего боя
@@ -251,6 +259,7 @@ static func librarian() -> UnitData:
 	d.sprite_path = "res://assets/sprites/space_marine"
 	d.tint = Color(0.55, 0.7, 1.0)
 	d.sprite_scale = 1.05
+	d.projectile = "charged"
 	return d
 
 # Капеллан: боец ближнего боя, аура +урон союзным melee рядом
@@ -295,6 +304,7 @@ static func land_speeder() -> UnitData:
 	d.sprite_path = "res://assets/sprites/space_marine"
 	d.tint = Color(1.0, 0.85, 0.4)
 	d.sprite_scale = 1.1
+	d.projectile = "bolt"
 	return d
 
 # Шагающая машина: огромный HP, удар отбрасывает цель

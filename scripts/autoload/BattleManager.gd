@@ -49,6 +49,7 @@ var _citadel_hp_at_start: float = CITADEL_MAX_HP
 # Здания: стоят между раундами на своих клетках (CardData → Vector2i)
 var player_buildings: Dictionary = {}
 var buildings: Array = []           # узлы Building текущего боя (ставит BattleScene)
+var projectiles: Array = []         # снаряды в полёте (Projectile.launch) — тикают в бою, урон при попадании
 
 signal citadel_hp_changed(hp: float)
 signal citadel_destroyed
@@ -78,6 +79,7 @@ func start_battle() -> void:
 	siege_started = false
 	surrendered = false
 	_citadel_hp_at_start = citadel_hp
+	clear_projectiles()
 	emit_signal("battle_started")
 	print("BattleManager: бой начался")
 
@@ -94,12 +96,14 @@ func surrender() -> void:
 	phase = BattlePhase.FINISHED
 	winner_team = GameConstants.TEAM_ENEMY
 	surrendered = true
+	clear_projectiles()
 	print("BattleManager: игрок сдался")
 	emit_signal("battle_ended", winner_team)
 
 func stop_battle() -> void:
 	phase = BattlePhase.IDLE
 	surrendered = false
+	clear_projectiles()
 	SquadRegistry.clear()
 	SoldierRegistry.clear()
 
@@ -140,7 +144,26 @@ func _battle_tick() -> void:
 			b.tick(FIXED_TICK)
 	if siege_started and has_citadel():
 		citadel.tick(FIXED_TICK)
+	_tick_projectiles()
 	_check_battle_end()
+
+# Снаряды летят после выстрелов этого тика; попавшие и сгинувшие со сценой — из списка
+func _tick_projectiles() -> void:
+	for p in projectiles.duplicate():
+		if is_instance_valid(p):
+			p.tick(FIXED_TICK)
+	projectiles = projectiles.filter(func(p): return is_instance_valid(p) and not p.finished)
+
+# Бой кончился — снаряды в полёте больше не попадут, убираем с поля
+func clear_projectiles() -> void:
+	for p in projectiles:
+		if is_instance_valid(p):
+			p.queue_free()
+	projectiles.clear()
+
+# Доля FIXED_TICK, накопленная с последнего тика (0..1) — для плавной отрисовки между тиками
+func get_tick_alpha() -> float:
+	return clampf(_accumulator / FIXED_TICK, 0.0, 1.0)
 
 func _check_battle_end() -> void:
 	var team0_alive = SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER).size() > 0
@@ -157,6 +180,7 @@ func _check_battle_end() -> void:
 		return
 
 	phase = BattlePhase.FINISHED
+	clear_projectiles()
 	_check_catch_up()
 
 	if player_alive and not team1_alive:
