@@ -39,7 +39,7 @@ const UPGRADES: Array[String] = ["blessed_armour", "battle_fury"]
 const CAMPAIGN_PRIORITY = {
 	"tactical": ["tactical_squad", "blessed_armour", "battle_fury"],
 	"mixed": ["tactical_squad", "assault_squad", "devastator_squad", "terminator_squad",
-		"bolter_turret", "apothecary", "dreadnought", "chaplain", "chapter_master",
+		"bolter_turret", "thunderfire_cannon", "apothecary", "dreadnought", "chaplain", "chapter_master",
 		"fortress_wall", "librarian", "land_speeder", "scout_squad", "blessed_armour", "battle_fury"],
 	"elite": ["terminator_squad", "devastator_squad", "dreadnought", "librarian", "chaplain",
 		"apothecary", "chapter_master", "land_speeder", "tactical_squad", "blessed_armour", "battle_fury"],
@@ -485,7 +485,11 @@ func _campaign_battle() -> int:
 	bm.battle_ended.connect(_on_end)
 	scene._on_start_pressed()
 	var t0 = game_time
+	var so = root.get_node("SoldierRegistry")
 	while not ended and game_time - t0 < MAX_GAME_SECONDS:
+		# Орудие игрока (Thunderfire Cannon): бот бьёт в центр строя врага, как только готово
+		if not so.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY).is_empty():
+			scene.fire_artillery(so.get_team_center(GameConstants.TEAM_ENEMY))
 		await process_frame
 	bm.battle_ended.disconnect(_on_end)
 	var w = winner if ended else -2

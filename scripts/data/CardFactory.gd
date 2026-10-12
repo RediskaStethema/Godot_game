@@ -174,6 +174,27 @@ static func bolter_turret() -> CardData:
 	c.building_level_bonuses = {"damage": 0.25, "attack_speed": 0.20}
 	return c
 
+# Орудие под управлением игрока (решение пользователя, как в 9 Kings): в бою клик
+# по полю — снаряд из здания, взрыв по площади только по врагам, затем перезарядка.
+static func thunderfire_cannon() -> CardData:
+	var c = CardData.new()
+	c.id = "thunderfire_cannon"
+	c.title = "Thunderfire Cannon"
+	c.description = "Орудие: в бою кликните по полю — залп по площади. Перезарядка 10 с."
+	c.faction = "space_marines"
+	c.cost = 8
+	c.rarity = "rare"
+	c.card_type = "building"
+	c.building_type = "artillery"
+	c.building_stats = {
+		"damage": 40.0,          # каждому врагу в радиусе взрыва
+		"splash_radius": 60.0,
+		"cooldown": 10.0,        # сек между залпами
+	}
+	# Уровень (такая же карта на орудие): +25% урона, перезарядка −15%
+	c.building_level_bonuses = {"damage": 0.25, "cooldown": -0.15}
+	return c
+
 static func fortress_wall() -> CardData:
 	var c = CardData.new()
 	c.id = "fortress_wall"
@@ -264,7 +285,7 @@ static func build_pool() -> Array:
 	for i in range(5): pool.append(assault_squad())
 	for i in range(4): pool.append(scout_squad())
 	for i in range(2): pool.append(fortress_wall())
-	# Rare — 9 копий
+	# Rare — 10 копий
 	pool.append(devastator_squad())
 	pool.append(terminator_squad())
 	pool.append(apothecary_card())
@@ -272,6 +293,7 @@ static func build_pool() -> Array:
 	pool.append(chaplain_card())
 	pool.append(land_speeder_card())
 	pool.append(bolter_turret())
+	pool.append(thunderfire_cannon())
 	pool.append(blessed_armour())
 	pool.append(battle_fury())
 	# Epic — 3 копии

@@ -6,6 +6,8 @@ extends Node2D
 # Здания неуязвимы и стоят между раундами (BattleManager.player_buildings).
 # Тикает BattleManager (FIXED_TICK) во время боя.
 #   tower — турель: бьёт ближайшего врага в радиусе
+#   artillery — орудие игрока: клик по полю в бою (BattleScene) → fire_at, залп по
+#           площади только по врагам, перезарядка cooldown (готово в начале боя)
 #   wall  — стена: щит цитадели на каждый бой + замедляет врагов рядом
 #           (статус slowed без стаков, держится WALL_SLOW_LINGER после выхода из радиуса)
 
@@ -15,7 +17,13 @@ const BLOCK_SCALE: float = 0.5
 const BLOCKS = {
 	"tower": [[30, 0.5, 0.5, 1], [30, 0.5, 0.5, 2], [31, 0.5, 0.5, 3]],
 	"wall":  [[12, 0, 1, 1], [12, 1, 0, 1]],   # низкая стена поперёк клетки
+	"artillery": [[30, 0.5, 0.5, 1], [31, 0.5, 0.5, 2]],   # приземистая башня с длинным стволом
 }
+const ARTILLERY_LEVELS: int = 2
+const ARTILLERY_BARREL_LENGTH: float = 40.0
+const ARTILLERY_PROJECTILE: String = "charged"
+const EXPLOSION_COLOR = Color(1.0, 0.6, 0.2, 0.45)
+const EXPLOSION_SHOW_TIME: float = 0.3   # сек видна вспышка взрыва (таймер дерева — только вид)
 const TOWER_LEVELS: int = 3
 const BARREL_LENGTH: float = 26.0
 const BARREL_COLOR = Color("1b1f24")
@@ -35,6 +43,9 @@ var stats: Dictionary
 
 var attack_timer: float = 0.0
 var aim: Vector2 = Vector2(1, 0.5)        # куда смотрит ствол (к врагу по умолчанию)
+var cooldown_left: float = 0.0            # орудие: сек до готовности (0 — готово)
+var _explosion_point: Vector2             # орудие: где показать вспышку взрыва
+var _explosion_id: int = 0
 
 func setup(building_card: CardData, grid_tile: Vector2i) -> void:
 	card = building_card
@@ -60,6 +71,11 @@ func _draw() -> void:
 	if building_type == "tower":
 		var muzzle = _block_top(0.5, 0.5, TOWER_LEVELS)
 		draw_line(muzzle, muzzle + aim.normalized() * BARREL_LENGTH, BARREL_COLOR, 6.0)
+	if building_type == "artillery":
+		var base = _block_top(0.5, 0.5, ARTILLERY_LEVELS)
+		draw_line(base, base + aim.normalized() * ARTILLERY_BARREL_LENGTH, BARREL_COLOR, 8.0)
+		if _explosion_id > 0:
+			draw_circle(to_local(_explosion_point), stats.get("splash_radius", 0.0), EXPLOSION_COLOR)
 	_draw_level_pips()
 
 func _draw_level_pips() -> void:
@@ -90,6 +106,9 @@ func get_occlusion_rect() -> Rect2:
 # БОЙ
 # -------------------------------------------------------
 func tick(delta: float) -> void:
+	if building_type == "artillery":
+		cooldown_left = maxf(cooldown_left - delta, 0.0)
+		return
 	if building_type == "wall":
 		_tick_slow_aura()
 		return
@@ -118,6 +137,42 @@ func _find_target(attack_range: float) -> Soldier:
 			best_dist = d
 			best = e
 	return best
+
+# -------------------------------------------------------
+# ОРУДИЕ ИГРОКА (artillery)
+# -------------------------------------------------------
+func is_artillery_ready() -> bool:
+	return building_type == "artillery" and cooldown_left <= Soldier.TIMER_EPSILON
+
+# Залп в точку поля (мировые координаты): снаряд из ствола, взрыв по площади
+# при попадании — только враги. false — не орудие или перезаряжается.
+func fire_at(point: Vector2) -> bool:
+	if not is_artillery_ready():
+		return false
+	cooldown_left = stats.get("cooldown", 1.0)
+	aim = point - global_position
+	queue_redraw()
+	var base = _block_top(0.5, 0.5, ARTILLERY_LEVELS)
+	var shot = Projectile.launch(get_parent(), ARTILLERY_PROJECTILE,
+		to_global(base + aim.normalized() * ARTILLERY_BARREL_LENGTH), null, point)
+	shot.damage = stats.get("damage", 0.0)
+	shot.splash_radius = stats.get("splash_radius", 0.0)
+	shot.splash_team = GameConstants.TEAM_ENEMY
+	shot.on_impact = _show_explosion
+	return true
+
+# Только вид: вспышка на месте взрыва гаснет по таймеру дерева
+func _show_explosion(point: Vector2) -> void:
+	if not is_inside_tree():
+		return
+	_explosion_point = point
+	_explosion_id += 1
+	var id := _explosion_id
+	queue_redraw()
+	get_tree().create_timer(EXPLOSION_SHOW_TIME, false).timeout.connect(func():
+		if is_instance_valid(self) and _explosion_id == id:
+			_explosion_id = 0
+			queue_redraw())
 
 # Щит цитадели, который даёт здание на каждый бой
 func get_citadel_shield() -> float:

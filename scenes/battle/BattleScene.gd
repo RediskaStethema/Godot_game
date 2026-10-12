@@ -87,6 +87,7 @@ func _build_ui() -> void:
 	start_button.pressed.connect(_on_start_pressed)
 
 	inspector = SquadInspector.new()
+	inspector.click_blocker = _artillery_takes_click
 	$UI.add_child(inspector)
 	pause_menu = PauseMenu.new()
 	add_child(pause_menu)
@@ -365,6 +366,30 @@ func _save_placement() -> void:
 # -------------------------------------------------------
 # БОЙ
 # -------------------------------------------------------
+# Орудия игрока (Thunderfire Cannon): клик по полю в бою — залп готового орудия.
+# _unhandled_input: клики по UI (шапка, кнопки) сюда не доходят
+func _unhandled_input(event: InputEvent) -> void:
+	if not BattleManager.is_battle_running() or not (event is InputEventMouseButton \
+			and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	fire_artillery(_screen_to_world(event.position))
+
+# Клик в бою уйдёт на залп — справка по отряду его не трогает
+func _artillery_takes_click() -> bool:
+	if not BattleManager.is_battle_running():
+		return false
+	for b in BattleManager.buildings:
+		if is_instance_valid(b) and b.is_artillery_ready():
+			return true
+	return false
+
+# Залп первого готового орудия в точку (мир); false — готовых нет
+func fire_artillery(point: Vector2) -> bool:
+	for b in BattleManager.buildings:
+		if is_instance_valid(b) and b.is_artillery_ready():
+			return b.fire_at(point)
+	return false
+
 func _on_start_pressed() -> void:
 	is_placement_phase = false
 	fader.enabled = false

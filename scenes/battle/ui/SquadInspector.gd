@@ -15,6 +15,9 @@ const INFO_WIDTH: float = 220.0
 
 # Выключается, пока открыто меню слияния (BattleScene)
 var enabled: bool = true
+# true — клик забран другим (залп орудия игрока): справку не открывать и не закрывать.
+# Справка получает клик раньше сцены, поэтому спрашивает её заранее
+var click_blocker: Callable
 var info_squad: Squad = null
 
 var _hover_panel: PanelContainer
@@ -83,6 +86,8 @@ func _update_hover(elapsed: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not enabled or not (event is InputEventMouseButton and event.pressed \
 			and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	if click_blocker.is_valid() and click_blocker.call():
 		return
 	var squad = squad_at(_screen_to_world(event.position))
 	if squad == null or squad.team != GameConstants.TEAM_PLAYER or squad == info_squad:

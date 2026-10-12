@@ -11,6 +11,8 @@ var _citadel: Label
 var _synergy_panel: PanelContainer
 var _synergy_label: Label
 var _speed_button: Button   # скорость боя ×1/×2 (GameSettings.battle_speed)
+var _artillery: Label       # орудия игрока в бою: готово / перезарядка (только если есть)
+var _artillery_state: String = ""   # последняя надпись — метка меняется только при смене
 
 func setup(wave_text: String, message_label: Label, start_button: Button, synergy_width: float) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -46,6 +48,9 @@ func _build_header(wave_text: String, message_label: Label, start_button: Button
 	_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 
+	_artillery = UITheme.make_label("", "ValueLabel")
+	_artillery.visible = false
+	row.add_child(_artillery)
 	_speed_button = UITheme.make_button("", "", GameSettings.cycle_battle_speed)
 	_speed_button.custom_minimum_size = Vector2(64, 0)
 	_speed_button.tooltip_text = "Скорость боя"
@@ -102,6 +107,33 @@ func show_synergies() -> void:
 	var marines = SynergyManager.tag_counts.get(SynergyManager.INCOME_TAG, 0)
 	lines.append("Marine: %d · доход синергии +%d Req" % [marines, SynergyManager.income_bonus])
 	_synergy_label.text = "\n".join(lines)
+
+# Орудия игрока: опрос раз в кадр — только надпись, на бой не влияет
+func _process(_delta: float) -> void:
+	var ready_count = 0
+	var wait = INF
+	var any = false
+	if BattleManager.is_battle_running():   # на расстановке клик не стреляет — надписи нет
+		for b in BattleManager.buildings:
+			if not is_instance_valid(b) or b.building_type != "artillery":
+				continue
+			any = true
+			if b.is_artillery_ready():
+				ready_count += 1
+			else:
+				wait = minf(wait, b.cooldown_left)
+	var text = ""
+	if any:
+		if ready_count > 0:
+			text = "Орудие: готово — клик по полю" if ready_count == 1 else "Орудия: %d готовы — клик по полю" % ready_count
+		else:
+			text = "Орудие: %.1f с" % wait
+	if text == _artillery_state:
+		return
+	_artillery_state = text
+	_artillery.visible = text != ""
+	_artillery.text = text
+	_artillery.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT if ready_count > 0 else UITheme.TEXT_DIM)
 
 func _update_speed_button() -> void:
 	_speed_button.text = "×%d" % GameSettings.battle_speed
