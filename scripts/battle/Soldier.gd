@@ -519,6 +519,8 @@ func _find_target() -> Soldier:
 			return _get_farthest(enemies)
 		GameConstants.PRIORITY_RANDOM:
 			return enemies[randi() % enemies.size()]
+		GameConstants.PRIORITY_RANGED_FIRST:
+			return _get_nearest_ranged(enemies)
 		_:
 			return _get_nearest(enemies)
 
@@ -531,6 +533,19 @@ func _get_nearest(units: Array) -> Soldier:
 			min_dist = d
 			closest = u
 	return closest
+
+# Ближайший стрелок; стрелков нет — просто ближайший
+func _get_nearest_ranged(units: Array) -> Soldier:
+	var closest: Soldier = null
+	var min_dist: float = INF
+	for u in units:
+		if not "ranged" in u.data.tags:
+			continue
+		var d = global_position.distance_squared_to(u.global_position)
+		if d < min_dist:
+			min_dist = d
+			closest = u
+	return closest if closest else _get_nearest(units)
 
 func _get_farthest(units: Array) -> Soldier:
 	var farthest: Soldier = null

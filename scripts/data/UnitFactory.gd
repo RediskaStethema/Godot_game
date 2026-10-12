@@ -30,6 +30,10 @@ static func create(factory_id: String) -> UnitData:
 		"chaos_champion":  d = chaos_champion()
 		"chaos_lord":      d = chaos_lord()
 		"chaos_hellbrute": d = chaos_hellbrute()
+		"chaos_cultist":   d = chaos_cultist()
+		"chaos_havoc":     d = chaos_havoc()
+		"chaos_raptor":    d = chaos_raptor()
+		"plague_marine":   d = plague_marine()
 		"scout_marine":    d = scout_marine()
 		"devastator":      d = devastator()
 		"terminator":      d = terminator()
@@ -153,6 +157,72 @@ static func chaos_hellbrute() -> UnitData:
 	d.rarity = GameConstants.RARITY_EPIC
 	d.tint = Color(1.0, 0.65, 0.35)
 	d.sprite_scale = 1.5
+	return d
+
+# Архетипы обычных волн Хаоса (EnemyWaves.ARCHETYPES). Статы — от √(HP × DPS)
+# Chaos Marine (35.5): культист 0.4 от него, рапторы 1.25, хавоки и чумные 1.5;
+# сколько бойцов в отряде (EnemyWaves power) — подобрано tests/balance_sim.gd.
+# Своих спрайтов нет — спрайт chaos с тинтом и масштабом.
+
+# Культисты: толпа слабых стрелков с коротким стволом
+static func chaos_cultist() -> UnitData:
+	var d = chaos_marine()
+	d.unit_name = "Chaos Cultist"
+	d.tags = ["chaos", "ranged", "light"]
+	d.hp = 40.0
+	d.damage = 6.0
+	d.attack_speed = 0.85
+	d.attack_range = 110.0
+	d.move_speed = 85.0
+	d.tint = Color(0.75, 0.7, 0.6)
+	d.sprite_scale = 0.85
+	return d
+
+# Хавоки: тяжёлое оружие из тыла, бьют самого опасного
+static func chaos_havoc() -> UnitData:
+	var d = chaos_marine()
+	d.unit_name = "Havoc"
+	d.tags = ["chaos", "ranged", "heavy"]
+	d.hp = 130.0
+	d.damage = 40.0
+	d.attack_speed = 0.55
+	d.attack_range = 260.0   # дальше Tactical, но в зоне орудия цитадели (260 + HIT_RADIUS < 320)
+	d.move_speed = 60.0
+	d.priority = GameConstants.PRIORITY_HIGHEST_THREAT
+	d.projectile = "charged"
+	d.tint = Color(0.75, 0.85, 1.0)
+	d.sprite_scale = 1.1
+	return d
+
+# Рапторы: быстрые бойцы ближнего боя, летят к стрелкам в тылу
+static func chaos_raptor() -> UnitData:
+	var d = chaos_marine()
+	d.unit_name = "Raptor"
+	d.projectile = ""
+	d.tags = ["chaos", "melee", "jump"]
+	d.hp = 120.0
+	d.damage = 15.0
+	d.attack_speed = 0.9
+	d.attack_range = 60.0
+	d.move_speed = 140.0
+	d.priority = GameConstants.PRIORITY_RANGED_FIRST
+	d.tint = Color(0.6, 0.6, 0.75)
+	return d
+
+# Чумные десантники: медленные и живучие, урон слабый, не отступают
+static func plague_marine() -> UnitData:
+	var d = chaos_marine()
+	d.unit_name = "Plague Marine"
+	d.projectile = ""
+	d.tags = ["chaos", "melee", "heavy"]
+	d.hp = 300.0
+	d.damage = 12.0
+	d.attack_speed = 0.8
+	d.attack_range = 60.0
+	d.move_speed = 55.0
+	d.retreat_hp_threshold = 0.0
+	d.tint = Color(0.7, 1.0, 0.55)
+	d.sprite_scale = 1.15
 	return d
 
 # Лёгкий стрелок: хрупкий, быстрый, добивает раненых

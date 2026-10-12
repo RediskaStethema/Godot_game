@@ -184,7 +184,7 @@ func _place_player_squads() -> void:
 # Состав врагов — данными в EnemyWaves; заполняют зону с переднего края в тыл
 func _place_enemy_squads() -> void:
 	var tiles = iso_grid.get_enemy_tiles_front_first()
-	var specs = EnemyWaves.build(battle_wave, battle_type, tiles.size())
+	var specs = EnemyWaves.build(battle_wave, battle_type, tiles.size(), RunManager.rng.seed)
 	enemy_elites_at_start = 0
 	for i in range(mini(specs.size(), tiles.size())):
 		var spec: Dictionary = specs[i]

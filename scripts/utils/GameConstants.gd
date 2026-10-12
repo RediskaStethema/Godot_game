@@ -11,7 +11,8 @@ const PRIORITY_NEAREST: String = "nearest"
 const PRIORITY_LOWEST_HP: String = "lowest_hp"
 const PRIORITY_HIGHEST_THREAT: String = "highest_threat"
 const PRIORITY_FARTHEST:String="farthest"      # снайперы
-const PRIORITY_RANDOM:String="random" 
+const PRIORITY_RANDOM:String="random"
+const PRIORITY_RANGED_FIRST: String = "ranged_first"   # ближайший стрелок [ranged], иначе ближайший
 # --- Команды ---
 const TEAM_PLAYER: int = 0
 const TEAM_ENEMY: int = 1
