@@ -91,6 +91,9 @@ func show_synergies() -> void:
 		lines.append("• %s — %s" % [s["name"], s["desc"]])
 	if lines.is_empty():
 		lines.append("Нет активных синергий (3+ Marine → +15% HP)")
+	var chapter = Chapters.get_chapter(RunManager.player_chapter)
+	if not chapter.is_empty():
+		lines.append("• Орден %s — %s" % [chapter["name"], chapter["desc"]])
 	var rows = SynergyManager.count_position_bonuses(
 		SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
 	for pos in [SynergyManager.FRONT, SynergyManager.BACK]:

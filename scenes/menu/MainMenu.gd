@@ -160,11 +160,22 @@ func _open_race_select() -> void:
 	var dialog = RaceSelectDialog.new()
 	add_child(dialog)
 	dialog.setup()
-	dialog.chosen.connect(_start_new_run)
+	dialog.chosen.connect(_on_race_chosen)
 
-func _start_new_run(faction: String) -> void:
+# Раса с орденами (Космодесант) — следом выбор ордена; «Отмена» там — забег не начат
+func _on_race_chosen(faction: String) -> void:
+	if not Chapters.has_chapters(faction):
+		_start_new_run(faction, "")
+		return
+	var dialog = ChapterSelectDialog.new()
+	add_child(dialog)
+	dialog.setup()
+	dialog.chosen.connect(func(chapter): _start_new_run(faction, chapter))
+
+func _start_new_run(faction: String, chapter: String) -> void:
 	BattleManager.reset_run()
 	RunManager.player_faction = faction
+	RunManager.player_chapter = chapter
 	SaveManager.delete_save()
 	RunManager.advance()
 

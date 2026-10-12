@@ -130,10 +130,23 @@ func _main() -> void:
 	await _frames(2)
 	_check("закрытую расу не выбрать", current_scene == menu and is_instance_valid(race))
 	race.choose("space_marines")
+	await _frames(2)
+	var chapter = null
+	for c in menu.get_children():
+		if _is(c, "ChapterSelectDialog"):
+			chapter = c
+	var chapter_cards = 0
+	for c in Chapters.CHAPTERS:
+		if chapter and chapter.find_child("Chapter_" + c["id"], true, false):
+			chapter_cards += 1
+	_check("выбрали десант → окно ордена (5 орденов), забег ещё не начат", chapter != null \
+		and chapter_cards == 5 and current_scene == menu)
+	chapter.choose("salamanders")
 	await _frames(4)
-	_check("выбрали десант → магазин волны 1, раса в забеге, в магазине есть пауза", current_scene.name == "ShopScene" \
+	_check("выбрали орден → магазин волны 1, раса и орден в забеге, в магазине есть пауза", current_scene.name == "ShopScene" \
 		and root.get_node("EconomyManager").round_number == 1 \
 		and root.get_node("RunManager").player_faction == "space_marines" \
+		and root.get_node("RunManager").player_chapter == "salamanders" \
 		and current_scene.get_children().any(func(c): return _is(c, "PauseMenu")))
 
 	# 6. Экран конца забега: пауза выключена, кнопка «В главное меню»

@@ -45,7 +45,7 @@ func setup(building_card: CardData, grid_tile: Vector2i) -> void:
 
 # Статы по уровню карты (после улучшения — пересчитать)
 func refresh_stats() -> void:
-	stats = card.get_building_stats()
+	stats = Chapters.apply_building_stats(card.get_building_stats(), RunManager.player_chapter)
 	queue_redraw()
 
 # -------------------------------------------------------

@@ -390,6 +390,7 @@ func _on_start_pressed() -> void:
 	SynergyManager.calculate_synergies(my_soldiers)
 	SynergyManager.apply_synergies_to_soldiers(my_soldiers)
 	SynergyManager.apply_position_bonuses(SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
+	SynergyManager.apply_chapter_bonus(my_soldiers)
 	SynergyManager.apply_commander_bonus(my_soldiers)
 	hud.show_synergies()
 

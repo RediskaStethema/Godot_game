@@ -31,6 +31,8 @@ func _ready() -> void:
 # Раса игрока на забег: от неё оформление поля и цитадели (FactionTheme).
 # Выбор расы — позже; новый забег её не сбрасывает (выбирается до new_run)
 var player_faction: String = FactionTheme.DEFAULT_FACTION
+# Орден Космодесанта (Chapters) — выбирается после расы; "" — без ордена
+var player_chapter: String = ""
 
 func new_run(seed_value: int = 0) -> void:
 	if seed_value != 0:
@@ -145,6 +147,7 @@ func save_state() -> Dictionary:
 		"current_node_id": current_node_id,
 		"current_completed": current_completed,
 		"player_faction": player_faction,
+		"player_chapter": player_chapter,
 	}
 
 func load_state(d: Dictionary) -> void:
@@ -153,6 +156,7 @@ func load_state(d: Dictionary) -> void:
 	current_node_id = int(d["current_node_id"])
 	current_completed = bool(d["current_completed"])
 	player_faction = str(d.get("player_faction", FactionTheme.DEFAULT_FACTION))
+	player_chapter = str(d.get("player_chapter", ""))
 
 # -------------------------------------------------------
 # ДЛЯ БОЯ
