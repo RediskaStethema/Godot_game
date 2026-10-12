@@ -44,6 +44,10 @@ extends Resource
 # Пока у новых юнитов нет своих спрайтов — различаем их тинтом и размером
 @export var tint: Color = Color.WHITE
 @export var sprite_scale: float = 1.0
+# Снаряд стрелка — вид из Projectile.EFFECTS ("bolt" / "charged" / "spark"), "" — без снаряда.
+# Урон и эффекты попадания (стан, отбрасывание) — когда снаряд долетит (Projectile._impact).
+@export var projectile: String = ""
+@export var projectile_warm: bool = false   # синий эффект → красно-оранжевый (Хаос)
 
 # --- Фракционные флаги ---
 @export var has_reanimation: bool = false

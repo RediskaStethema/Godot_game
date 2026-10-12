@@ -18,6 +18,14 @@ const HP_BAR_GAP: float = 6.0
 const LEVEL_PIP_R: float = 3.0
 const LEVEL_PIP_STEP: float = 8.0
 const LEVEL_PIP_GAP: float = 5.0
+# Вспышка попадания: боец, получивший урон, на мгновение белеет (общий шейдер на всех)
+const HIT_FLASH_TIME: float = 0.1
+const HIT_FLASH_STRENGTH: float = 0.85   # доля белого поверх цвета спрайта (с тинтом)
+const HIT_FLASH_SHADER = """shader_type canvas_item;
+void fragment() {
+	vec4 c = texture(TEXTURE, UV) * COLOR;
+	COLOR = vec4(mix(c.rgb, vec3(1.0), %.2f), c.a);
+}"""
 # Таймеры уменьшаются на 0.1 — из-за погрешности float 1.0 - 10*0.1 != 0
 const TIMER_EPSILON: float = 0.001
 
@@ -84,14 +92,21 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 # АНИМАЦИИ
 # -------------------------------------------------------
 # Анимация → подпапка спрайтов. Кадры: <sprite_path>/<папка>/0.png, 1.png, ...
+# Если рядом есть <sprite_path>/frames.tres (tools/gif_to_frames.py из GIF) — берём его:
+# там скорость каждой анимации и метаданные muzzle / shot_frame для снарядов.
 const ANIMATION_FOLDERS = {"idle": "idle", "walk": "run", "attack": "attack", "death": "death"}
 const ANIMATION_FPS: float = 8.0
 # Набор кадров на папку спрайтов собирается один раз и общий для всех бойцов
 # этого вида (раньше — заново на каждого бойца, с проверкой файлов на диске)
 static var _frames_cache: Dictionary = {}   # sprite_path → SpriteFrames
+static var _hit_flash_material: ShaderMaterial
+var _hit_flash_id: int = 0   # номер последней вспышки — старый таймер не гасит новую
 
 static func _get_frames(sprite_path: String) -> SpriteFrames:
 	if _frames_cache.has(sprite_path):
+		return _frames_cache[sprite_path]
+	if ResourceLoader.exists(sprite_path + "/frames.tres"):
+		_frames_cache[sprite_path] = load(sprite_path + "/frames.tres")
 		return _frames_cache[sprite_path]
 	var frames = SpriteFrames.new()
 	frames.remove_animation("default")
@@ -201,9 +216,13 @@ func _attack_citadel(delta: float) -> void:
 	attack_timer -= delta
 	if attack_timer <= TIMER_EPSILON:
 		attack_timer = 1.0 / current_attack_speed
-		citadel.take_hit(_roll_damage())
 		sprite.stop()
 		sprite.play("attack")
+		var shot := _shoot_projectile(citadel, Vector2(0.0, -40.0))
+		if shot:
+			shot.damage = _roll_damage()   # урон — при попадании
+		else:
+			citadel.take_hit(_roll_damage())
 
 # Преследуем конкретную цель до дальности атаки
 func _state_chase(delta: float) -> void:
@@ -379,12 +398,37 @@ func apply_knockback(direction: Vector2, force: float) -> void:
 # -------------------------------------------------------
 # АТАКА И УРОН
 # -------------------------------------------------------
+# Стрелок (UnitData.projectile) выпускает снаряд — урон и эффекты при попадании
+# (Projectile._impact); ближний бой бьёт сразу.
 func _do_attack() -> void:
-	if is_instance_valid(target):
-		target.take_damage(_roll_damage())
-		_apply_on_hit_effects()
-		sprite.stop()
-		sprite.play("attack")
+	if not is_instance_valid(target):
+		return
+	sprite.stop()
+	sprite.play("attack")
+	var shot := _shoot_projectile(target, Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * target.data.sprite_scale))
+	if shot:
+		shot.damage = _roll_damage()
+		shot.stun = data.on_hit_stun
+		shot.knockback = data.on_hit_knockback
+		return
+	target.take_damage(_roll_damage())
+	_apply_on_hit_effects()
+
+# Снаряд из ствола (метаданные muzzle кадров) на кадре вспышки (shot_frame);
+# null — юнит без снаряда (ближний бой)
+func _shoot_projectile(to: Node2D, aim_offset: Vector2) -> Projectile:
+	if data.projectile == "" or parent_squad == null:
+		return null
+	var frames := sprite.sprite_frames
+	var base_h := TARGET_SPRITE_HEIGHT / sprite.scale.y   # высота кадра idle
+	var muzzle: Vector2 = frames.get_meta("muzzle", Vector2(base_h * 0.3, -base_h * 0.5))
+	if sprite.flip_h:
+		muzzle.x = -muzzle.x
+	var delay := 0.0
+	if frames.has_meta("shot_frame"):
+		delay = frames.get_meta("shot_frame") / frames.get_animation_speed("attack")
+	return Projectile.launch(parent_squad.get_parent(), data.projectile, global_position + muzzle * sprite.scale,
+			to, aim_offset, delay, data.projectile_warm)
 
 # Урон одного удара: аура союзников + разброс damage_variance
 func _roll_damage() -> float:
@@ -420,6 +464,7 @@ func take_damage(amount: float) -> void:
 		return
 	current_hp -= amount
 	queue_redraw()
+	_flash_hit()
 	if current_hp <= 0.0:
 		_die()
 		return
@@ -428,6 +473,23 @@ func take_damage(amount: float) -> void:
 		has_retreated = true
 		retreat_timer = data.retreat_duration
 		transition_to(State.RETREATING)
+
+# Только визуал: таймер дерева (на паузе стоит, ×2 ускоряет), а не тик боя —
+# иначе вспышка последнего тика осталась бы гореть после конца боя
+func _flash_hit() -> void:
+	if not is_inside_tree():
+		return
+	if _hit_flash_material == null:
+		var shader := Shader.new()
+		shader.code = HIT_FLASH_SHADER % HIT_FLASH_STRENGTH
+		_hit_flash_material = ShaderMaterial.new()
+		_hit_flash_material.shader = shader
+	sprite.material = _hit_flash_material
+	_hit_flash_id += 1
+	var id := _hit_flash_id
+	get_tree().create_timer(HIT_FLASH_TIME, false).timeout.connect(func():
+		if is_instance_valid(self) and _hit_flash_id == id:
+			sprite.material = null)
 
 func _die() -> void:
 	if current_state == State.DEAD:

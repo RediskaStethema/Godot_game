@@ -34,7 +34,8 @@ const DAMAGE: float = 30.0          # каждому врагу в радиус�
 const ATTACK_SPEED: float = 1.0     # выстрелов в секунду
 const ATTACK_RANGE: float = 320.0   # пиксели от центра цитадели
 const SPLASH_RADIUS: float = 80.0   # радиус взрыва вокруг цели
-const SHOT_SHOW_TIME: float = 0.2   # сколько секунд виден след выстрела
+const SHOT_SHOW_TIME: float = 0.2   # сколько секунд виден взрыв
+const SHOT_PROJECTILE: String = "bolt"   # снаряд орудия (Projectile.EFFECTS), взрыв — при попадании
 const SHOT_COLOR = Color(1.0, 0.85, 0.45)
 
 var attack_timer: float = 0.0
@@ -134,7 +135,6 @@ func _draw() -> void:
 	if shot_timer > Soldier.TIMER_EPSILON:
 		var a = shot_timer / SHOT_SHOW_TIME
 		var to = to_local(shot_target)
-		draw_line(_muzzle(), to, Color(SHOT_COLOR, a), 3.0, true)
 		draw_circle(to, SPLASH_RADIUS * 0.5, Color(SHOT_COLOR, 0.35 * a))
 		draw_arc(to, SPLASH_RADIUS, 0.0, TAU, 32, Color(SHOT_COLOR, 0.6 * a), 2.0, true)
 
@@ -191,7 +191,7 @@ func tick(delta: float) -> void:
 	if target == null:
 		return
 	attack_timer = 1.0 / ATTACK_SPEED
-	_fire_at(target.global_position)
+	_fire_at(target.global_position, target)
 
 # Ближайший враг в радиусе орудия
 func _find_target() -> Soldier:
@@ -204,14 +204,20 @@ func _find_target() -> Soldier:
 			best = e
 	return best
 
-# Взрыв: урон всем врагам в SPLASH_RADIUS от точки попадания
-func _fire_at(point: Vector2) -> void:
-	for e in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY):
-		if e.global_position.distance_to(point) <= SPLASH_RADIUS:
-			e.take_damage(DAMAGE)
+# Выстрел снарядом: взрыв (урон всем врагам в SPLASH_RADIUS) — где он попадёт.
+# target — за кем снаряд наводится (null — в точку point)
+func _fire_at(point: Vector2, target: Soldier = null) -> void:
+	var shot = Projectile.launch(get_parent(), SHOT_PROJECTILE, to_global(_muzzle()), target,
+			Vector2.ZERO if target else point)
+	shot.damage = DAMAGE
+	shot.splash_radius = SPLASH_RADIUS
+	shot.splash_team = GameConstants.TEAM_ENEMY
+	shot.on_impact = _show_explosion
+	play_state("attack")
+
+func _show_explosion(point: Vector2) -> void:
 	shot_target = point
 	shot_timer = SHOT_SHOW_TIME
-	play_state("attack")
 	queue_redraw()
 
 # Враг атаковал цитадель
