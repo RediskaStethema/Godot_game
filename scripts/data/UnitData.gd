@@ -32,6 +32,15 @@ extends Resource
 # --- Способности (0 = выключено) ---
 @export var on_hit_stun: float = 0.0        # сек оглушения цели при попадании (Librarian)
 @export var on_hit_knockback: float = 0.0   # сила отбрасывания цели, px/сек (Dreadnought)
+# Статус-эффект на цель при попадании (StatusEffects): +1 стак за удар
+@export var on_hit_status: String = ""      # Plague Marine — poisoned, Havoc — burning
+@export var on_hit_status_power: float = 0.0   # яд/огонь — урон в секунду за стак
+@export var on_hit_status_duration: float = 0.0
+# Боевой клич: при первом сближении с врагом — эффект союзникам в радиусе (Chaplain)
+@export var battle_cry_status: String = ""
+@export var battle_cry_power: float = 0.0    # empowered — доля урона за стак
+@export var battle_cry_duration: float = 0.0
+@export var battle_cry_radius: float = 0.0
 # Аура: союзники с тегом aura_tag в радиусе бьют сильнее (Chaplain). Не суммируется
 # с другими такими же аурами — берётся самая сильная.
 @export var aura_damage_bonus: float = 0.0  # 0.15 = +15% урона

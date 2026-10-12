@@ -26,6 +26,9 @@ static var _warm_material: ShaderMaterial
 var damage: float = 0.0
 var stun: float = 0.0               # сек оглушения цели (Librarian)
 var knockback: float = 0.0          # сила отбрасывания от точки выстрела
+var status: String = ""             # статус-эффект цели (StatusEffects), +1 стак
+var status_power: float = 0.0
+var status_duration: float = 0.0
 var splash_radius: float = 0.0      # > 0 — урон всем бойцам splash_team в радиусе точки попадания
 var splash_team: int = GameConstants.TEAM_ENEMY
 var on_impact: Callable             # (точка) — вспышка взрыва у стрелка (цитадель)
@@ -140,6 +143,8 @@ func _impact() -> void:
 			s.apply_stun(stun)
 		if knockback > 0.0:
 			s.apply_knockback(s.global_position - _origin, knockback)
+		if status != "":
+			s.apply_status(status, status_power, status_duration)
 	elif _target is Citadel:
 		_target.take_hit(damage)
 	queue_free()

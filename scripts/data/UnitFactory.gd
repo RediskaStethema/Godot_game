@@ -190,6 +190,9 @@ static func chaos_havoc() -> UnitData:
 	d.move_speed = 60.0
 	d.priority = GameConstants.PRIORITY_HIGHEST_THREAT
 	d.projectile = "charged"
+	d.on_hit_status = StatusEffects.BURNING   # попадание поджигает, огонь перекидывается
+	d.on_hit_status_power = 3.0
+	d.on_hit_status_duration = 3.0
 	d.tint = Color(0.75, 0.85, 1.0)
 	d.sprite_scale = 1.1
 	return d
@@ -221,6 +224,9 @@ static func plague_marine() -> UnitData:
 	d.attack_range = 60.0
 	d.move_speed = 55.0
 	d.retreat_hp_threshold = 0.0
+	d.on_hit_status = StatusEffects.POISONED   # яд Nurgle: стак за удар
+	d.on_hit_status_power = 2.0
+	d.on_hit_status_duration = 4.0
 	d.tint = Color(0.7, 1.0, 0.55)
 	d.sprite_scale = 1.15
 	return d
@@ -347,6 +353,11 @@ static func chaplain() -> UnitData:
 	d.aura_damage_bonus = 0.20
 	d.aura_radius = 180.0
 	d.aura_tag = "melee"
+	# Боевой клич при первом сближении: всем союзникам рядом +20% урона на 6 с
+	d.battle_cry_status = StatusEffects.EMPOWERED
+	d.battle_cry_power = 0.20
+	d.battle_cry_duration = 6.0
+	d.battle_cry_radius = 180.0
 	d.cost = 8
 	d.rarity = GameConstants.RARITY_RARE
 	# TODO: свой спрайт chaplain
