@@ -1,12 +1,13 @@
 class_name RunMapNode
 extends Resource
 
-# Шаг забега: магазин перед волной или бой волны. Связи — id следующего шага (RunMapData.nodes[id]).
+# Шаг забега: магазин перед волной, бой волны или событие (после некоторых волн). Связи — id следующего шага (RunMapData.nodes[id]).
 
 const BATTLE: String = "battle"   # обычный бой волны
 const MINIBOSS: String = "miniboss"  # каждая RunMapData.MINIBOSS_EVERY-я волна: мини-босс + элита
 const BOSS: String = "boss"       # последняя волна (главный босс): победа = победа в забеге
 const SHOP: String = "shop"       # магазин (ShopScene)
+const EVENT: String = "event"     # событие (EventScene, RunEvents) — после волн RunMapData.EVENT_AFTER_WAVES
 
 const BATTLE_TYPES: Array[String] = [BATTLE, MINIBOSS, BOSS]
 

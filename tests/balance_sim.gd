@@ -312,14 +312,17 @@ func _run_campaign(strategy: String, runs: int) -> void:
 		print("\n-- забег %d (сид %d)" % [r + 1, CAMPAIGN_SEED_BASE + r])
 		print("волна | тип      | Req до | клет | отр | здан | итог | цит. HP | Req после | армия")
 		for wave in range(1, WAVES + 1):
-			rm.current_node_id = 2 * (wave - 1)   # магазин перед волной
+			# Шаги по номеру волны: события (RunMapData.EVENT_AFTER_WAVES) сдвигают id шагов.
+			# Сами события бот пропускает — баланс волн без их наград и цен
+			var battle_id = _battle_node_id(rm, wave)
+			rm.current_node_id = battle_id - 1   # магазин перед волной
 			rm.current_completed = false
 			sm.open_shop()
 			if sm.catch_up_just_issued:
 				catch_ups += 1
 			var req_before = em.requisition
 			var picked = _campaign_shop(strategy, wave)
-			rm.current_node_id = 2 * (wave - 1) + 1   # бой волны
+			rm.current_node_id = battle_id   # бой волны
 			rm.current_completed = false
 			var w = await _campaign_battle()
 			last_wave = wave
@@ -511,3 +514,10 @@ func _campaign_battle() -> int:
 	current_scene = null
 	await process_frame
 	return w
+
+# id боевого шага волны в цепочке забега
+func _battle_node_id(rm, wave: int) -> int:
+	for n in rm.map.nodes:
+		if n.is_battle() and n.wave == wave:
+			return n.id
+	return -1

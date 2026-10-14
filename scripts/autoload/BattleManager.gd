@@ -45,6 +45,10 @@ var citadel_shield: float = 0.0
 const CATCH_UP_HP_RATIO: float = 0.5
 var catch_up_pending: bool = false
 var _citadel_hp_at_start: float = CITADEL_MAX_HP
+# Последствие события (RunEvents, эффект enemy_hp) на следующий бой: HP врагов ×, подпись для шапки.
+# Сохраняется; сбрасывает BattleScene по итогу боя
+var next_battle_enemy_hp: float = 1.0
+var next_battle_note: String = ""
 
 # Здания: стоят между раундами на своих клетках (CardData → Vector2i)
 var player_buildings: Dictionary = {}
@@ -255,6 +259,8 @@ func _check_catch_up() -> void:
 func reset_run() -> void:
 	battle_in_progress = false
 	catch_up_pending = false
+	next_battle_enemy_hp = 1.0
+	next_battle_note = ""
 	citadel_hp = CITADEL_MAX_HP
 	emit_signal("citadel_hp_changed", citadel_hp)
 	citadel_shield = 0.0
@@ -333,6 +339,8 @@ func save_state() -> Dictionary:
 		"hand": CardFactory.ids_of(pending_cards),
 		"in_progress": battle_in_progress,
 		"catch_up_pending": catch_up_pending,
+		"next_enemy_hp": next_battle_enemy_hp,
+		"next_note": next_battle_note,
 	}
 
 func load_state(d: Dictionary) -> void:
@@ -354,6 +362,8 @@ func load_state(d: Dictionary) -> void:
 	pending_cards = CardFactory.create_many(d["hand"])
 	battle_in_progress = bool(d.get("in_progress", false))
 	catch_up_pending = bool(d.get("catch_up_pending", false))
+	next_battle_enemy_hp = float(d.get("next_enemy_hp", 1.0))
+	next_battle_note = str(d.get("next_note", ""))
 	emit_signal("citadel_hp_changed", citadel_hp)
 
 static func _v2i_to_arr(v: Vector2i) -> Array:

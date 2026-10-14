@@ -7,12 +7,13 @@ extends Node
 # и его тик, а цепочка шагов забега и текущий шаг — навигация между сценами.
 # Сбрасывается из BattleManager.reset_run() (new_run()), генерирует RunMapData.
 #
-# Цикл линейный, игрок путь не выбирает: ShopScene → BattleScene → ShopScene → …
+# Цикл линейный, игрок путь не выбирает: ShopScene → BattleScene → (EventScene) → ShopScene → …
 # Шаг завершён → advance() сам открывает следующий. round_number растёт только в
 # EconomyManager.give_round_income (один бой = одна волна).
 
 const SHOP_SCENE: String = "res://scenes/shop/ShopScene.tscn"
 const BATTLE_SCENE: String = "res://scenes/battle/BattleScene.tscn"
+const EVENT_SCENE: String = "res://scenes/event/EventScene.tscn"
 const MENU_SCENE: String = "res://scenes/menu/MainMenu.tscn"
 
 signal run_started
@@ -60,6 +61,8 @@ func enter_node(id: int) -> bool:
 	match node.type:
 		RunMapNode.SHOP:
 			get_tree().change_scene_to_file(SHOP_SCENE)
+		RunMapNode.EVENT:
+			get_tree().change_scene_to_file(EVENT_SCENE)
 		RunMapNode.BATTLE, RunMapNode.MINIBOSS, RunMapNode.BOSS:
 			if node.wave != EconomyManager.round_number:
 				push_warning("RunManager: волна шага %d ≠ round_number %d" % [node.wave, EconomyManager.round_number])
@@ -173,6 +176,24 @@ func get_battle_wave() -> int:
 	if node and node.is_battle() and not current_completed:
 		return node.wave
 	return EconomyManager.round_number
+
+# -------------------------------------------------------
+# СОБЫТИЯ
+# -------------------------------------------------------
+# Событие текущего шага (пусто — шаг не событие). Детерминировано от seed забега:
+# «Продолжить» покажет то же событие
+func get_current_event() -> Dictionary:
+	var node = get_current_node()
+	if node == null or node.type != RunMapNode.EVENT:
+		return {}
+	return RunEvents.for_run(rng.seed, map.get_event_index(current_node_id))
+
+# Случайность исхода события (риск, случайная карта / отряд) — от seed забега и шага:
+# перезапуск не перебрасывает результат
+func get_event_rng() -> RandomNumberGenerator:
+	var r = RandomNumberGenerator.new()
+	r.seed = hash([rng.seed, current_node_id, "event"])
+	return r
 
 func get_total_waves() -> int:
 	return map.total_waves if map else 0
