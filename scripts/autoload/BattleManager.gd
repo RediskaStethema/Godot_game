@@ -308,6 +308,26 @@ func store_survivors(alive_squads: Array, at_start: Array) -> Array[String]:
 		revived.append(data.unit_name)
 	return revived
 
+# Ход Казарм (после выигранного боя, после store_survivors): каждому отряду на соседней с казармами
+# клетке (по сторонам) возвращается до refill павших бойцов с полным HP, не больше squad_size.
+# Живых не лечит. Возвращает, сколько бойцов вернулось
+const NEIGHBOUR_TILES: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+
+func refill_from_barracks() -> int:
+	var total = 0
+	for card in player_buildings:
+		if card.building_type != "barracks":
+			continue
+		var refill = floori(card.get_building_stats().get("refill", 0.0))
+		for d in player_units:
+			if not player_placements.has(d) or not NEIGHBOUR_TILES.has(player_placements[d] - player_buildings[card]):
+				continue
+			var added = mini(refill, d.squad_size - d.saved_hp.size())
+			for i in range(added):
+				d.saved_hp.append(1.0)
+			total += maxi(added, 0)
+	return total
+
 # Поражение / ничья — армия потеряна
 func lose_army() -> void:
 	player_units.clear()

@@ -39,7 +39,7 @@ const UPGRADES: Array[String] = ["blessed_armour", "battle_fury"]
 const CAMPAIGN_PRIORITY = {
 	"tactical": ["tactical_squad", "blessed_armour", "battle_fury"],
 	"mixed": ["tactical_squad", "assault_squad", "devastator_squad", "terminator_squad",
-		"bolter_turret", "thunderfire_cannon", "apothecary", "dreadnought", "chaplain", "chapter_master",
+		"bolter_turret", "thunderfire_cannon", "barracks", "apothecary", "dreadnought", "chaplain", "chapter_master",
 		"fortress_wall", "librarian", "land_speeder", "scout_squad", "blessed_armour", "battle_fury"],
 	"elite": ["terminator_squad", "devastator_squad", "dreadnought", "librarian", "chaplain",
 		"apothecary", "chapter_master", "land_speeder", "tactical_squad", "blessed_armour", "battle_fury"],
@@ -450,7 +450,7 @@ func _campaign_apply(card: CardData) -> void:
 						return
 		"building":
 			if _campaign_free_tiles() > 0:
-				bm.player_buildings[card] = _campaign_building_tile()
+				bm.player_buildings[card] = _campaign_building_tile(card)
 			else:
 				for b in bm.player_buildings:
 					if b.id == card.id and b.level_up_building():
@@ -462,13 +462,23 @@ func _campaign_apply(card: CardData) -> void:
 					return
 
 # Здание — на последнюю свободную клетку (передние остаются отрядам)
-func _campaign_building_tile() -> Vector2i:
+# Свободная клетка под здание: с конца королевства; Казармы — рядом с наибольшим числом отрядов
+# (по сторонам, BattleManager.NEIGHBOUR_TILES), как поставил бы игрок
+func _campaign_building_tile(card: CardData = null) -> Vector2i:
 	var used: Array = bm.player_buildings.values() + bm.player_placements.values()
+	var best := Vector2i(-1, -1)
+	var best_n := -1
 	for k in range(bm.kingdom_tiles.size() - 1, -1, -1):
 		var t: Vector2i = bm.kingdom_tiles[k]
-		if not used.has(t):
+		if used.has(t):
+			continue
+		if card == null or card.building_type != "barracks":
 			return t
-	return bm.kingdom_tiles[-1]
+		var n = bm.player_placements.values().filter(func(p): return bm.NEIGHBOUR_TILES.has(p - t)).size()
+		if n > best_n:
+			best_n = n
+			best = t
+	return best if best_n >= 0 else bm.kingdom_tiles[-1]
 
 func _campaign_army_desc() -> String:
 	var counts := {}
