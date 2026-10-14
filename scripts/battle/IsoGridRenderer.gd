@@ -11,6 +11,8 @@ var grid: IsoGrid
 const COLOR_NORMAL   = Color(0.30, 0.40, 0.58, 0.10)   # сталь
 const COLOR_HOVER    = Color(0.94, 0.83, 0.55, 0.40)   # светлое золото
 const COLOR_OCCUPIED = Color(0.79, 0.63, 0.29, 0.22)   # золото
+const COLOR_SAME_SQUAD = Color(0.98, 0.72, 0.29, 0.45)  # отряд карты под курсором (скамейка)
+const LINE_SAME_SQUAD  = Color(1.0, 0.82, 0.45, 1.0)
 const LINE_PLAYER    = Color(0.79, 0.63, 0.29, 0.45)
 const BORDER_PLAYER  = Color(0.79, 0.63, 0.29, 0.95)
 # --- Закрытые клетки рамки королевства ---
@@ -39,6 +41,8 @@ const CLUSTER_GIVE_UP: float = 0.2
 var hovered_tile: Vector2i = Vector2i(-1, -1)
 var occupied_tiles_player: Dictionary = {}
 var occupied_tiles_enemy: Dictionary = {}
+# Клетки отрядов карты под курсором на скамейке (BattleScene._on_bench_card_hovered)
+var highlighted_tiles: Array[Vector2i] = []
 # Клетки, которые сейчас можно купить, и их цена (пусто — расширение недоступно)
 var expansion_tiles: Array[Vector2i] = []
 var expansion_cost: int = 0
@@ -228,10 +232,15 @@ func _draw_kingdom() -> void:
 		var color = COLOR_NORMAL
 		if tile == hovered_tile:
 			color = COLOR_HOVER
+		elif highlighted_tiles.has(tile):
+			color = COLOR_SAME_SQUAD
 		elif occupied_tiles_player.has(tile):
 			color = COLOR_OCCUPIED
 		_draw_diamond(grid.tile_to_screen(tile, false), color, LINE_PLAYER)
 	_draw_kingdom_border(BORDER_PLAYER, 3.0)
+	# Контур подсвеченных клеток — поверх общей рамки, чтобы читался и на краю королевства
+	for tile in highlighted_tiles:
+		_draw_diamond(grid.tile_to_screen(tile, false), Color(0, 0, 0, 0), LINE_SAME_SQUAD, 3.0)
 
 	var font = ThemeDB.fallback_font
 	for tile in expansion_tiles:
@@ -289,7 +298,7 @@ func _border_points(is_enemy: bool) -> PackedVector2Array:
 		grid.tile_to_screen(Vector2i(0, h), is_enemy) + Vector2(-hw, 0),
 	])
 
-func _draw_diamond(center: Vector2, color: Color, line_color: Color) -> void:
+func _draw_diamond(center: Vector2, color: Color, line_color: Color, line_width: float = 1.5) -> void:
 	var hw = IsoGrid.TILE_WIDTH / 2
 	var hh = IsoGrid.TILE_HEIGHT / 2
 
@@ -304,9 +313,13 @@ func _draw_diamond(center: Vector2, color: Color, line_color: Color) -> void:
 	draw_polyline(
 		PackedVector2Array([points[0], points[1], points[2], points[3], points[0]]),
 		line_color,
-		1.5,
+		line_width,
 		true
 	)
+
+func set_highlighted(tiles: Array[Vector2i]) -> void:
+	highlighted_tiles = tiles
+	queue_redraw()
 
 func update_hover(tile: Vector2i) -> void:
 	hovered_tile = tile

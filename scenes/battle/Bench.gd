@@ -48,12 +48,17 @@ func _exit_tree() -> void:
 const BENCH_RIGHT_RESERVE: float = 380.0
 
 signal card_dropped_on_tile(card: CardData, tile: Vector2i)
+# Карта под курсором или в руке (тащим), null — ни одной: BattleScene подсвечивает её отряды на поле
+signal card_hovered(card: CardData)
+var hovered_card: CardData = null
 
 func setup(cards: Array[CardData]) -> void:
 	bench_cards = cards
 	_populate()
 
 func _populate() -> void:
+	# Карта под курсором сейчас освободится — её mouse_exited уже не придёт
+	_set_hovered_card(null)
 	for child in cards_container.get_children():
 		if child != empty_hint:
 			child.queue_free()
@@ -68,6 +73,20 @@ func _populate() -> void:
 		cards_container.add_child(bench_card)
 		bench_card.setup(card)
 		bench_card.drag_started.connect(_on_drag_started)
+		bench_card.hover_changed.connect(_on_card_hover_changed)
+
+# Пока карту тащат, подсветка держится, хотя курсор уже ушёл с карты на поле
+func _on_card_hover_changed(card: CardData, hovered: bool) -> void:
+	if hovered:
+		_set_hovered_card(card)
+	elif card == hovered_card and dragging_card != card:
+		_set_hovered_card(null)
+
+func _set_hovered_card(card: CardData) -> void:
+	if card == hovered_card:
+		return
+	hovered_card = card
+	card_hovered.emit(card)
 
 # -------------------------------------------------------
 # DRAG & DROP
@@ -116,3 +135,4 @@ func _on_drop(screen_pos: Vector2) -> void:
 	# BattleScene сама разберётся попали ли мы на тайл
 	emit_signal("card_dropped_on_tile", dragging_card, screen_pos)
 	dragging_card = null
+	_set_hovered_card(null)
