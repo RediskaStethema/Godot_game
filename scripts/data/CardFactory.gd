@@ -83,7 +83,7 @@ static func apothecary_card() -> CardData:
 	c.rarity = "rare"
 	c.card_type = "squad"
 	c.unit_factory_id = "apothecary"
-	c.unit_count = 1
+	c.unit_count = 2   # пара: уровень +UnitFactory.PAIR_GROWTH бойца
 	return c
 
 static func librarian_card() -> CardData:
@@ -96,7 +96,7 @@ static func librarian_card() -> CardData:
 	c.rarity = "rare"
 	c.card_type = "squad"
 	c.unit_factory_id = "librarian"
-	c.unit_count = 1
+	c.unit_count = 2   # пара: уровень +UnitFactory.PAIR_GROWTH бойца
 	return c
 
 static func chaplain_card() -> CardData:
@@ -109,7 +109,7 @@ static func chaplain_card() -> CardData:
 	c.rarity = "rare"
 	c.card_type = "squad"
 	c.unit_factory_id = "chaplain"
-	c.unit_count = 1
+	c.unit_count = 2   # пара: уровень +UnitFactory.PAIR_GROWTH бойца
 	return c
 
 static func land_speeder_card() -> CardData:
@@ -122,7 +122,7 @@ static func land_speeder_card() -> CardData:
 	c.rarity = "rare"
 	c.card_type = "squad"
 	c.unit_factory_id = "land_speeder"
-	c.unit_count = 1
+	c.unit_count = 2   # пара: уровень +UnitFactory.PAIR_GROWTH бойца
 	return c
 
 static func dreadnought_card() -> CardData:
@@ -135,7 +135,7 @@ static func dreadnought_card() -> CardData:
 	c.rarity = "epic"
 	c.card_type = "squad"
 	c.unit_factory_id = "dreadnought"
-	c.unit_count = 1
+	c.unit_count = 2   # пара: уровень +UnitFactory.PAIR_GROWTH бойца
 	return c
 
 static func chapter_master_card() -> CardData:
@@ -148,7 +148,7 @@ static func chapter_master_card() -> CardData:
 	c.rarity = "epic"
 	c.card_type = "squad"
 	c.unit_factory_id = "chapter_master"
-	c.unit_count = 1
+	c.unit_count = 2   # пара: уровень +UnitFactory.PAIR_GROWTH бойца
 	return c
 
 # -------------------------------------------------------

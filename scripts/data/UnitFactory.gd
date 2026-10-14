@@ -26,12 +26,29 @@ const DEFAULT_FACTION: String = "space_marines"
 # Assault / Devastator / Terminator 6 → 8 → 10 → 12. Герои, техника, элита и боссы — по одному
 const SQUAD_SPLIT: int = 3
 const SQUAD_GROWTH: int = 2
+# Герои и техника игрока (решение пользователя: отрядов из одного бойца нет) — парами: HP, урон и
+# лечение бойца ÷PAIR_SPLIT, отряд 1-го уровня по силе как прежний одиночка; уровень +PAIR_GROWTH
+# бойца: 2 → 3 → 4 → 5. Ауры, командир и клич не складываются — у пары как у одного; оглушение и
+# отбрасывание за удар ÷PAIR_SPLIT (ударов вдвое больше).
+# Враги-одиночки (Hellbrute, Chaos Lord) остаются одиночками, чемпионы Хаоса и так парами (EnemyWaves)
+const PAIR_SPLIT: int = 2
+const PAIR_GROWTH: int = 1
+# Космодесант в силовой броне и техника — на ARMOUR_SCALE крупнее (решение пользователя); люди
+# (Scout, культисты) — прежнего роста
+const ARMOUR_SCALE: float = 1.1
 
-# Бойцов за уровень у отряда карты: пехота — SQUAD_GROWTH, одиночки — 0
+# Бойцов за уровень у отряда карты: пехота — SQUAD_GROWTH, пары — PAIR_GROWTH
 static func squad_growth_for(card: CardData) -> int:
-	return SQUAD_GROWTH if card.unit_count > 1 else 0
+	if card.unit_factory_id in SPLIT_UNITS:
+		return SQUAD_GROWTH
+	if card.unit_factory_id in PAIR_UNITS:
+		return PAIR_GROWTH
+	return 0
 const SPLIT_UNITS = ["tactical_marine", "assault_marine", "scout_marine", "devastator", "terminator",
 	"chaos_marine", "chaos_cultist", "chaos_havoc", "chaos_raptor", "plague_marine"]
+const PAIR_UNITS = ["apothecary", "librarian", "chaplain", "land_speeder", "dreadnought", "chapter_master"]
+const ARMOURED_UNITS = ["tactical_marine", "assault_marine", "devastator", "terminator",
+	"apothecary", "librarian", "chaplain", "land_speeder", "dreadnought", "chapter_master"]
 
 static func get_merge_bonuses(faction: String) -> Dictionary:
 	return SQUAD_MERGE_BONUSES.get(faction, SQUAD_MERGE_BONUSES[DEFAULT_FACTION])
@@ -69,6 +86,16 @@ static func create(factory_id: String) -> UnitData:
 		d.hp /= SQUAD_SPLIT
 		d.damage /= SQUAD_SPLIT
 		d.unit_weight = 1.0 / SQUAD_SPLIT
+	elif factory_id in PAIR_UNITS:
+		d.hp /= PAIR_SPLIT
+		d.damage /= PAIR_SPLIT
+		d.heal_per_second /= PAIR_SPLIT
+		# Удары пары вдвое чаще — оглушение (Librarian) и отбрасывание (Dreadnought) за удар вдвое слабее
+		d.on_hit_stun /= PAIR_SPLIT
+		d.on_hit_knockback /= PAIR_SPLIT
+		d.unit_weight = 1.0 / PAIR_SPLIT
+	if factory_id in ARMOURED_UNITS:
+		d.sprite_scale *= ARMOUR_SCALE
 	return d
 
 static func tactical_marine() -> UnitData:
