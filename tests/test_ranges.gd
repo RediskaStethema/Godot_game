@@ -30,7 +30,13 @@ func _main() -> void:
 		scout.hp, UnitFactory.create("tactical_marine").hp],
 		scout.attack_range > longest_other and scout.hp < UnitFactory.create("tactical_marine").hp)
 
-	# 2. Турель в бою бьёт врага на другом краю поля (дальше прежних 300 px)
+	# 2. Chaplain стреляет вблизи из болт-пистолета (лист спрайтов): дальше ближнего боя, ближе Tactical
+	var chaplain = UnitFactory.create("chaplain")
+	_check("Chaplain: стрелок, дальность %.0f, снаряд %s" % [chaplain.attack_range, chaplain.projectile],
+		"ranged" in chaplain.tags and not "melee" in chaplain.tags and chaplain.projectile == "bolt"
+		and chaplain.attack_range > 60.0 and chaplain.attack_range < UnitFactory.create("tactical_marine").attack_range)
+
+	# 3. Турель в бою бьёт врага на другом краю поля (дальше прежних 300 px)
 	bm.reset_run()
 	rm.new_run(3)
 	for n in rm.map.nodes:

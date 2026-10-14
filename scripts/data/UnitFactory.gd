@@ -363,11 +363,13 @@ static func chaplain() -> UnitData:
 	var d = UnitData.new()
 	d.unit_name = "Chaplain"
 	d.faction = "space_marines"
-	d.tags = ["marine", "melee", "support"]
+	# Стреляет вблизи из болт-пистолета (решение пользователя по листу спрайтов; был ближний бой, 60 px)
+	d.tags = ["marine", "ranged", "support"]
 	d.hp = 480.0
 	d.damage = 36.0
 	d.attack_speed = 1.0
-	d.attack_range = 60.0
+	d.attack_range = 140.0
+	d.projectile = "bolt"
 	d.move_speed = 75.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.aura_damage_bonus = 0.20
@@ -380,9 +382,7 @@ static func chaplain() -> UnitData:
 	d.battle_cry_radius = 180.0
 	d.cost = 8
 	d.rarity = GameConstants.RARITY_RARE
-	# TODO: свой спрайт chaplain
-	d.sprite_path = "res://assets/sprites/space_marine"
-	d.tint = Color(0.45, 0.45, 0.5)
+	d.sprite_path = "res://assets/sprites/space_marine_chaplain"  # лист assets/Сhaplin_assets.png (tools/sheet_to_frames.py)
 	d.sprite_scale = 1.05
 	return d
 

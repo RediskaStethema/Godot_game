@@ -138,10 +138,15 @@ func _main() -> void:
 	near.global_position = chaplain.global_position + Vector2(50, 0)
 	chaplain.target = p
 	chaplain.transition_to(chaplain.State.ATTACK)
+	# Клич виден: кадр клича (лист Chaplain), первый выстрел — через BATTLE_CRY_TIME
+	var cry_anim = chaplain.sprite.animation
+	var cry_delay = chaplain.attack_timer
 	chaplain.transition_to(chaplain.State.CHASE)
 	chaplain.transition_to(chaplain.State.ATTACK)
-	_check("клич Chaplain: союзник рядом усилен (1 стак, повторный вход в атаку не добавляет)",
-		near.get_status_stacks(StatusEffects.EMPOWERED) == 1 and chaplain.battle_cry_used)
+	_check("клич Chaplain: союзник рядом усилен (1 стак, повторный вход в атаку не добавляет), кадр клича, выстрел через %.1f с" % cry_delay,
+		near.get_status_stacks(StatusEffects.EMPOWERED) == 1 and chaplain.battle_cry_used
+		and cry_anim == "battle_cry" and absf(cry_delay - chaplain.BATTLE_CRY_TIME) < EPS
+		and chaplain.sprite.animation == "attack" and chaplain.attack_timer < EPS)
 
 	# 8. Стена: аура замедляет врага в радиусе 1 стаком, вне радиуса — проходит за 0.5 с
 	var wall_node = null
