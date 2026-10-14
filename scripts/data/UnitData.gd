@@ -159,15 +159,24 @@ static func from_save_state(d: Dictionary) -> UnitData:
 	u.squad_level = int(d["level"])
 	u.squad_growth = int(d.get("growth", 0))
 	# Сохранение до пехоты ×SQUAD_SPLIT: бойцов втрое больше с той же долей HP, состав растёт с уровнем
-	if not d.has("growth") and u.unit_weight < 1.0:
+	if not d.has("growth") and u.factory_id in UnitFactory.SPLIT_UNITS:
 		u.squad_growth = UnitFactory.SQUAD_GROWTH
 		u.squad_size = u.squad_size * UnitFactory.SQUAD_SPLIT + u.squad_growth * u.squad_level
-		var split_hp: Array[float] = []
-		for v in u.saved_hp:
-			for i in UnitFactory.SQUAD_SPLIT:
-				split_hp.append(v)
-		u.saved_hp = split_hp
+		u.saved_hp = _split_hp(u.saved_hp, UnitFactory.SQUAD_SPLIT)
+	# Сохранение до пар героев: одиночка → пара с той же долей HP, состав растёт с уровнем
+	elif u.factory_id in UnitFactory.PAIR_UNITS and u.squad_growth == 0:
+		u.squad_growth = UnitFactory.PAIR_GROWTH
+		u.squad_size = u.squad_size * UnitFactory.PAIR_SPLIT + u.squad_growth * u.squad_level
+		u.saved_hp = _split_hp(u.saved_hp, UnitFactory.PAIR_SPLIT)
 	return u
+
+# Каждый боец старого сохранения → n бойцов с той же долей HP
+static func _split_hp(hp: Array[float], n: int) -> Array[float]:
+	var out: Array[float] = []
+	for v in hp:
+		for i in n:
+			out.append(v)
+	return out
 
 # Может ли карта-улучшение быть применена к этому отряду
 func can_apply_upgrade(card: CardData) -> bool:

@@ -673,7 +673,8 @@ func _try_battle_cry() -> bool:
 	var r2 = data.battle_cry_radius * data.battle_cry_radius
 	for ally in SoldierRegistry.get_alive_soldiers_of_team(team):
 		if global_position.distance_squared_to(ally.global_position) <= r2:
-			ally.apply_status(data.battle_cry_status, data.battle_cry_power, data.battle_cry_duration)
+			# Без стаков: клич пары Chaplain (UnitFactory.PAIR_UNITS) — как клич одного
+			ally.apply_status(data.battle_cry_status, data.battle_cry_power, data.battle_cry_duration, false)
 	return true
 
 # -------------------------------------------------------
