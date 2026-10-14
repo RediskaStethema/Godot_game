@@ -1,6 +1,6 @@
 extends SceneTree
 
-# Расстановка: курсор на карте отряда на скамейке — клетки такого же отряда на поле подсвечены
+# Расстановка: курсор на карте отряда / здания на скамейке — клетки такого же отряда / здания на поле подсвечены
 # (BattleScene._on_bench_card_hovered → IsoGridRenderer.highlighted_tiles). Пока карту тащат —
 # подсветка держится, бросили / ушли курсором — гаснет; в бою — нет.
 # Сохранение выключено — забег игрока не трогает.
@@ -46,7 +46,9 @@ func _main() -> void:
 	var assault = _squad(CardFactory.assault_squad())
 	bm.player_units = [tac_a, tac_b, assault] as Array[UnitData]
 	bm.player_placements = {tac_a: Vector2i(2, 0), tac_b: Vector2i(1, 2), assault: Vector2i(2, 1)}
-	bm.pending_cards = [CardFactory.tactical_squad(), CardFactory.scout_squad(), CardFactory.bolter_turret()] as Array[CardData]
+	bm.pending_cards = [CardFactory.tactical_squad(), CardFactory.scout_squad(), CardFactory.bolter_turret(),
+		CardFactory.fortress_wall()] as Array[CardData]
+	bm.player_buildings = {CardFactory.bolter_turret(): Vector2i(0, 0), CardFactory.thunderfire_cannon(): Vector2i(0, 1)}
 	var scene = load("res://scenes/battle/BattleScene.tscn").instantiate()
 	root.add_child(scene)
 	current_scene = scene
@@ -65,13 +67,22 @@ func _main() -> void:
 	tac_card.mouse_exited.emit()
 	_check("курсор ушёл: подсветки нет", renderer.highlighted_tiles.is_empty())
 
-	# 3. Отряда этой карты на поле нет, здание — подсветки нет
+	# 3. Отряда / здания этой карты на поле нет — подсветки нет
 	_bench_card(scene, "scout_squad").mouse_entered.emit()
 	var scout_lit = renderer.highlighted_tiles.is_empty()
-	_bench_card(scene, "bolter_turret").mouse_entered.emit()
-	_check("Scout (нет на поле) и здание: подсветки нет", scout_lit and renderer.highlighted_tiles.is_empty())
+	_bench_card(scene, "fortress_wall").mouse_entered.emit()
+	_check("Scout и стена (нет на поле): подсветки нет", scout_lit and renderer.highlighted_tiles.is_empty())
 
-	# 4. Карту тащат: курсор ушёл на поле — подсветка держится; бросили мимо — погасла
+	# 4. Карта здания — подсвечена клетка такого же здания, другое здание — нет
+	_bench_card(scene, "bolter_turret").mouse_entered.emit()
+	var lit_buildings = bm.buildings.filter(func(x): return x.modulate != Color.WHITE).map(func(x): return x.tile)
+	_check("турель: подсвечена клетка %s и само здание %s" % [renderer.highlighted_tiles, lit_buildings],
+		renderer.highlighted_tiles.size() == 1 and renderer.highlighted_tiles.has(Vector2i(0, 0))
+		and bm.buildings.size() == 2 and lit_buildings == [Vector2i(0, 0)])
+	_bench_card(scene, "bolter_turret").mouse_exited.emit()
+	_check("курсор ушёл: здания без подсветки", bm.buildings.all(func(x): return x.modulate == Color.WHITE))
+
+	# 5. Карту тащат: курсор ушёл на поле — подсветка держится; бросили мимо — погасла
 	tac_card.mouse_entered.emit()
 	tac_card.drag_started.emit(tac_card.card_data, Vector2.ZERO)
 	tac_card.mouse_exited.emit()
@@ -79,7 +90,7 @@ func _main() -> void:
 	scene.bench._on_drop(Vector2(-1000, -1000))
 	_check("тащим: подсветка держится, бросили — погасла", held and renderer.highlighted_tiles.is_empty())
 
-	# 5. В бою подсветки нет
+	# 6. В бою подсветки нет
 	scene._on_start_pressed()
 	await process_frame
 	scene._on_bench_card_hovered(tac_card.card_data)
