@@ -143,6 +143,7 @@ func _build_army(strategy: String, budget: int, tiles: int) -> Dictionary:
 		left -= card.cost
 		var d = UnitFactory.create(card.unit_factory_id)
 		d.squad_size = card.unit_count
+		d.squad_growth = UnitFactory.squad_growth_for(card)
 		units.append(d)
 		ids.append(card.id)
 	# 2) Слияния (уровень до MAX) и улучшения — по кругу, пока хватает денег
@@ -429,6 +430,7 @@ func _campaign_apply(card: CardData) -> void:
 			if _campaign_free_tiles() > 0:
 				var d = UnitFactory.create(card.unit_factory_id)
 				d.squad_size = card.unit_count
+				d.squad_growth = UnitFactory.squad_growth_for(card)
 				var hp: Array[float] = []
 				for j in range(card.unit_count):
 					hp.append(1.0)
@@ -438,6 +440,8 @@ func _campaign_apply(card: CardData) -> void:
 				for d in bm.player_units:
 					if d.factory_id == card.unit_factory_id and d.can_merge_upgrade():
 						d.apply_merge_upgrade()
+						for j in range(d.squad_growth):   # новые бойцы уровня — как Squad.merge_upgrade
+							d.saved_hp.append(1.0)
 						return
 		"building":
 			if _campaign_free_tiles() > 0:

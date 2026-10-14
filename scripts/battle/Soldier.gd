@@ -12,14 +12,15 @@ const KNOCKBACK_FRICTION: float = 600.0
 const KNOCKBACK_STOP_SPEED: float = 5.0
 # Высота бойца на экране (px) при sprite_scale = 1. Тайл — 128×64,
 # спрайты разного исходного размера (marine 197 px, chaos 170 px) приводим к одной высоте.
-const TARGET_SPRITE_HEIGHT: float = 62.0
-const HP_BAR_SIZE = Vector2(26, 4)
-const HP_BAR_GAP: float = 6.0
-const LEVEL_PIP_R: float = 3.0
-const LEVEL_PIP_STEP: float = 8.0
-const LEVEL_PIP_GAP: float = 5.0
-const STATUS_DOT_R: float = 2.0
-const STATUS_DOT_GAP: float = 4.0
+# Решение пользователя: бойцы вдвое мельче прежних 62 px, зато их в отряде втрое больше
+const TARGET_SPRITE_HEIGHT: float = 31.0
+const HP_BAR_SIZE = Vector2(16, 3)
+const HP_BAR_GAP: float = 4.0
+const LEVEL_PIP_R: float = 2.0
+const LEVEL_PIP_STEP: float = 5.0
+const LEVEL_PIP_GAP: float = 4.0
+const STATUS_DOT_R: float = 1.5
+const STATUS_DOT_GAP: float = 3.0
 # Вспышка попадания: боец, получивший урон, на мгновение белеет (общий шейдер на всех)
 const HIT_FLASH_TIME: float = 0.1
 const HIT_FLASH_STRENGTH: float = 0.85   # доля белого поверх цвета спрайта (с тинтом)
@@ -587,7 +588,8 @@ func _tick_status_effects(delta: float) -> void:
 			e["dot_timer"] -= delta
 			if e["dot_timer"] <= TIMER_EPSILON:
 				e["dot_timer"] += StatusEffects.DOT_TICK
-				take_damage(e["power"] * e["stacks"] * StatusEffects.DOT_TICK, false)
+				# Доля бойца (UnitData.unit_weight): мелкий боец пехоты горит / травится втрое слабее
+				take_damage(e["power"] * e["stacks"] * StatusEffects.DOT_TICK * data.unit_weight, false)
 				if current_state == State.DEAD:
 					return
 		if effect == StatusEffects.BURNING:

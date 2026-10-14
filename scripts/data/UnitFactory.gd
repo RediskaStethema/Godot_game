@@ -17,6 +17,22 @@ const SQUAD_MERGE_BONUSES = {
 }
 const DEFAULT_FACTION: String = "space_marines"
 
+# Пехота (решение пользователя): бойцы вдвое мельче, в отряде их ×SQUAD_SPLIT, HP и урон бойца
+# ÷SQUAD_SPLIT — отряд 1-го уровня по силе как прежний. Статы в функциях ниже — прежние «на бойца»
+# прежнего отряда (таблица TDD), делятся в create(). Такой боец — 1/SQUAD_SPLIT юнита (unit_weight):
+# в синергиях и в уроне по площади / яда / огня (мелких бойцов в толпе накрывает втрое больше)
+# Каждое из MAX_SQUAD_LEVEL улучшений пехоты добавляет SQUAD_GROWTH бойцов (UnitData.squad_growth):
+# Tactical / Scout 9 → 11 → 13 → 15 (самый крупный отряд — 15, решение пользователя),
+# Assault / Devastator / Terminator 6 → 8 → 10 → 12. Герои, техника, элита и боссы — по одному
+const SQUAD_SPLIT: int = 3
+const SQUAD_GROWTH: int = 2
+
+# Бойцов за уровень у отряда карты: пехота — SQUAD_GROWTH, одиночки — 0
+static func squad_growth_for(card: CardData) -> int:
+	return SQUAD_GROWTH if card.unit_count > 1 else 0
+const SPLIT_UNITS = ["tactical_marine", "assault_marine", "scout_marine", "devastator", "terminator",
+	"chaos_marine", "chaos_cultist", "chaos_havoc", "chaos_raptor", "plague_marine"]
+
 static func get_merge_bonuses(faction: String) -> Dictionary:
 	return SQUAD_MERGE_BONUSES.get(faction, SQUAD_MERGE_BONUSES[DEFAULT_FACTION])
 
@@ -49,6 +65,10 @@ static func create(factory_id: String) -> UnitData:
 			factory_id = "tactical_marine"
 	# По нему карта узнаёт «свой» отряд
 	d.factory_id = factory_id
+	if factory_id in SPLIT_UNITS:
+		d.hp /= SQUAD_SPLIT
+		d.damage /= SQUAD_SPLIT
+		d.unit_weight = 1.0 / SQUAD_SPLIT
 	return d
 
 static func tactical_marine() -> UnitData:

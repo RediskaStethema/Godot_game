@@ -56,9 +56,13 @@ signal synergies_changed(active: Array)
 func calculate_synergies(soldiers: Array) -> void:
 	tag_counts.clear()
 	active_synergies.clear()
+	# Боец пехоты — доля юнита (UnitData.unit_weight): пороги как при прежних отрядах
+	var weights: Dictionary = {}
 	for soldier in soldiers:
 		for tag in soldier.data.tags:
-			tag_counts[tag] = tag_counts.get(tag, 0) + 1
+			weights[tag] = weights.get(tag, 0.0) + soldier.data.unit_weight
+	for tag in weights:
+		tag_counts[tag] = int(weights[tag] + 0.001)
 
 	for tag in SYNERGY_DEFINITIONS:
 		var count = tag_counts.get(tag, 0)

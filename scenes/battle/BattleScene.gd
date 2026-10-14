@@ -278,6 +278,7 @@ func _play_squad_card(card: CardData, tile: Vector2i) -> bool:
 		return false
 	var unit_data = UnitFactory.create(card.unit_factory_id)
 	unit_data.squad_size = card.unit_count
+	unit_data.squad_growth = UnitFactory.squad_growth_for(card)
 	_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, card.unit_count)
 	return true
 

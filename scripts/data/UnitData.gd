@@ -82,6 +82,11 @@ extends Resource
 @export var squad_size: int = 0
 # Уровень отряда: сколько раз его улучшили картой того же отряда (0..MAX_SQUAD_LEVEL)
 @export var squad_level: int = 0
+# Бойцов, которых добавляет каждый уровень (пехота — UnitFactory.SQUAD_GROWTH, герои — 0)
+@export var squad_growth: int = 0
+# Доля прежнего бойца (пехота — 1 / UnitFactory.SQUAD_SPLIT, остальные — 1): столько юнитов боец
+# значит в синергиях и такую долю получает урона по площади и от яда / огня. Из UnitFactory, не сохраняется
+var unit_weight: float = 1.0
 
 func get_max_hp() -> float:
 	return hp * hp_multiplier
@@ -103,6 +108,7 @@ func apply_merge_upgrade() -> void:
 	hp_multiplier *= 1.0 + b["hp"]
 	attack_speed_multiplier *= 1.0 + b["attack_speed"]
 	squad_level += 1
+	squad_size += squad_growth
 
 # Отряд пал целиком в выигранном бою: возрождается полным составом с полным HP,
 # на уровень ниже и без карт-улучшений (с базового уровня — просто возрождается).
@@ -112,6 +118,7 @@ func respawn_after_wipe() -> void:
 	damage_multiplier = 1.0
 	attack_speed_multiplier = 1.0
 	applied_upgrades.clear()
+	squad_size -= squad_growth * squad_level
 	squad_level = 0
 	for i in range(new_level):
 		apply_merge_upgrade()
@@ -132,6 +139,7 @@ func save_state() -> Dictionary:
 		"upgrades": Array(applied_upgrades),
 		"squad_size": squad_size,
 		"level": squad_level,
+		"growth": squad_growth,
 	}
 
 static func from_save_state(d: Dictionary) -> UnitData:
@@ -149,6 +157,16 @@ static func from_save_state(d: Dictionary) -> UnitData:
 	u.applied_upgrades = ups
 	u.squad_size = int(d["squad_size"])
 	u.squad_level = int(d["level"])
+	u.squad_growth = int(d.get("growth", 0))
+	# Сохранение до пехоты ×SQUAD_SPLIT: бойцов втрое больше с той же долей HP, состав растёт с уровнем
+	if not d.has("growth") and u.unit_weight < 1.0:
+		u.squad_growth = UnitFactory.SQUAD_GROWTH
+		u.squad_size = u.squad_size * UnitFactory.SQUAD_SPLIT + u.squad_growth * u.squad_level
+		var split_hp: Array[float] = []
+		for v in u.saved_hp:
+			for i in UnitFactory.SQUAD_SPLIT:
+				split_hp.append(v)
+		u.saved_hp = split_hp
 	return u
 
 # Может ли карта-улучшение быть применена к этому отряду
