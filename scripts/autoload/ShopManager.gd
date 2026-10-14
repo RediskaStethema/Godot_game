@@ -120,6 +120,31 @@ func get_price(card: CardData) -> int:
 		return 0
 	return SynergyManager.get_discounted_cost(card)
 
+# Сноска карты магазина (ShopSlot, при наведении): такой отряд / здание уже стоит на поле —
+# какого уровня и пойдёт ли карта на улучшение. Пусто — на поле такого нет (или карта не отряд / здание)
+func get_owned_note(card: CardData) -> String:
+	var levels: Array[String] = []
+	var can_level := false
+	match card.card_type:
+		"squad":
+			for d in BattleManager.player_units:
+				if d.factory_id == card.unit_factory_id:
+					levels.append("ур. %d/%d" % [d.squad_level, UnitFactory.MAX_SQUAD_LEVEL])
+					can_level = can_level or d.can_merge_upgrade()
+		"building":
+			for b in BattleManager.player_buildings:
+				if b.id == card.id:
+					levels.append("ур. %d/%d" % [b.building_level, CardData.MAX_BUILDING_LEVEL]
+						if not b.building_level_bonuses.is_empty() else "стоит")
+					can_level = can_level or b.can_level_up_building()
+	if levels.is_empty():
+		return ""
+	var head := "На поле: " if levels.size() == 1 else "На поле ×%d: " % levels.size()
+	var tail := "можно улучшить" if can_level else ("максимум — только лечение" if card.card_type == "squad" else "максимум")
+	if card.card_type == "building" and card.building_level_bonuses.is_empty():
+		tail = "можно поставить ещё"
+	return "%s%s\n%s" % [head, ", ".join(levels), tail]
+
 func try_purchase(slot_index: int) -> CardData:
 	if slot_index < 0 or slot_index >= current_offers.size():
 		return null
