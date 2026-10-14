@@ -90,11 +90,14 @@ func _main() -> void:
 	scene.bench._on_drop(Vector2(-1000, -1000))
 	_check("тащим: подсветка держится, бросили — погасла", held and renderer.highlighted_tiles.is_empty())
 
-	# 6. В бою подсветки нет
+	# 6. В бою подсветки нет: ни карты под курсором, ни клеток королевства; зона врага не подсвечивается вовсе
+	var overlay_before = renderer.grid_overlay
 	scene._on_start_pressed()
 	await process_frame
 	scene._on_bench_card_hovered(tac_card.card_data)
-	_check("в бою: подсветки нет", renderer.highlighted_tiles.is_empty())
+	_check("в бою: подсветки нет (на расстановке клетки королевства подсвечены, в бою — нет; зона врага — никогда)",
+		renderer.highlighted_tiles.is_empty() and overlay_before and not renderer.grid_overlay
+		and not renderer.has_method("_draw_enemy_zone"))
 
 	bm.stop_battle()
 	scene.queue_free()

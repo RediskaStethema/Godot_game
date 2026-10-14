@@ -429,6 +429,7 @@ func get_same_card_tiles(card: CardData) -> Array[Vector2i]:
 func _on_start_pressed() -> void:
 	is_placement_phase = false
 	_on_bench_card_hovered(null)
+	renderer.set_grid_overlay(false)   # в бою — только поле, здания, цитадель и бойцы
 	fader.enabled = false
 	start_button.disabled = true
 	_close_merge_menu()
