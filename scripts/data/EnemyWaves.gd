@@ -30,6 +30,9 @@ const SOLDIERS_BASE: int = 3
 const SOLDIERS_EVERY_WAVES: int = 3
 const MAX_SOLDIERS_PER_SQUAD: int = 6
 const STAT_STEP_PER_WAVE: float = 0.10
+# Бойцов в отряде не больше (сложность множит состав): прежний наибольший — 12 культистов ×SQUAD_SPLIT.
+# Больше — отряд вылезает за свою клетку, а бой тяжелеет (tests/bench_battle.gd)
+const MAX_SQUAD_SOLDIERS: int = 36
 
 # Мини-босс (каждая 5-я волна): Hellbrute на переднем крае, за ним отряды
 # элиты Хаоса (elite_base + волна / elite_wave_div). Hellbrute — сверх обычной
@@ -65,25 +68,40 @@ static func get_archetype_count(unit: String, budget: int) -> int:
 	var a: Dictionary = ARCHETYPES[unit]
 	return clampi(roundi(budget / a["power"]), 1, a["max_count"])
 
+# Архетип с поправкой уровня сложности (Difficulty): сильные — чаще, раньше и большей долей
+static func get_archetype(unit: String, difficulty: int = Difficulty.DEFAULT) -> Dictionary:
+	var a: Dictionary = ARCHETYPES[unit]
+	if not unit in Difficulty.STRONG:
+		return a
+	var d = Difficulty.get_level(difficulty)
+	a = a.duplicate()
+	a["weight"] = a["weight"] * d["strong_weight"]
+	a["from_wave"] = maxi(a["from_wave"] - d["strong_earlier"], 1)
+	a["max_share"] = maxf(a["max_share"], d["strong_share"])
+	return a
+
 # Архетипы обычных отрядов волны, от переднего края в тыл
-static func pick_archetypes(wave: int, squads: int, seed_value: int) -> Array[String]:
+static func pick_archetypes(wave: int, squads: int, seed_value: int,
+		difficulty: int = Difficulty.DEFAULT) -> Array[String]:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, wave])
 	var picked: Array[String] = []
 	var taken: Dictionary = {}
 	for i in range(squads):
 		var pool: Array[String] = []
-		var total = 0
+		var total = 0.0
 		for unit in ARCHETYPES:
-			var a: Dictionary = ARCHETYPES[unit]
+			var a: Dictionary = get_archetype(unit, difficulty)
 			var cap = maxi(ceili(squads * a["max_share"]), 1)
 			if wave >= a["from_wave"] and taken.get(unit, 0) < cap:
 				pool.append(unit)
 				total += a["weight"]
-		var roll = rng.randi_range(1, total)
+		# Веса целые (уровень Difficulty.DEFAULT и ниже без дробей) — прежний целый бросок: состав волн
+		# прежнего баланса не меняется; дробные (поправка сложности) — бросок по доле
+		var roll: float = rng.randi_range(1, int(total)) if is_equal_approx(total, roundf(total)) else rng.randf() * total
 		for unit in pool:
-			roll -= ARCHETYPES[unit]["weight"]
-			if roll <= 0:
+			roll -= get_archetype(unit, difficulty)["weight"]
+			if roll <= 0.0 or unit == pool[-1]:
 				picked.append(unit)
 				taken[unit] = taken.get(unit, 0) + 1
 				break
@@ -91,8 +109,10 @@ static func pick_archetypes(wave: int, squads: int, seed_value: int) -> Array[St
 	return picked
 
 # Возвращает [{ "unit": factory_id, "count": бойцов, "mult": множитель hp/урона }].
-# seed_value — seed забега (RunManager.rng.seed): от него случайный состав волны
-static func build(wave: int, node_type: String, max_squads: int, seed_value: int = 0) -> Array[Dictionary]:
+# seed_value — seed забега (RunManager.rng.seed): от него случайный состав волны.
+# difficulty — уровень сложности забега (Difficulty): бойцов в обычных отрядах и сильные архетипы
+static func build(wave: int, node_type: String, max_squads: int, seed_value: int = 0,
+		difficulty: int = Difficulty.DEFAULT) -> Array[Dictionary]:
 	wave = max(wave, 1)
 	var mult = get_stat_mult(wave)
 	var squads: Array[Dictionary] = []
@@ -110,7 +130,9 @@ static func build(wave: int, node_type: String, max_squads: int, seed_value: int
 	# Обычная волна за спинами босса и элиты
 	var budget = get_soldiers_per_squad(wave)
 	var normal = mini(maxi(get_normal_squads(wave) - replaced, 1), max_squads - squads.size())
-	for unit in pick_archetypes(wave, normal, seed_value):
-		squads.append({"unit": unit, "count": get_archetype_count(unit, budget) * UnitFactory.SQUAD_SPLIT,
-			"mult": mult})
+	var enemies: float = Difficulty.get_level(difficulty)["enemies"]
+	for unit in pick_archetypes(wave, normal, seed_value, difficulty):
+		var count = clampi(roundi(get_archetype_count(unit, budget) * UnitFactory.SQUAD_SPLIT * enemies), 1,
+			MAX_SQUAD_SOLDIERS)
+		squads.append({"unit": unit, "count": count, "mult": mult})
 	return squads

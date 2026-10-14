@@ -52,8 +52,8 @@ func _ready() -> void:
 	_update_requisition_label(EconomyManager.requisition)
 	_update_army_label()
 	_refresh_hand()
-	round_label.text = "Волна %d/%d" % [mini(EconomyManager.round_number, RunManager.get_total_waves()),
-		RunManager.get_total_waves()]
+	round_label.text = "Волна %d/%d · %s" % [mini(EconomyManager.round_number, RunManager.get_total_waves()),
+		RunManager.get_total_waves(), Difficulty.level_name(RunManager.difficulty)]
 	# Каждый новый магазин — новый набор, цена обновления снова базовая
 	ShopManager.open_shop()
 	if ShopManager.free_cards_left > 0:

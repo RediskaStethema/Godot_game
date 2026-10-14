@@ -5,9 +5,12 @@ extends SceneTree
 #   godot --headless --path . -s tests/test_menus.gd
 const TEST_SAVE_PATH: String = "user://test_menus_save.json"
 const TEST_CONFIG_PATH: String = "user://test_menus_settings.cfg"
+const TEST_PROFILE_PATH: String = "user://test_menus_profile.cfg"   # не существует — открыты стартовые 3
 
 func _initialize() -> void:
 	root.get_node("SaveManager").save_path = TEST_SAVE_PATH
+	root.get_node("SaveManager").profile_path = TEST_PROFILE_PATH   # открытые сложности игрока не трогаем
+	root.get_node("SaveManager").load_profile()
 	root.get_node("GameSettings").config_path = TEST_CONFIG_PATH
 	_main()
 
@@ -142,11 +145,30 @@ func _main() -> void:
 	_check("выбрали десант → окно ордена (5 орденов), забег ещё не начат", chapter != null \
 		and chapter_cards == 5 and current_scene == menu)
 	chapter.choose("salamanders")
+	await _frames(2)
+	var difficulty = null
+	for c in menu.get_children():
+		if _is(c, "DifficultySelectDialog"):
+			difficulty = c
+	var open_levels = []
+	for level in range(1, 8):
+		var card = difficulty.find_child("Difficulty_%d" % level, true, false) if difficulty else null
+		if card and not card.disabled:
+			open_levels.append(level)
+	_check("выбрали орден → окно сложности: открыты %s из 7, фокус на 3-й, забег не начат" % [open_levels],
+		difficulty != null and open_levels == [1, 2, 3] and current_scene == menu
+		and root.get_viewport().gui_get_focus_owner() == difficulty.find_child("Difficulty_3", true, false))
+	difficulty.choose(4)   # закрытая — ничего
+	await _frames(2)
+	_check("закрытую сложность не выбрать", current_scene == menu and is_instance_valid(difficulty))
+	difficulty.choose(3)
 	await _frames(4)
-	_check("выбрали орден → магазин волны 1, раса и орден в забеге, в магазине есть пауза", current_scene.name == "ShopScene" \
+	_check("выбрали сложность → магазин волны 1, раса, орден и сложность в забеге, в магазине есть пауза",
+		current_scene.name == "ShopScene" \
 		and root.get_node("EconomyManager").round_number == 1 \
 		and root.get_node("RunManager").player_faction == "space_marines" \
 		and root.get_node("RunManager").player_chapter == "salamanders" \
+		and root.get_node("RunManager").difficulty == 3 \
 		and current_scene.get_children().any(func(c): return _is(c, "PauseMenu")))
 
 	# 6. Экран конца забега: пауза выключена, кнопка «В главное меню»

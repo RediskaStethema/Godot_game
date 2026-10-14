@@ -34,6 +34,8 @@ func _ready() -> void:
 var player_faction: String = FactionTheme.DEFAULT_FACTION
 # Орден Космодесанта (Chapters) — выбирается после расы; "" — без ордена
 var player_chapter: String = ""
+# Уровень сложности забега (Difficulty, 1..COUNT) — выбирается после ордена, новый забег его не сбрасывает
+var difficulty: int = Difficulty.DEFAULT
 
 func new_run(seed_value: int = 0) -> void:
 	if seed_value != 0:
@@ -151,6 +153,7 @@ func save_state() -> Dictionary:
 		"current_completed": current_completed,
 		"player_faction": player_faction,
 		"player_chapter": player_chapter,
+		"difficulty": difficulty,
 	}
 
 func load_state(d: Dictionary) -> void:
@@ -160,6 +163,7 @@ func load_state(d: Dictionary) -> void:
 	current_completed = bool(d["current_completed"])
 	player_faction = str(d.get("player_faction", FactionTheme.DEFAULT_FACTION))
 	player_chapter = str(d.get("player_chapter", ""))
+	difficulty = clampi(int(d.get("difficulty", Difficulty.DEFAULT)), 1, Difficulty.COUNT)
 
 # -------------------------------------------------------
 # ДЛЯ БОЯ

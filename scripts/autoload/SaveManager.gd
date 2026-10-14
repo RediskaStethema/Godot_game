@@ -23,6 +23,42 @@ var save_path: String = SAVE_PATH
 # настоящее сохранение игрока: root.get_node("SaveManager").enabled = false
 var enabled: bool = true
 
+# ПРОФИЛЬ ИГРОКА (не забег, переживает конец забега): сколько уровней сложности открыто
+# (Difficulty). Отдельный файл; пишется только при enabled — тесты не трогают профиль игрока
+const PROFILE_PATH: String = "user://profile.cfg"
+var profile_path: String = PROFILE_PATH
+var unlocked_difficulty: int = Difficulty.START_UNLOCKED
+
+signal difficulty_unlocked(level: int)
+
+func _ready() -> void:
+	load_profile()
+
+func load_profile() -> void:
+	var cfg = ConfigFile.new()
+	unlocked_difficulty = Difficulty.START_UNLOCKED
+	if cfg.load(profile_path) == OK:
+		unlocked_difficulty = clampi(int(cfg.get_value("progress", "unlocked_difficulty", Difficulty.START_UNLOCKED)),
+			Difficulty.START_UNLOCKED, Difficulty.COUNT)
+
+func is_difficulty_unlocked(level: int) -> bool:
+	return level >= 1 and level <= unlocked_difficulty
+
+# Забег выигран на уровне level: это самый высокий открытый — открывается следующий.
+# Возвращает открытый уровень (0 — ничего не открылось)
+func on_run_won(level: int) -> int:
+	if level != unlocked_difficulty or level >= Difficulty.COUNT:
+		return 0
+	unlocked_difficulty = level + 1
+	if enabled:
+		var cfg = ConfigFile.new()
+		cfg.load(profile_path)
+		cfg.set_value("progress", "unlocked_difficulty", unlocked_difficulty)
+		cfg.save(profile_path)
+	print("SaveManager: открыта сложность %d" % unlocked_difficulty)
+	emit_signal("difficulty_unlocked", unlocked_difficulty)
+	return unlocked_difficulty
+
 func has_save() -> bool:
 	return FileAccess.file_exists(save_path)
 

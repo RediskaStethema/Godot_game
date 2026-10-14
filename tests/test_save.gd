@@ -11,6 +11,7 @@ func _initialize() -> void:
 	# Скорость боя игрока (GameSettings) не должна влиять на тест
 	root.get_node("GameSettings").battle_speed = 1.0
 	root.get_node("SaveManager").save_path = TEST_SAVE_PATH
+	root.get_node("SaveManager").profile_path = "user://test_save_profile.cfg"   # открытые сложности игрока не трогаем
 	_main()
 
 func _frames(n: int) -> void:
@@ -45,6 +46,10 @@ func _main() -> void:
 	for c in current_scene.get_children():
 		if c.has_method("choose") and c.get("_chosen") == false:   # следом — окно выбора ордена
 			c.choose("ultramarines")
+	await _frames(2)
+	for c in current_scene.get_children():
+		if c.has_method("choose") and c.get("_chosen") == false:   # следом — окно выбора сложности
+			c.choose(3)
 	await _frames(3)
 	var shop = current_scene
 	_check("новый забег → магазин шага 0, сохранение записано", shop.name == "ShopScene" and rm.current_node_id == 0 and sv.has_save())
@@ -92,11 +97,13 @@ func _main() -> void:
 	bm.player_buildings[wall] = Vector2i(0, 2)
 	bm.pending_cards = [CardFactory.battle_fury(), CardFactory.tactical_squad()] as Array[CardData]
 	rm.player_chapter = "imperial_fists"
+	rm.difficulty = 5
 	sv.save_run()
 	bm.reset_run()
 	rm.player_chapter = ""
+	rm.difficulty = 2
 	_check("загрузка", sv.load_run())
-	_check("орден забега сохранён", rm.player_chapter == "imperial_fists")
+	_check("орден и сложность забега сохранены", rm.player_chapter == "imperial_fists" and rm.difficulty == 5)
 	var lt = bm.player_units[0]
 	var ls = bm.player_units[1]
 	_check("экономика и забег", em.requisition == 77 and em.round_number == 4 and em.wins == 4 \
