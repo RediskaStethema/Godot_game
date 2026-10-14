@@ -195,6 +195,24 @@ static func thunderfire_cannon() -> CardData:
 	c.building_level_bonuses = {"damage": 0.25, "cooldown": -0.15}
 	return c
 
+# Казармы (решение пользователя): после каждого выигранного боя возвращают погибших бойцов
+# отрядам на соседних клетках — по сторонам клетки, не по диагонали (BattleManager.refill_from_barracks).
+# Не лечат: живые бойцы остаются с тем HP, что есть; новые — с полным HP, не больше состава отряда
+static func barracks() -> CardData:
+	var c = CardData.new()
+	c.id = "barracks"
+	c.title = "Barracks"
+	c.description = "После каждой победы возвращают павших бойцов (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Не лечат."
+	c.faction = "space_marines"
+	c.cost = 7
+	c.rarity = "rare"
+	c.card_type = "building"
+	c.building_type = "barracks"
+	c.building_stats = {"refill": 2.0}   # бойцов каждому соседнему отряду за ход
+	# Уровень: 2 → 3 → 4 бойца (2 × 1.5^(ур − 1), дробь вниз: 2, 3, 4.5 → 4)
+	c.building_level_bonuses = {"refill": 0.5}
+	return c
+
 static func fortress_wall() -> CardData:
 	var c = CardData.new()
 	c.id = "fortress_wall"
@@ -285,7 +303,7 @@ static func build_pool() -> Array:
 	for i in range(5): pool.append(assault_squad())
 	for i in range(4): pool.append(scout_squad())
 	for i in range(2): pool.append(fortress_wall())
-	# Rare — 10 копий
+	# Rare — 11 копий
 	pool.append(devastator_squad())
 	pool.append(terminator_squad())
 	pool.append(apothecary_card())
@@ -294,6 +312,7 @@ static func build_pool() -> Array:
 	pool.append(land_speeder_card())
 	pool.append(bolter_turret())
 	pool.append(thunderfire_cannon())
+	pool.append(barracks())
 	pool.append(blessed_armour())
 	pool.append(battle_fury())
 	# Epic — 3 копии

@@ -526,6 +526,9 @@ func _resolve_battle(winner_team: int) -> String:
 		SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER), player_squads_at_start)
 	if not revived.is_empty():
 		text += " · возрождено отрядов: %d" % revived.size()
+	var refilled = BattleManager.refill_from_barracks()
+	if refilled > 0:
+		text += " · Казармы вернули бойцов: %d" % refilled
 	print("BattleScene: армия %d отрядов, возрождено %s" % [BattleManager.player_units.size(), revived])
 	return text
 
