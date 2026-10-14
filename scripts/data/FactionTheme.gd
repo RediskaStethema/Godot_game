@@ -6,10 +6,21 @@ extends RefCounted
 # на вид не влияет). Раса забега — RunManager.player_faction, выбирается в начале
 # нового забега (RaceSelectDialog из главного меню; пока доступен только Космодесант).
 #
-# Плитка (floor / kingdom / enemy) — вариант для клетки, выбирается по хэшу клетки:
+# Плитка (floor / kingdom / enemy; необязательные edge — внешнее кольцо поля, river — линии рек через
+# поле, IsoGridRenderer) — вариант для клетки, выбирается по хэшу клетки.
+# ground + features (необязательно) — пол и зона врага естественной местностью вместо случайной плиты
+#   в каждой клетке: ground — грунт везде, features — редкие детали поверх:
+#   {"tiles": [плитки], "clusters": N, "size": [от, до]} — N групп соседних клеток (руины к руинам),
+#   {"tiles": [плитки], "scatter": доля} — одиночные (кратеры);
+# flags — {"tiles": [плитки], "count": N}: N клеток только на стороне игрока (не в королевстве).
+# Плитка:
 #   int    — номер Tiles/Slice N лунного тайлсета (блок, TerrainTiles.draw_block)
 #   String — путь к PNG ромба клетки целиком (TerrainTiles.draw_tile_texture):
 #            ширина картинки = ширина клетки, верхняя грань — ромб 2:1 в верхней части
+#   {"texture": путь, "top": px} — то же, верхний угол ромба на top px ниже верха картинки
+#            (руины, знамя торчат над плитой); плиты из листа — tools/tiles_from_sheet.py (tiles.json);
+#            "axis": "u" / "v" — вдоль какой оси клеток нарисована стена / русло (edge, river):
+#            на линии по другой оси плита отражается
 # decorations — [имя файла Decorations_tiles, плоский ли] (как TerrainTiles.DECORATIONS)
 #
 # citadel — вид цитадели:
@@ -43,11 +54,39 @@ static func get_faction_info(faction: String) -> Dictionary:
 static func is_available(faction: String) -> bool:
 	return get_faction_info(faction).get("available", false)
 
+# Плиты Космодесанта: лист assets/FightFleed/photo_2026-10-13_12-08-49.png → tools/tiles_from_sheet.py.
+# Решение пользователя: королевство — seamless terrain (осыпь), край карты — debris wall (стена),
+# ядовитый ручей — только линиями рек через поле, остальное (ничья земля, зона врага) — как реальная
+# местность: грунт (та же осыпь) и редкие детали — пара групп руин и окопов, одиночные кратеры;
+# знамёна — немного и только на стороне игрока
+const SM_TILES = "res://assets/sprites/tiles/space_marines/"
+const SM_TERRAIN = [{"texture": SM_TILES + "tile_0.png", "top": 15}]      # каменная осыпь с воронками
+const SM_DEBRIS_WALL = [{"texture": SM_TILES + "tile_5.png", "top": 8, "axis": "u"}]   # стена с обломками
+const SM_RIVER = [{"texture": SM_TILES + "tile_6.png", "top": 8, "axis": "v"}]        # ядовитый ручей
+const SM_RUINS = [
+	{"texture": SM_TILES + "tile_1.png", "top": 72},   # руины с бункером
+	{"texture": SM_TILES + "tile_7.png", "top": 20},   # бункер
+	{"texture": SM_TILES + "tile_8.png", "top": 34},   # развалины
+]
+const SM_CRATER = [{"texture": SM_TILES + "tile_2.png", "top": 18}]   # большой кратер
+const SM_TRENCH = [{"texture": SM_TILES + "tile_4.png", "top": 6}]    # окоп
+const SM_FLAG = [{"texture": SM_TILES + "tile_3.png", "top": 84}]     # обломки и знамя
+const SM_FEATURES = [
+	{"tiles": SM_RUINS, "clusters": 3, "size": [2, 4]},
+	{"tiles": SM_TRENCH, "clusters": 2, "size": [2, 3]},
+	{"tiles": SM_CRATER, "scatter": 0.04},
+]
+
 const THEMES = {
 	"space_marines": {
-		"floor": TerrainTiles.FLOOR,
-		"kingdom": TerrainTiles.KINGDOM,
-		"enemy": TerrainTiles.ENEMY,
+		"floor": SM_RUINS + SM_CRATER + SM_TRENCH,
+		"kingdom": SM_TERRAIN,
+		"enemy": SM_RUINS + SM_CRATER + SM_TRENCH,
+		"ground": SM_TERRAIN,
+		"features": SM_FEATURES,
+		"flags": {"tiles": SM_FLAG, "count": 3},
+		"edge": SM_DEBRIS_WALL,
+		"river": SM_RIVER,
 		"decorations": TerrainTiles.DECORATIONS,
 		# TODO: листы assets/citadel_sprite_list/space_marine и плитки assets/FightFleed/space_marin,
 		# когда будут PNG с прозрачным фоном

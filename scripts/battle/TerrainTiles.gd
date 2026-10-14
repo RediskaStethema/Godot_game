@@ -63,21 +63,32 @@ static func block_rect(top_center: Vector2, scale_mult: float = 1.0) -> Rect2:
 	var s = SCALE * scale_mult
 	return Rect2(top_center - TOP_CENTER_PX * s, SPRITE_PX * s)
 
-# Плитка темы расы: int — блок тайлсета, String — картинка ромба клетки целиком
-static func draw_theme_tile(canvas: CanvasItem, entry, top_center: Vector2, modulate: Color = Color.WHITE) -> void:
+# Плитка темы расы: int — блок тайлсета, String — картинка ромба клетки целиком,
+# {"texture": путь, "top": px} — то же, но над ромбом торчит что-то высотой top px картинки.
+# flip — отразить по горизонтали (русло / стена вдоль другой оси клеток)
+static func draw_theme_tile(canvas: CanvasItem, entry, top_center: Vector2, modulate: Color = Color.WHITE,
+		flip: bool = false) -> void:
 	if entry is String:
-		draw_tile_texture(canvas, FactionTheme.load_texture(entry), top_center, modulate)
+		draw_tile_texture(canvas, FactionTheme.load_texture(entry), top_center, modulate, 0.0, flip)
+	elif entry is Dictionary:
+		draw_tile_texture(canvas, FactionTheme.load_texture(entry["texture"]), top_center, modulate,
+			entry.get("top", 0.0), flip)
 	else:
 		draw_block(canvas, tile(int(entry)), top_center, modulate)
 
 # Картинка клетки целиком: ширина = ширина клетки, ромб верхней грани (2:1) —
-# в верхней части картинки, его центр — в top_center
-static func draw_tile_texture(canvas: CanvasItem, tex: Texture2D, top_center: Vector2, modulate: Color = Color.WHITE) -> void:
+# в верхней части картинки (верхний угол — на top_px от верха), его центр — в top_center
+static func draw_tile_texture(canvas: CanvasItem, tex: Texture2D, top_center: Vector2, modulate: Color = Color.WHITE,
+		top_px: float = 0.0, flip: bool = false) -> void:
 	if tex == null:
 		return
 	var k: float = float(IsoGrid.TILE_WIDTH) / tex.get_width()   # не целочисленно: PNG любой ширины
 	var size = tex.get_size() * k
-	canvas.draw_texture_rect(tex, Rect2(top_center - Vector2(size.x / 2.0, IsoGrid.TILE_HEIGHT / 2.0), size), false, modulate)
+	# Ромб симметричен относительно вертикали через top_center — отражение вокруг неё
+	canvas.draw_set_transform(top_center, 0.0, Vector2(-1.0 if flip else 1.0, 1.0))
+	canvas.draw_texture_rect(tex, Rect2(-Vector2(size.x / 2.0, IsoGrid.TILE_HEIGHT / 2.0 + top_px * k), size),
+		false, modulate)
+	canvas.draw_set_transform(Vector2.ZERO)
 
 # Вариант для клетки (int или String) — как pick, но без приведения к int
 static func pick_any(variants: Array, cell: Vector2i, salt: int = 0) -> Variant:
