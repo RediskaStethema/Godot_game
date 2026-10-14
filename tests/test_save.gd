@@ -68,9 +68,9 @@ func _main() -> void:
 
 	# 3. Развитая армия: уровни, улучшения, клетки, здания, королевство, цитадель
 	bm.reset_run()
-	rm.current_node_id = 7
-	rm.current_completed = true   # бой волны 4 пройден
-	em.round_number = 5
+	rm.current_node_id = 5
+	rm.current_completed = true   # бой волны 3 пройден (после 4-й — событие, RunMapData.EVENT_AFTER_WAVES)
+	em.round_number = 4
 	em.requisition = 77
 	em.wins = 4
 	bm.citadel_hp = 640.5
@@ -99,9 +99,9 @@ func _main() -> void:
 	_check("орден забега сохранён", rm.player_chapter == "imperial_fists")
 	var lt = bm.player_units[0]
 	var ls = bm.player_units[1]
-	_check("экономика и забег", em.requisition == 77 and em.round_number == 5 and em.wins == 4 \
+	_check("экономика и забег", em.requisition == 77 and em.round_number == 4 and em.wins == 4 \
 		and is_equal_approx(bm.citadel_hp, 640.5) and bm.kingdom_tiles.size() == 10 and bm.tiles_bought == 1 \
-		and rm.current_node_id == 7 and rm.current_completed)
+		and rm.current_node_id == 5 and rm.current_completed)
 	_check("отряд: уровень, множители, улучшения, HP, клетка", lt.factory_id == "terminator" and lt.squad_level == 1 \
 		and is_equal_approx(lt.hp_multiplier, 1.5) and is_equal_approx(lt.damage_multiplier, 1.2) \
 		and is_equal_approx(lt.attack_speed_multiplier, 1.15) and lt.applied_upgrades == ["Blessed Armour"] \
@@ -114,7 +114,7 @@ func _main() -> void:
 	# 4. «Продолжить» после пройденного боя → магазин следующей волны
 	rm.resume()
 	await _frames(3)
-	_check("пройденный шаг → магазин шага 8", current_scene.name == "ShopScene" and rm.current_node_id == 8)
+	_check("пройденный шаг → магазин шага 6", current_scene.name == "ShopScene" and rm.current_node_id == 6)
 
 	# 5. Расстановка: выставить отряд с карты и наложить улучшение → «вылет» →
 	#    «Продолжить» возвращает поле как было

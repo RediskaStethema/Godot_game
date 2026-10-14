@@ -124,6 +124,8 @@ func _populate_field() -> void:
 	_update_expansion()
 	if BattleManager.can_expand_kingdom() and not iso_grid.get_expansion_tiles().is_empty():
 		_show_message("Расширение: кликните по зелёной клетке")
+	elif BattleManager.next_battle_note != "":
+		_show_message(BattleManager.next_battle_note)
 
 func _get_play_area() -> Rect2:
 	var screen = get_viewport_rect().size
@@ -194,7 +196,7 @@ func _place_enemy_squads() -> void:
 	for i in range(mini(specs.size(), tiles.size())):
 		var spec: Dictionary = specs[i]
 		var enemy_data = UnitFactory.create(spec["unit"])
-		enemy_data.hp_multiplier = spec["mult"]
+		enemy_data.hp_multiplier = spec["mult"] * BattleManager.next_battle_enemy_hp   # событие забега
 		enemy_data.damage_multiplier = spec["mult"]
 		_spawn_squad(enemy_data, GameConstants.TEAM_ENEMY, tiles[i], spec["count"])
 		if "elite" in enemy_data.tags:
@@ -457,6 +459,9 @@ func _on_battle_ended(winner_team: int) -> void:
 		RunManager.complete_current_node()
 		_end_run(true, "Босс повержен!")
 		return
+	# Последствие события действовало на этот бой
+	BattleManager.next_battle_enemy_hp = 1.0
+	BattleManager.next_battle_note = ""
 	hud.set_message(_resolve_battle(winner_team))
 	# BattleManager.pending_cards НЕ очищаем: невыложенные карты остаются в руке
 	SquadRegistry.clear()

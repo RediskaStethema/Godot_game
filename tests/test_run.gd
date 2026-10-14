@@ -79,21 +79,26 @@ func _main() -> void:
 	var bm = root.get_node("BattleManager")
 	var em = root.get_node("EconomyManager")
 	var rm = root.get_node("RunManager")
-	# Цепочка: 15 волн, перед каждой магазин, мини-босс на 5 и 10, босс на 15
+	# Цепочка: 15 волн, перед каждой магазин, мини-босс на 5 и 10, босс на 15,
+	# события после волн RunMapData.EVENT_AFTER_WAVES (перед магазином следующей)
 	rm.new_run(12345)
 	var seq := []
 	for n in rm.map.nodes:
 		seq.append("%s%s" % [n.type, "" if n.wave == 0 else str(n.wave)])
 	print("chain(%d): %s" % [rm.map.nodes.size(), " > ".join(seq)])
-	var ok_chain = rm.map.nodes.size() == 30 and rm.map.total_waves == 15
-	for i in range(rm.map.nodes.size()):
-		var n = rm.map.nodes[i]
-		var expect_next = [] if i == rm.map.nodes.size() - 1 else [i + 1]
+	var nodes = rm.map.nodes
+	var ok_chain = nodes.size() == 30 + RunMapData.EVENT_AFTER_WAVES.size() and rm.map.total_waves == 15
+	for i in range(nodes.size()):
+		var n = nodes[i]
+		var expect_next = [] if i == nodes.size() - 1 else [i + 1]
 		if n.next != expect_next: ok_chain = false
-		if i % 2 == 0 and n.type != "shop": ok_chain = false
-	for w in [5, 10]:
-		if rm.map.nodes[w * 2 - 1].type != "miniboss": ok_chain = false
-	if rm.map.nodes[29].type != "boss": ok_chain = false
+		if n.is_battle():
+			if i == 0 or nodes[i - 1].type != "shop": ok_chain = false
+			var expect_type = "boss" if n.wave == 15 else ("miniboss" if n.wave in [5, 10] else "battle")
+			if n.type != expect_type: ok_chain = false
+			if n.wave in RunMapData.EVENT_AFTER_WAVES and (nodes[i + 1].type != "event" or nodes[i + 2].type != "shop"):
+				ok_chain = false
+	if nodes[nodes.size() - 1].type != "boss": ok_chain = false
 	print("chain ok: %s" % ok_chain)
 	rm.ensure_started()
 	print("ensure_started: node=%d type=%s next=%d" % [rm.current_node_id, rm.get_current_node().type, rm.get_next_id()])
