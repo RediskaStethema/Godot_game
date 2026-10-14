@@ -25,6 +25,7 @@ var merge_menu: MergeMenu = null   # выбор «улучшить / вылеч�
 var pause_menu: PauseMenu = null
 var fader: OcclusionFader = null   # прозрачность построек — только на расстановке
 var reticle: ArtilleryReticle = null   # прицел орудия игрока — в бою за курсором
+const BUILDING_HIGHLIGHT = Color(1.45, 1.2, 0.7)   # здание карты под курсором на скамейке — золотом
 # Скорость боя: Engine.time_scale = базовый × GameSettings.battle_speed, только
 # пока идёт бой; базовый — тот, что был до боя (тесты гоняют с ускорением)
 var _base_time_scale: float = 1.0
@@ -398,21 +399,31 @@ func fire_artillery(point: Vector2) -> bool:
 			return b.fire_at(point)
 	return false
 
-# Карта отряда на скамейке под курсором — клетки такого же отряда на поле подсвечены
-# (только на расстановке): видно, куда бросить карту для улучшения или лечения
+# Карта отряда / здания на скамейке под курсором — клетки такого же отряда / здания на поле
+# подсвечены (только на расстановке): видно, куда бросить карту для улучшения или лечения
 func _on_bench_card_hovered(card: CardData) -> void:
 	var tiles: Array[Vector2i] = []
 	if is_placement_phase:
-		tiles = get_same_squad_tiles(card)
+		tiles = get_same_card_tiles(card)
 	renderer.set_highlighted(tiles)
+	# Здание закрывает свою клетку — подсвечивается и само (modulate: прозрачность OcclusionFader — self_modulate)
+	for b in BattleManager.buildings:
+		if is_instance_valid(b):
+			b.modulate = BUILDING_HIGHLIGHT if tiles.has(b.tile) else Color.WHITE
 
-func get_same_squad_tiles(card: CardData) -> Array[Vector2i]:
+func get_same_card_tiles(card: CardData) -> Array[Vector2i]:
 	var tiles: Array[Vector2i] = []
-	if card == null or card.card_type != "squad":
+	if card == null:
 		return tiles
-	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER):
-		if squad.data.factory_id == card.unit_factory_id:
-			tiles.append(squad.tile)
+	match card.card_type:
+		"squad":
+			for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER):
+				if squad.data.factory_id == card.unit_factory_id:
+					tiles.append(squad.tile)
+		"building":
+			for b in BattleManager.player_buildings:
+				if b.id == card.id:
+					tiles.append(BattleManager.player_buildings[b])
 	return tiles
 
 func _on_start_pressed() -> void:
