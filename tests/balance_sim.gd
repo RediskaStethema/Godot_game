@@ -7,7 +7,7 @@ extends SceneTree
 # Стратегии: tactical (только Tactical), mixed (смешанная армия), elite (Rare/Epic), all (все).
 #
 # Забег целиком (реалистичнее, см. «ЗАБЕГ ЦЕЛИКОМ» ниже):
-#   godot --headless --path . -s tests/balance_sim.gd -- campaign [стратегия|all] [забегов] [орден из Chapters, по умолчанию без ордена]
+#   godot --headless --path . -s tests/balance_sim.gd -- campaign [стратегия|all] [забегов] [орден из Chapters или none] [сложность 1..7, по умолчанию Difficulty.DEFAULT]
 #
 # Модель игрока (оптимистичная — верхняя оценка силы):
 #   * каждую волну выигрывает, бонус к доходу BONUS_NORMAL / BONUS_BOSS;
@@ -286,7 +286,9 @@ func _battle(wave: int, units: Array[UnitData], bought: int) -> Dictionary:
 func _main_campaign(args: Array) -> void:
 	var strategy: String = args[1] if args.size() > 1 else "all"
 	var runs: int = int(args[2]) if args.size() > 2 else 5
-	root.get_node("RunManager").player_chapter = args[3] if args.size() > 3 else ""
+	root.get_node("RunManager").player_chapter = args[3] if args.size() > 3 and args[3] != "none" else ""
+	root.get_node("RunManager").difficulty = int(args[4]) if args.size() > 4 else Difficulty.DEFAULT
+	print("сложность: %s" % Difficulty.describe(root.get_node("RunManager").difficulty))
 	for c in CardFactory.build_pool():
 		cards[c.id] = c
 	Engine.time_scale = TIME_SCALE

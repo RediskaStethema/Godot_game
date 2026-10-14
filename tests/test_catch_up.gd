@@ -8,6 +8,7 @@ const TEST_SAVE_PATH: String = "user://test_catch_up_save.json"
 
 func _initialize() -> void:
 	root.get_node("SaveManager").save_path = TEST_SAVE_PATH
+	root.get_node("SaveManager").profile_path = "user://test_catch_up_profile.cfg"   # открытые сложности игрока не трогаем
 	root.get_node("GameSettings").battle_speed = 1.0
 	_main()
 

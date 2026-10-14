@@ -162,20 +162,28 @@ func _open_race_select() -> void:
 	dialog.setup()
 	dialog.chosen.connect(_on_race_chosen)
 
-# Раса с орденами (Космодесант) — следом выбор ордена; «Отмена» там — забег не начат
+# Раса с орденами (Космодесант) — следом выбор ордена, затем сложности; «Отмена» в любом
+# окне — забег не начат
 func _on_race_chosen(faction: String) -> void:
 	if not Chapters.has_chapters(faction):
-		_start_new_run(faction, "")
+		_open_difficulty_select(faction, "")
 		return
 	var dialog = ChapterSelectDialog.new()
 	add_child(dialog)
 	dialog.setup()
-	dialog.chosen.connect(func(chapter): _start_new_run(faction, chapter))
+	dialog.chosen.connect(func(chapter): _open_difficulty_select(faction, chapter))
 
-func _start_new_run(faction: String, chapter: String) -> void:
+func _open_difficulty_select(faction: String, chapter: String) -> void:
+	var dialog = DifficultySelectDialog.new()
+	add_child(dialog)
+	dialog.setup()
+	dialog.chosen.connect(func(level): _start_new_run(faction, chapter, level))
+
+func _start_new_run(faction: String, chapter: String, level: int) -> void:
 	BattleManager.reset_run()
 	RunManager.player_faction = faction
 	RunManager.player_chapter = chapter
+	RunManager.difficulty = level
 	SaveManager.delete_save()
 	RunManager.advance()
 

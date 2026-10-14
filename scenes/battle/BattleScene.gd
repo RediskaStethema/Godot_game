@@ -35,6 +35,7 @@ var battle_type: String = RunMapNode.BATTLE   # тип боя шага забе�
 var battle_wave: int = 1
 var is_placement_phase: bool = true
 var player_soldiers_at_start: int = 0   # для бонуса «победа без потерь»
+var _unlocked_difficulty: int = 0       # победа над боссом открыла этот уровень сложности (0 — нет)
 var enemy_elites_at_start: int = 0      # элитные враги (тег elite) — бонус TDD за каждого
 # Отряды игрока на старте боя — павшие целиком при победе возрождаются
 var player_squads_at_start: Array[Dictionary] = []
@@ -85,6 +86,7 @@ func _build_ui() -> void:
 	var wave_text = "Волна %d/%d" % [battle_wave, RunManager.get_total_waves()]
 	if battle_type != RunMapNode.BATTLE:
 		wave_text += " · " + UITheme.NODE_NAMES.get(battle_type, battle_type)
+	wave_text += " · " + Difficulty.level_name(RunManager.difficulty)
 	hud.setup(wave_text, result_label, start_button, bench.BENCH_RIGHT_RESERVE)
 	hud.set_message("Расставьте отряды")
 	start_button.pressed.connect(_on_start_pressed)
@@ -193,7 +195,7 @@ func _place_player_squads() -> void:
 # Состав врагов — данными в EnemyWaves; заполняют зону с переднего края в тыл
 func _place_enemy_squads() -> void:
 	var tiles = iso_grid.get_enemy_tiles_front_first()
-	var specs = EnemyWaves.build(battle_wave, battle_type, tiles.size(), RunManager.rng.seed)
+	var specs = EnemyWaves.build(battle_wave, battle_type, tiles.size(), RunManager.rng.seed, RunManager.difficulty)
 	enemy_elites_at_start = 0
 	for i in range(mini(specs.size(), tiles.size())):
 		var spec: Dictionary = specs[i]
@@ -487,6 +489,7 @@ func _on_battle_ended(winner_team: int) -> void:
 	var won = winner_team == GameConstants.TEAM_PLAYER
 	if battle_type == RunMapNode.BOSS and won:
 		RunManager.complete_current_node()
+		_unlocked_difficulty = SaveManager.on_run_won(RunManager.difficulty)
 		_end_run(true, "Босс повержен!")
 		return
 	# Последствие события действовало на этот бой
@@ -542,9 +545,12 @@ func _show_run_end(victory: bool) -> void:
 	inspector.shutdown()
 	var subtitle = "Главный босс Хаоса повержен — забег выигран!" if victory \
 		else "Забег окончен на волне %d из %d." % [battle_wave, RunManager.get_total_waves()]
-	var stats = "Побед в волнах: %d · Цитадель %d/%d · %d Req" % [
-		EconomyManager.wins + (1 if victory else 0), ceili(BattleManager.citadel_hp),
-		int(BattleManager.CITADEL_MAX_HP), EconomyManager.requisition]
+	var stats = "%s · Побед в волнах: %d · Цитадель %d/%d · %d Req" % [
+		Difficulty.describe(RunManager.difficulty), EconomyManager.wins + (1 if victory else 0),
+		ceili(BattleManager.citadel_hp), int(BattleManager.CITADEL_MAX_HP), EconomyManager.requisition]
+	if _unlocked_difficulty > 0:
+		subtitle += "
+Открыта новая сложность: %s" % Difficulty.describe(_unlocked_difficulty)
 	pause_menu.enabled = false
 	var screen = RunEndScreen.new()
 	$UI.add_child(screen)
