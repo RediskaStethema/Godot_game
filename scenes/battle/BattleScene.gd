@@ -77,6 +77,7 @@ func _build_ui() -> void:
 	add_child(bench)
 	bench.setup(BattleManager.pending_cards)
 	bench.card_dropped_on_tile.connect(_on_card_dropped)
+	bench.card_hovered.connect(_on_bench_card_hovered)
 
 	hud = BattleHud.new()
 	$UI.add_child(hud)
@@ -397,8 +398,26 @@ func fire_artillery(point: Vector2) -> bool:
 			return b.fire_at(point)
 	return false
 
+# Карта отряда на скамейке под курсором — клетки такого же отряда на поле подсвечены
+# (только на расстановке): видно, куда бросить карту для улучшения или лечения
+func _on_bench_card_hovered(card: CardData) -> void:
+	var tiles: Array[Vector2i] = []
+	if is_placement_phase:
+		tiles = get_same_squad_tiles(card)
+	renderer.set_highlighted(tiles)
+
+func get_same_squad_tiles(card: CardData) -> Array[Vector2i]:
+	var tiles: Array[Vector2i] = []
+	if card == null or card.card_type != "squad":
+		return tiles
+	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER):
+		if squad.data.factory_id == card.unit_factory_id:
+			tiles.append(squad.tile)
+	return tiles
+
 func _on_start_pressed() -> void:
 	is_placement_phase = false
+	_on_bench_card_hovered(null)
 	fader.enabled = false
 	start_button.disabled = true
 	_close_merge_menu()

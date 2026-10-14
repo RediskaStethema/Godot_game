@@ -13,6 +13,8 @@ var drag_offset: Vector2 = Vector2.ZERO
 
 # Сигнал — когда начали тащить карту
 signal drag_started(card: CardData, screen_pos: Vector2)
+# Курсор на карте / ушёл с неё — BattleScene подсвечивает клетки этого отряда на поле
+signal hover_changed(card: CardData, hovered: bool)
 
 func setup(data: CardData) -> void:
 	card_data = data
@@ -43,8 +45,12 @@ func setup(data: CardData) -> void:
 	else:
 		info_label.text = "%s\n%s" % [data.title, data.get_play_hint()]
 
-	mouse_entered.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity, true)))
-	mouse_exited.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity)))
+	mouse_entered.connect(func():
+		add_theme_stylebox_override("panel", UITheme.card_style(data.rarity, true))
+		hover_changed.emit(card_data, true))
+	mouse_exited.connect(func():
+		add_theme_stylebox_override("panel", UITheme.card_style(data.rarity))
+		hover_changed.emit(card_data, false))
 
 # -------------------------------------------------------
 # DRAG & DROP
