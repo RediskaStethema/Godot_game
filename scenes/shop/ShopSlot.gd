@@ -7,11 +7,14 @@ extends PanelContainer
 
 const CARD_SIZE = Vector2(220, 270)
 const PORTRAIT_HEIGHT = 70.0
+const OWNED_NOTE_TOP = 22.0   # сноска «на поле» — поверх портрета, под строкой редкости
 
 var slot_index: int = 0
 var card_data: CardData = null
 var hand_full: bool = false
 var free: bool = false   # карта подкрепления — всегда бесплатно
+var owned_note: PanelContainer = null   # сноска «на поле: ур. N» при наведении
+var _owned_label: Label = null
 
 signal purchase_requested(slot_index: int)
 
@@ -28,8 +31,44 @@ func setup(data: CardData, index: int, is_free: bool = false) -> void:
 	buy_button.pressed.connect(_on_buy_pressed)
 	EconomyManager.requisition_changed.connect(_on_requisition_changed)
 	_refresh_button()
-	mouse_entered.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity, true)))
-	mouse_exited.connect(func(): add_theme_stylebox_override("panel", UITheme.card_style(data.rarity)))
+	_build_owned_note()
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
+
+func _on_mouse_entered() -> void:
+	add_theme_stylebox_override("panel", UITheme.card_style(card_data.rarity, true))
+	show_owned_note()
+
+func _on_mouse_exited() -> void:
+	# Курсор ушёл на кнопку «Купить» — он всё ещё над картой
+	if Rect2(Vector2.ZERO, size).has_point(get_local_mouse_position()):
+		return
+	add_theme_stylebox_override("panel", UITheme.card_style(card_data.rarity))
+	owned_note.hide()
+
+# Сноска поверх портрета: такой отряд / здание уже на поле — уровень (ShopManager.get_owned_note).
+# Текст — в момент наведения: армия могла измениться, пока магазин открыт
+func show_owned_note() -> void:
+	var text := ShopManager.get_owned_note(card_data)
+	_owned_label.text = text
+	owned_note.visible = text != ""
+
+func _build_owned_note() -> void:
+	var layer := Control.new()   # слой поверх содержимого карты, клики не ловит
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(layer)
+	owned_note = UITheme.make_panel("HudPanel", true)
+	owned_note.add_theme_stylebox_override("panel", UITheme.panel_style(UITheme.BG_DEEP, UITheme.GOLD, 1, 4, 4))
+	owned_note.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	owned_note.offset_top = OWNED_NOTE_TOP
+	owned_note.hide()
+	layer.add_child(owned_note)
+	_owned_label = UITheme.make_label("", "SmallLabel")
+	_owned_label.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT)
+	_owned_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_owned_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_owned_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	owned_note.add_child(_owned_label)
 
 # Редкость · тип, портрет, название
 func _fill_header(data: CardData) -> void:
