@@ -1,4 +1,4 @@
-"""Лист анимаций PNG (ряды idle / бег / стрельба / смерть) → кадры PNG + frames.tres для Soldier.gd.
+"""Лист анимаций PNG (ряды idle / бег / стрельба / смерть, необязательно — боевой клич) → кадры PNG + frames.tres для Soldier.gd.
 
     python tools/sheet_to_frames.py assets/assetlist.png assets/sprites/space_marine_v2
 
@@ -21,13 +21,16 @@ from PIL import Image
 from gif_to_frames import IMPORT_PARAMS, FILL
 
 ROW_ANIMS = ["idle", "walk", "attack", "death"]
-FOLDERS = {"idle": "idle", "walk": "run", "attack": "attack", "death": "death"}
+# Необязательный пятый ряд — боевой клич (Chaplain): кадр показывается, пока он кричит (Soldier.BATTLE_CRY_TIME)
+EXTRA_ROWS = ["battle_cry"]
+FOLDERS = {"idle": "idle", "walk": "run", "attack": "attack", "death": "death", "battle_cry": "battle_cry"}
 LOOPING = {"idle", "walk"}
-FPS = {"idle": 8.0, "walk": 14.0, "attack": 16.0, "death": 10.0}
+FPS = {"idle": 8.0, "walk": 14.0, "attack": 16.0, "death": 10.0, "battle_cry": 1.5}
 ALPHA_MIN = 128
 MIN_ROW_HEIGHT = 80
 MIN_FRAME_WIDTH = 20
 HEAD_PART = 0.25
+LABEL_PART = 0.2     # отдельный кусок выше этой доли высоты кадра — подпись ряда
 STRAY_SIZE = 40      # меньше — крошка соседнего кадра
 SPLIT_WINDOW = 0.3   # где искать границу слипшихся кадров: ± доля шага
 
@@ -129,16 +132,52 @@ def parts_of(frame, alpha_min=0):
     return parts
 
 
-def clear_label(frame):
-    """Подпись ряда (заголовок над кадрами) стирается: куски целиком выше макушки фигуры."""
+def clear_halo(frame):
+    """Полупрозрачный ореол, оставшийся без плотных пикселей рядом (стёртые куски), — в ноль."""
     px = frame.load()
-    parts = parts_of(frame)
+    w, h = frame.size
+    for y in range(h):
+        for x in range(w):
+            if 0 < px[x, y][3] <= ALPHA_MIN and not any(
+                    px[nx, ny][3] > ALPHA_MIN
+                    for nx in range(max(0, x - 2), min(w, x + 3)) for ny in range(max(0, y - 2), min(h, y + 3))):
+                px[x, y] = (0, 0, 0, 0)
+
+
+def clear_label(frame, by_color=False):
+    """Подписи листа стираются: отдельные от фигуры куски целиком выше её макушки или в верхней
+    LABEL_PART кадра (поднятый крозиус достаёт до строки подписи) — заголовок ряда, и целиком ниже
+    её ног — номера кадров. Куски — по плотным пикселям: ореол листа склеивает буквы с фигурой.
+    by_color — подпись касается фигуры (ряд из одного кадра): в строке подписи стираются её цвета —
+    белые буквы и тёмно-синяя обводка (у оружия и брони в этой строке — тёплые цвета)."""
+    px = frame.load()
+    if by_color:
+        _clear_label_colors(frame)
+    parts = parts_of(frame, ALPHA_MIN)
     top = min(y for _, y in parts[0])
+    feet = max(y for _, y in parts[0])
     for part in parts[1:]:
-        if max(y for _, y in part) <= top + 2:
+        ys = [y for _, y in part]
+        if max(ys) <= top + 2 or max(ys) < frame.height * LABEL_PART or min(ys) >= feet - 2:
             for x, y in part:
                 px[x, y] = (0, 0, 0, 0)
+    clear_halo(frame)
     return frame
+
+
+def _clear_label_colors(frame):
+    px = frame.load()
+    w, h = frame.size
+    band = int(h * LABEL_PART)
+    whites = [y for y in range(band) for x in range(w)
+              if px[x, y][3] > ALPHA_MIN and min(px[x, y][:3]) > 200]
+    if not whites:
+        return
+    for y in range(max(whites) + 4):   # буквы + обводка под ними
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a > 0 and b >= r - 10:
+                px[x, y] = (0, 0, 0, 0)
 
 
 def clear_strays(frame):
@@ -155,12 +194,7 @@ def clear_strays(frame):
         if min(x for x, _ in part) < hx or len(part) < STRAY_SIZE:
             for x, y in part:
                 px[x, y] = (0, 0, 0, 0)
-    for y in range(h):
-        for x in range(w):
-            if 0 < px[x, y][3] <= ALPHA_MIN and not any(
-                    px[nx, ny][3] > ALPHA_MIN
-                    for nx in range(max(0, x - 2), min(w, x + 3)) for ny in range(max(0, y - 2), min(h, y + 3))):
-                px[x, y] = (0, 0, 0, 0)
+    clear_halo(frame)
     return frame
 
 
@@ -204,15 +238,19 @@ def main(sheet, folder):
     folder = Path(folder)
     res_folder = "res://" + folder.as_posix().strip("/")
     rows = find_rows(img)
-    if len(rows) != len(ROW_ANIMS):
-        sys.exit(f"рядов кадров {len(rows)}, ожидалось {len(ROW_ANIMS)}: {rows}")
+    anims = ROW_ANIMS + EXTRA_ROWS[:max(len(rows) - len(ROW_ANIMS), 0)]
+    if len(rows) != len(anims):
+        sys.exit(f"рядов кадров {len(rows)}, ожидалось {len(ROW_ANIMS)}–{len(ROW_ANIMS) + len(EXTRA_ROWS)}: {rows}")
 
     # Кадры и якоря (x — в координатах кадра, y — линия земли ряда)
     src = {}
     pitch = frame_pitch(img, *rows[0])
-    for anim, (y0, y1) in zip(ROW_ANIMS, rows):
-        frames = [img.crop((c0, y0, c1, y1)) for c0, c1 in find_cells(img, y0, y1, pitch)]
-        frames = [clear_label(f) for f in frames]
+    for anim, (y0, y1) in zip(anims, rows):
+        if anim in EXTRA_ROWS:   # один кадр на весь ряд — подпись ряда сотрёт clear_label
+            frames = [img.crop((0, y0, img.width, y1))]
+        else:
+            frames = [img.crop((c0, y0, c1, y1)) for c0, c1 in find_cells(img, y0, y1, pitch)]
+        frames = [clear_label(f, anim in EXTRA_ROWS) for f in frames]
         if anim == "attack":
             frames = [clear_stray_flash(f) for f in frames]
         elif anim != "death":

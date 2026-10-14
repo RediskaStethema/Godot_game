@@ -23,6 +23,8 @@ const LEVEL_PIP_STEP: float = 5.0
 const LEVEL_PIP_GAP: float = 4.0
 const STATUS_DOT_R: float = 1.5
 const STATUS_DOT_GAP: float = 3.0
+# Боевой клич (Chaplain): кадр клича (анимация battle_cry листа, если есть), первый выстрел — после него
+const BATTLE_CRY_TIME: float = 0.6
 # Вспышка попадания: боец, получивший урон, на мгновение белеет (общий шейдер на всех)
 const HIT_FLASH_TIME: float = 0.1
 const HIT_FLASH_STRENGTH: float = 0.85   # доля белого поверх цвета спрайта (с тинтом)
@@ -146,7 +148,7 @@ func _ready() -> void:
 
 # Выстрел / удар отыгран — стойка до следующего (последний кадр атаки — со вспышкой ствола)
 func _on_animation_finished() -> void:
-	if sprite.animation == "attack" and current_state != State.DEAD:
+	if sprite.animation in ["attack", "battle_cry"] and current_state != State.DEAD:
 		sprite.play("idle")
 
 # Бой окончен (BattleManager): выжившие опускают оружие — стойка, а не стрельба
@@ -664,14 +666,15 @@ func _spread_burning(e: Dictionary) -> void:
 		best.apply_status(StatusEffects.BURNING, e["power"], e["time"], false)
 
 # Боевой клич (Chaplain): один раз за бой, при первом сближении с врагом
-func _try_battle_cry() -> void:
+func _try_battle_cry() -> bool:
 	if battle_cry_used or data.battle_cry_status == "":
-		return
+		return false
 	battle_cry_used = true
 	var r2 = data.battle_cry_radius * data.battle_cry_radius
 	for ally in SoldierRegistry.get_alive_soldiers_of_team(team):
 		if global_position.distance_squared_to(ally.global_position) <= r2:
 			ally.apply_status(data.battle_cry_status, data.battle_cry_power, data.battle_cry_duration)
+	return true
 
 # -------------------------------------------------------
 # ПОИСК ЦЕЛИ
@@ -776,10 +779,13 @@ func _on_state_enter(state: State) -> void:
 		State.MOVE, State.CHASE, State.RETREATING:
 			_play_animation("walk")
 		State.ATTACK:
-			_try_battle_cry()
 			attack_timer = 0.0
 			sprite.stop()
-			sprite.play("attack")
+			if _try_battle_cry() and sprite.sprite_frames.has_animation("battle_cry"):
+				attack_timer = BATTLE_CRY_TIME   # сначала клич, выстрел — после
+				sprite.play("battle_cry")
+			else:
+				sprite.play("attack")
 		State.CASTING:
 			cast_timer = data.cast_time
 			_play_animation("idle")
