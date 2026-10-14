@@ -65,9 +65,9 @@ func _reform() -> void:
 # Строй как в 9 Kings: шеренги вдоль осей изометрии, фронт смотрит на врага.
 # Шеренга (до FORMATION_MAX_RANK бойцов) — вдоль оси row, ряды уходят в тыл
 # вдоль оси наступления. Первый ряд — ближе к противнику.
-const FORMATION_MAX_RANK: int = 3
-const RANK_SPACING: float = 26.0   # между бойцами в шеренге, px
-const FILE_SPACING: float = 22.0   # между рядами, px
+const FORMATION_MAX_RANK: int = 5   # 15 бойцов — 3 ряда по 5
+const RANK_SPACING: float = 14.0   # между бойцами в шеренге, px
+const FILE_SPACING: float = 12.0   # между рядами, px
 
 func _get_formation_offsets(count: int) -> Array[Vector2]:
 	var offsets: Array[Vector2] = []
@@ -144,6 +144,11 @@ func merge_upgrade() -> bool:
 	data.apply_merge_upgrade()
 	for soldier in soldiers:
 		soldier.refresh_stats_from_data()
+	# Уровень пехоты добавляет бойцов (UnitData.squad_growth) — новички с полным HP
+	for i in range(data.squad_growth):
+		_add_soldier(Vector2.ZERO, 1.0)
+	if data.squad_growth > 0:
+		_reform()
 	return true
 
 # Карта того же отряда → лечение: каждому живому бойцу доля его максимального HP,

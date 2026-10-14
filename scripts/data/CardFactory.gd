@@ -18,7 +18,7 @@ static func tactical_squad() -> CardData:
 	c.rarity = "common"
 	c.card_type = "squad"
 	c.unit_factory_id = "tactical_marine"
-	c.unit_count = 3
+	c.unit_count = 9   # уровень: +UnitFactory.SQUAD_GROWTH бойцов
 	return c
 
 static func assault_squad() -> CardData:
@@ -31,7 +31,7 @@ static func assault_squad() -> CardData:
 	c.rarity = "common"
 	c.card_type = "squad"
 	c.unit_factory_id = "assault_marine"
-	c.unit_count = 2
+	c.unit_count = 6   # уровень: +UnitFactory.SQUAD_GROWTH бойцов
 	return c
 
 static func scout_squad() -> CardData:
@@ -44,7 +44,7 @@ static func scout_squad() -> CardData:
 	c.rarity = "common"
 	c.card_type = "squad"
 	c.unit_factory_id = "scout_marine"
-	c.unit_count = 3
+	c.unit_count = 9   # уровень: +UnitFactory.SQUAD_GROWTH бойцов
 	return c
 
 static func devastator_squad() -> CardData:
@@ -57,7 +57,7 @@ static func devastator_squad() -> CardData:
 	c.rarity = "rare"
 	c.card_type = "squad"
 	c.unit_factory_id = "devastator"
-	c.unit_count = 2
+	c.unit_count = 6   # уровень: +UnitFactory.SQUAD_GROWTH бойцов
 	return c
 
 static func terminator_squad() -> CardData:
@@ -70,7 +70,7 @@ static func terminator_squad() -> CardData:
 	c.rarity = "rare"
 	c.card_type = "squad"
 	c.unit_factory_id = "terminator"
-	c.unit_count = 2
+	c.unit_count = 6   # уровень: +UnitFactory.SQUAD_GROWTH бойцов
 	return c
 
 static func apothecary_card() -> CardData:

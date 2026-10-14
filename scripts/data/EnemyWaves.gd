@@ -59,7 +59,8 @@ static func get_normal_squads(wave: int) -> int:
 static func get_soldiers_per_squad(wave: int) -> int:
 	return mini(SOLDIERS_BASE + (max(wave, 1) - 1) / SOLDIERS_EVERY_WAVES, MAX_SOLDIERS_PER_SQUAD)
 
-# Сколько бойцов архетипа дают бюджет отряда (бюджет — в бойцах Chaos Marine)
+# Сколько бойцов архетипа дают бюджет отряда (бюджет — в бойцах Chaos Marine прежнего размера;
+# в отряде их ×UnitFactory.SQUAD_SPLIT — build())
 static func get_archetype_count(unit: String, budget: int) -> int:
 	var a: Dictionary = ARCHETYPES[unit]
 	return clampi(roundi(budget / a["power"]), 1, a["max_count"])
@@ -110,5 +111,6 @@ static func build(wave: int, node_type: String, max_squads: int, seed_value: int
 	var budget = get_soldiers_per_squad(wave)
 	var normal = mini(maxi(get_normal_squads(wave) - replaced, 1), max_squads - squads.size())
 	for unit in pick_archetypes(wave, normal, seed_value):
-		squads.append({"unit": unit, "count": get_archetype_count(unit, budget), "mult": mult})
+		squads.append({"unit": unit, "count": get_archetype_count(unit, budget) * UnitFactory.SQUAD_SPLIT,
+			"mult": mult})
 	return squads

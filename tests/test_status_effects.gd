@@ -59,7 +59,8 @@ func _main() -> void:
 	var a = tacs[0]
 	var b = tacs[1]
 
-	# 1. Яд: 2 ур/с за стак, тик раз в 0.5 с; стаки до 3
+	# 1. Яд: 2 ур/с за стак, тик раз в 0.5 с; стаки до 3. Боец пехоты — доля прежнего (unit_weight)
+	var w: float = a.data.unit_weight
 	var hp0 = a.current_hp
 	a.apply_status(StatusEffects.POISONED, 2.0, 4.0)
 	_ticks(a, 1.0)
@@ -69,15 +70,15 @@ func _main() -> void:
 	var hp1 = a.current_hp
 	_ticks(a, 1.0)
 	_check("яд: 1 стак — %.1f урона за 1 с, 3 стака (4 повтора не больше 3) — %.1f" % [one_stack, hp1 - a.current_hp],
-		absf(one_stack - 2.0) < EPS and a.get_status_stacks(StatusEffects.POISONED) == 3 and absf(hp1 - a.current_hp - 6.0) < EPS)
+		absf(one_stack - 2.0 * w) < EPS and a.get_status_stacks(StatusEffects.POISONED) == 3 		and absf(hp1 - a.current_hp - 6.0 * w) < EPS)
 
 	# 2. Яд ослабляет лечение вдвое; эффект проходит по времени
 	var before = a.current_hp
-	a.heal(10.0)
+	a.heal(4.0)   # мелкий боец ранен меньше чем на 4 — лечение не упирается в максимум
 	var healed = a.current_hp - before
 	_ticks(a, 4.0)
-	_check("яд: лечение вдвое (%.1f из 10), через 4 с эффект снят" % healed,
-		absf(healed - 5.0) < EPS and not a.status_effects.has(StatusEffects.POISONED))
+	_check("яд: лечение вдвое (%.1f из 4), через 4 с эффект снят" % healed,
+		absf(healed - 2.0) < EPS and not a.status_effects.has(StatusEffects.POISONED))
 
 	# 3. Огонь перекидывается на соседа (1 стак), сам наносит урон
 	b.global_position = a.global_position + Vector2(20, 0)

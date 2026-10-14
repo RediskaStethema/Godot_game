@@ -133,7 +133,7 @@ func _main() -> void:
 	battle = current_scene
 	var term = bm.player_units.filter(func(d): return d.factory_id == "terminator")[0]
 	var tac = bm.player_units.filter(func(d): return d.factory_id == "tactical_marine")
-	_check("расстановка сохранена: новый отряд на клетке, улучшение, рука пуста", battle.name == "BattleScene" 		and battle.is_placement_phase and rm.current_node_id == battle_node and bm.player_units.size() == 3 		and tac.size() == 1 and bm.player_placements.get(tac[0]) == Vector2i(0, 0) and tac[0].saved_hp.size() == 3 		and term.squad_level == 1 and term.applied_upgrades == ["Blessed Armour", "Battle Fury"] 		and bm.pending_cards.is_empty() 		and root.get_node("SquadRegistry").get_alive_squads_of_team(0).size() == 3)
+	_check("расстановка сохранена: новый отряд на клетке, улучшение, рука пуста", battle.name == "BattleScene" 		and battle.is_placement_phase and rm.current_node_id == battle_node and bm.player_units.size() == 3 		and tac.size() == 1 and bm.player_placements.get(tac[0]) == Vector2i(0, 0) and tac[0].saved_hp.size() == hand_tactical.unit_count 		and term.squad_level == 1 and term.applied_upgrades == ["Blessed Armour", "Battle Fury"] 		and bm.pending_cards.is_empty() 		and root.get_node("SquadRegistry").get_alive_squads_of_team(0).size() == 3)
 
 	# 6. «В БОЙ» → «вылет» посреди боя → «Продолжить»: та же армия, бой сразу идёт
 	battle._on_start_pressed()

@@ -133,7 +133,7 @@ func _impact() -> void:
 	if splash_radius > 0.0:
 		for e in SoldierRegistry.get_alive_soldiers_of_team(splash_team).duplicate():
 			if e.global_position.distance_to(point) <= splash_radius:
-				e.take_damage(damage)
+				e.take_damage(damage * e.data.unit_weight)   # пехоту в толпе накрывает втрое больше
 		if on_impact.is_valid():
 			on_impact.call(point)
 	elif _target is Soldier:

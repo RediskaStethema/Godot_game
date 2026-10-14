@@ -28,6 +28,7 @@
 # справочники и брифы для агентов — только локально, не в репозиторий
 /WH40K_TDD.docx
 /CLAUDE.md
+/ASSETS_NEEDED.txt
 /CLAUDE_CODE_PROMPT.md
 /.claude/
 /skills/

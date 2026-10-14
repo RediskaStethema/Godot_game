@@ -67,7 +67,8 @@ func _main() -> void:
 			var specs = EnemyWaves.build(w, BATTLE, 9, s)
 			var power = 0.0
 			for sp in specs:
-				power += sp["count"] * EnemyWaves.ARCHETYPES[sp["unit"]]["power"]
+				# в отряде бойцов ×SQUAD_SPLIT, каждый — 1/SQUAD_SPLIT прежнего
+				power += float(sp["count"]) / UnitFactory.SQUAD_SPLIT * EnemyWaves.ARCHETYPES[sp["unit"]]["power"]
 			var ratio = power / float(specs.size() * EnemyWaves.get_soldiers_per_squad(w))
 			worst = ratio if absf(ratio - 1.0) > absf(worst - 1.0) else worst
 			power_ok = power_ok and ratio >= 0.70 and ratio <= 1.25
