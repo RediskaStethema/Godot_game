@@ -28,6 +28,13 @@ const COLORS = {
 	EMPOWERED: Color(1.0, 0.85, 0.35),
 	SLOWED: Color(0.45, 0.65, 0.95),
 }
+# Эффект на бойце, пока статус держится (Vfx.EFFECTS)
+const VFX = {
+	POISONED: "poisoned",
+	BURNING: "burning",
+	EMPOWERED: "empowered",
+	SLOWED: "slowed",
+}
 const NAMES = {
 	POISONED: "Яд",
 	BURNING: "Горение",

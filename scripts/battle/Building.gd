@@ -21,7 +21,12 @@ const BLOCKS = {
 }
 const ARTILLERY_LEVELS: int = 2
 const ARTILLERY_BARREL_LENGTH: float = 40.0
-const ARTILLERY_PROJECTILE: String = "charged"
+const ARTILLERY_PROJECTILE: String = "rocket"
+const ARTILLERY_ARC: float = 90.0          # px — высота дуги полёта ракеты (только вид)
+const ARTILLERY_IMPACT_VFX = ["explosion", "fireball", "impact"]   # по порядку: огонь поверх дыма
+const RECOIL_DISTANCE: float = 12.0        # px — откат ствола при залпе
+const RECOIL_TIME: float = 0.35
+const EXPLOSION_SHAKE: float = 6.0         # px — тряска камеры от взрыва залпа
 const EXPLOSION_COLOR = Color(1.0, 0.6, 0.2, 0.45)
 const EXPLOSION_SHOW_TIME: float = 0.3   # сек видна вспышка взрыва (таймер дерева — только вид)
 const TOWER_LEVELS: int = 3
@@ -46,6 +51,7 @@ var aim: Vector2 = Vector2(1, 0.5)        # куда смотрит ствол (
 var cooldown_left: float = 0.0            # орудие: сек до готовности (0 — готово)
 var _explosion_point: Vector2             # орудие: где показать вспышку взрыва
 var _explosion_id: int = 0
+var _recoil: float = 0.0                  # орудие: 1 — ствол откачен, гаснет к 0 (только вид)
 
 func setup(building_card: CardData, grid_tile: Vector2i) -> void:
 	card = building_card
@@ -72,8 +78,9 @@ func _draw() -> void:
 		var muzzle = _block_top(0.5, 0.5, TOWER_LEVELS)
 		draw_line(muzzle, muzzle + aim.normalized() * BARREL_LENGTH, BARREL_COLOR, 6.0)
 	if building_type == "artillery":
-		var base = _block_top(0.5, 0.5, ARTILLERY_LEVELS)
-		draw_line(base, base + aim.normalized() * ARTILLERY_BARREL_LENGTH, BARREL_COLOR, 8.0)
+		var dir = aim.normalized()
+		var base = _block_top(0.5, 0.5, ARTILLERY_LEVELS) - dir * RECOIL_DISTANCE * _recoil
+		draw_line(base, base + dir * ARTILLERY_BARREL_LENGTH, BARREL_COLOR, 8.0)
 		if _explosion_id > 0:
 			draw_circle(to_local(_explosion_point), stats.get("splash_radius", 0.0), EXPLOSION_COLOR)
 	_draw_level_pips()
@@ -153,13 +160,29 @@ func fire_at(point: Vector2) -> bool:
 	aim = point - global_position
 	queue_redraw()
 	var base = _block_top(0.5, 0.5, ARTILLERY_LEVELS)
-	var shot = Projectile.launch(get_parent(), ARTILLERY_PROJECTILE,
-		to_global(base + aim.normalized() * ARTILLERY_BARREL_LENGTH), null, point)
+	var muzzle = to_global(base + aim.normalized() * ARTILLERY_BARREL_LENGTH)
+	var shot = Projectile.launch(get_parent(), ARTILLERY_PROJECTILE, muzzle, null, point)
 	shot.damage = stats.get("damage", 0.0)
 	shot.splash_radius = stats.get("splash_radius", 0.0)
 	shot.splash_team = GameConstants.TEAM_ENEMY
 	shot.on_impact = _show_explosion
+	shot.impact_vfx = ARTILLERY_IMPACT_VFX
+	shot.arc_height = ARTILLERY_ARC
+	_play_fire_animation(muzzle)
 	return true
+
+# Только вид: вспышка и дым из ствола, ствол откатывается и возвращается
+func _play_fire_animation(muzzle: Vector2) -> void:
+	Vfx.spawn(get_parent(), "muzzle_flash", muzzle)
+	Vfx.spawn(get_parent(), "muzzle_smoke", muzzle)
+	if not is_inside_tree():
+		return
+	create_tween().tween_method(_set_recoil, 1.0, 0.0, RECOIL_TIME) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+func _set_recoil(value: float) -> void:
+	_recoil = value
+	queue_redraw()
 
 # Только вид: вспышка на месте взрыва гаснет по таймеру дерева
 func _show_explosion(point: Vector2) -> void:
@@ -167,6 +190,9 @@ func _show_explosion(point: Vector2) -> void:
 		return
 	_explosion_point = point
 	_explosion_id += 1
+	var camera = get_viewport().get_camera_2d()
+	if camera and camera.has_method("shake"):
+		camera.shake(EXPLOSION_SHAKE)
 	var id := _explosion_id
 	queue_redraw()
 	get_tree().create_timer(EXPLOSION_SHOW_TIME, false).timeout.connect(func():

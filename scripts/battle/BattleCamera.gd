@@ -8,6 +8,11 @@ extends Camera2D
 
 const TWEEN_TIME: float = 0.6
 const PLACEMENT_ZOOM: float = 1.15
+const SHAKE_TIME: float = 0.3
+const SHAKE_STEP: float = 0.03
+
+var _shake_tween: Tween
+var _shake_rng := RandomNumberGenerator.new()   # своя случайность — общий randf боя не сдвигается
 
 func fit(bounds: Rect2, area: Rect2, placement: bool, animate: bool) -> void:
 	var z = minf(area.size.x / bounds.size.x, area.size.y / bounds.size.y)
@@ -30,6 +35,17 @@ func fit(bounds: Rect2, area: Rect2, placement: bool, animate: bool) -> void:
 	else:
 		zoom = Vector2(z, z)
 		position = pos
+
+# Тряска (взрыв залпа): сдвиг offset гаснет за SHAKE_TIME — только вид, position не трогает
+func shake(strength: float) -> void:
+	if _shake_tween and _shake_tween.is_valid():
+		_shake_tween.kill()
+	_shake_tween = create_tween()
+	var steps := int(SHAKE_TIME / SHAKE_STEP)
+	for i in steps:
+		var k := strength * (1.0 - float(i) / steps)
+		_shake_tween.tween_property(self, "offset", Vector2(_shake_rng.randf_range(-k, k), _shake_rng.randf_range(-k, k)), SHAKE_STEP)
+	_shake_tween.tween_property(self, "offset", Vector2.ZERO, SHAKE_STEP)
 
 # Экран ↔ мир (UI живёт в CanvasLayer, камера на него не влияет)
 func screen_to_world(p: Vector2) -> Vector2:

@@ -24,6 +24,7 @@ var inspector: SquadInspector = null
 var merge_menu: MergeMenu = null   # выбор «улучшить / вылечить» отряд его картой
 var pause_menu: PauseMenu = null
 var fader: OcclusionFader = null   # прозрачность построек — только на расстановке
+var reticle: ArtilleryReticle = null   # прицел орудия игрока — в бою за курсором
 # Скорость боя: Engine.time_scale = базовый × GameSettings.battle_speed, только
 # пока идёт бой; базовый — тот, что был до боя (тесты гоняют с ускорением)
 var _base_time_scale: float = 1.0
@@ -108,6 +109,9 @@ func _build_field() -> void:
 	camera = BattleCamera.new()
 	add_child(camera)
 	camera.make_current()
+	reticle = ArtilleryReticle.new()
+	reticle.camera = camera
+	add_child(reticle)
 	_fit_camera(false)
 	get_viewport().size_changed.connect(_fit_camera.bind(false))
 
