@@ -3,7 +3,9 @@ extends Node2D
 
 # Рисует поле боя в духе 9 Kings: общая платформа, на ней — плиты королевства
 # игрока, плиты зоны врага и декор. Плитки и декор — из темы расы игрока
-# (FactionTheme.current()). Поверх — подсветка клеток (наведение, занято, покупка).
+# (FactionTheme.current()). Поверх — подсветка клеток королевства (наведение, занято, покупка) —
+# только на расстановке (grid_overlay, решение пользователя): в бою видно только поле, здания,
+# цитадель и бойцов. Зона врага не подсвечивается.
 
 var grid: IsoGrid
 
@@ -21,9 +23,6 @@ const COLOR_BUYABLE  = Color(0.30, 0.55, 0.30, 0.25)   # можно купить
 const COLOR_BUYABLE_HOVER = Color(0.45, 0.80, 0.45, 0.45)
 const LINE_BUYABLE   = Color(0.55, 0.85, 0.55, 0.80)
 const PRICE_FONT_SIZE: int = 15
-# --- Зона врага ---
-const COLOR_ENEMY    = Color(0.56, 0.15, 0.13, 0.10)
-const BORDER_ENEMY   = Color(0.78, 0.27, 0.23, 0.35)
 
 # --- Платформа ---
 const FLOOR_PAD_TILES: int = 5          # поле шире раскладки на столько тайлов (камера в бою отъезжает)
@@ -38,6 +37,7 @@ const RIVER_SECOND_CHANCE: float = 0.5
 const NEIGHBOURS = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const CLUSTER_GIVE_UP: float = 0.2
 
+var grid_overlay: bool = true   # подсветка клеток королевства (в бою выключена)
 var hovered_tile: Vector2i = Vector2i(-1, -1)
 var occupied_tiles_player: Dictionary = {}
 var occupied_tiles_enemy: Dictionary = {}
@@ -60,10 +60,14 @@ func setup(iso_grid: IsoGrid) -> void:
 	add_child(_floor)
 
 func _draw() -> void:
-	if not grid:
+	if not grid or not grid_overlay:
 		return
-	_draw_enemy_zone()
 	_draw_kingdom()
+
+# Подсветка клеток королевства: на расстановке — да, в бою — нет (BattleScene._on_start_pressed)
+func set_grid_overlay(visible_overlay: bool) -> void:
+	grid_overlay = visible_overlay
+	queue_redraw()
 
 # Пол перерисовывается только при изменении королевства (покупка клетки)
 func refresh_floor() -> void:
@@ -279,24 +283,6 @@ func set_expansion(tiles: Array[Vector2i], cost: int) -> void:
 	expansion_cost = cost
 	queue_redraw()
 	refresh_floor()
-
-func _draw_enemy_zone() -> void:
-	var pts = _border_points(true)
-	draw_colored_polygon(pts, COLOR_ENEMY)
-	pts.append(pts[0])
-	draw_polyline(pts, BORDER_ENEMY, 2.0, true)
-
-func _border_points(is_enemy: bool) -> PackedVector2Array:
-	var hw = IsoGrid.TILE_WIDTH / 2.0
-	var hh = IsoGrid.TILE_HEIGHT / 2.0
-	var w = (grid.enemy_width if is_enemy else grid.grid_width) - 1
-	var h = (grid.enemy_height if is_enemy else grid.grid_height) - 1
-	return PackedVector2Array([
-		grid.tile_to_screen(Vector2i(0, 0), is_enemy) + Vector2(0, -hh),
-		grid.tile_to_screen(Vector2i(w, 0), is_enemy) + Vector2(hw, 0),
-		grid.tile_to_screen(Vector2i(w, h), is_enemy) + Vector2(0, hh),
-		grid.tile_to_screen(Vector2i(0, h), is_enemy) + Vector2(-hw, 0),
-	])
 
 func _draw_diamond(center: Vector2, color: Color, line_color: Color, line_width: float = 1.5) -> void:
 	var hw = IsoGrid.TILE_WIDTH / 2
