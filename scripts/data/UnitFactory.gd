@@ -84,7 +84,7 @@ static func tactical_marine() -> UnitData:
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.cost = 5
 	d.rarity = GameConstants.RARITY_COMMON
-	d.sprite_path = "res://assets/sprites/space_marine"  # ← путь
+	d.sprite_path = "res://assets/sprites/space_marine_tactical"  # лист assets/assetlist.png (tools/sheet_to_frames.py)
 	d.projectile = "bolt"
 	return d
 
@@ -182,7 +182,7 @@ static func chaos_hellbrute() -> UnitData:
 # Архетипы обычных волн Хаоса (EnemyWaves.ARCHETYPES). Статы — от √(HP × DPS)
 # Chaos Marine (35.5): культист 0.4 от него, рапторы 1.25, хавоки и чумные 1.5;
 # сколько бойцов в отряде (EnemyWaves power) — подобрано tests/balance_sim.gd.
-# Своих спрайтов нет — спрайт chaos с тинтом и масштабом.
+# Свой спрайт — у культистов, остальные — спрайт chaos с тинтом и масштабом.
 
 # Культисты: толпа слабых стрелков с коротким стволом
 static func chaos_cultist() -> UnitData:
@@ -194,7 +194,7 @@ static func chaos_cultist() -> UnitData:
 	d.attack_speed = 0.85
 	d.attack_range = 110.0
 	d.move_speed = 85.0
-	d.tint = Color(0.75, 0.7, 0.6)
+	d.sprite_path = "res://assets/sprites/chaos_cultist"  # лист assets/Сhaos_cultists.png (tools/sheet_to_frames.py)
 	d.sprite_scale = 0.85
 	return d
 
@@ -265,9 +265,7 @@ static func scout_marine() -> UnitData:
 	d.priority = GameConstants.PRIORITY_LOWEST_HP
 	d.cost = 4
 	d.rarity = GameConstants.RARITY_COMMON
-	# TODO: свой спрайт scout_marine — пока space_marine с тинтом
-	d.sprite_path = "res://assets/sprites/space_marine"
-	d.tint = Color(0.75, 1.0, 0.75)
+	d.sprite_path = "res://assets/sprites/space_marine_scout"  # лист assets/Assets_scout.png (tools/sheet_to_frames.py)
 	d.sprite_scale = 0.85
 	d.projectile = "spark"
 	return d
