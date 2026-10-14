@@ -124,7 +124,7 @@ func tick(delta: float) -> void:
 	attack_timer -= delta
 	if attack_timer > Soldier.TIMER_EPSILON:
 		return
-	var target = _find_target(stats.get("attack_range", 0.0))
+	var target = _find_target(stats.get("attack_range", INF))   # без дальности — всё поле
 	if target == null:
 		return
 	attack_timer = 1.0 / stats.get("attack_speed", 1.0)
