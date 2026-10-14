@@ -38,7 +38,7 @@ static func scout_squad() -> CardData:
 	var c = CardData.new()
 	c.id = "scout_squad"
 	c.title = "Scout Squad"
-	c.description = "Быстрые стрелки, добивают раненых"
+	c.description = "Снайперы: бьют дальше всех, но хрупкие; добивают раненых"
 	c.faction = "space_marines"
 	c.cost = 4
 	c.rarity = "common"
@@ -159,7 +159,7 @@ static func bolter_turret() -> CardData:
 	var c = CardData.new()
 	c.id = "bolter_turret"
 	c.title = "Bolter Turret"
-	c.description = "Турель: стреляет в ближайшего врага. Стоит между раундами."
+	c.description = "Турель: стреляет в ближайшего врага на всём поле. Стоит между раундами."
 	c.faction = "space_marines"
 	c.cost = 7   # в TDD турели нет — Rare по шкале цен TDD
 	c.rarity = "rare"
@@ -168,7 +168,7 @@ static func bolter_turret() -> CardData:
 	c.building_stats = {
 		"damage": 15.0,
 		"attack_speed": 1.5,
-		"attack_range": 300.0,
+		# attack_range нет — бьёт на всё поле (решение пользователя; было 300 px)
 	}
 	# Уровень (такая же карта на турель): +25% урона, +20% скорострельности
 	c.building_level_bonuses = {"damage": 0.25, "attack_speed": 0.20}

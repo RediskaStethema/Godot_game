@@ -257,10 +257,12 @@ static func scout_marine() -> UnitData:
 	d.unit_name = "Scout Marine"
 	d.faction = "space_marines"
 	d.tags = ["marine", "ranged", "light"]
-	d.hp = 60.0
-	d.damage = 8.0
-	d.attack_speed = 1.2
-	d.attack_range = 220.0
+	# Снайперы (решение пользователя): бьют дальше всех, но хрупкие; редкие сильные выстрелы —
+	# урон в секунду почти прежний (было: HP 60, урон 8, 1.2/с, дальность 220)
+	d.hp = 35.0
+	d.damage = 20.0
+	d.attack_speed = 0.5
+	d.attack_range = 420.0
 	d.move_speed = 110.0
 	d.priority = GameConstants.PRIORITY_LOWEST_HP
 	d.cost = 4
