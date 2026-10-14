@@ -40,7 +40,9 @@ func _main() -> void:
 		ok_cases = ok_cases and bm.catch_up_pending == c[2]
 	_check("порог: ранена и < 50% — да; без урона, выше половины, 0 HP — нет", ok_cases)
 
-	# 2. Бой: армии нет, штурм с 550 HP → цитадель ниже 500 → флаг
+	# 2. Бой: армии нет, штурм с 530 HP → цитадель ниже 500 → флаг. Штурм волны 1 снимает ≈ 50 HP
+	# со случайным разбросом урона (Soldier._roll_damage): с 550 цитадель оставалась то ≈ 496, то ≈ 501 —
+	# на пороге 500 тест падал через раз; с 530 запас ≈ 20 HP
 	bm.reset_run()
 	rm.new_run(7)
 	for n in rm.map.nodes:
@@ -49,7 +51,7 @@ func _main() -> void:
 			rm.current_completed = false
 			break
 	eco.round_number = 1
-	bm.citadel_hp = 550.0
+	bm.citadel_hp = 530.0
 	change_scene_to_file("res://scenes/battle/BattleScene.tscn")
 	await _frames(3)
 	current_scene._on_start_pressed()
