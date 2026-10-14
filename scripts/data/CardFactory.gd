@@ -180,7 +180,7 @@ static func thunderfire_cannon() -> CardData:
 	var c = CardData.new()
 	c.id = "thunderfire_cannon"
 	c.title = "Thunderfire Cannon"
-	c.description = "Орудие: в бою кликните по полю — залп по площади. Перезарядка 10 с."
+	c.description = "Орудие: в бою кликните по полю — залп по площади. Перезарядка 4 с."
 	c.faction = "space_marines"
 	c.cost = 8
 	c.rarity = "rare"
@@ -189,7 +189,7 @@ static func thunderfire_cannon() -> CardData:
 	c.building_stats = {
 		"damage": 40.0,          # каждому врагу в радиусе взрыва
 		"splash_radius": 60.0,
-		"cooldown": 10.0,        # сек между залпами
+		"cooldown": 4.0,         # сек между залпами (решение пользователя: было 10)
 	}
 	# Уровень (такая же карта на орудие): +25% урона, перезарядка −15%
 	c.building_level_bonuses = {"damage": 0.25, "cooldown": -0.15}

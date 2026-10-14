@@ -14,6 +14,8 @@ const KNOCKBACK_STOP_SPEED: float = 5.0
 # спрайты разного исходного размера (marine 197 px, chaos 170 px) приводим к одной высоте.
 # Решение пользователя: бойцы вдвое мельче прежних 62 px, зато их в отряде втрое больше
 const TARGET_SPRITE_HEIGHT: float = 31.0
+# Эффекты на бойце (Vfx) подобраны под рост 62 px
+const EFFECT_SCALE: float = TARGET_SPRITE_HEIGHT / 62.0
 const HP_BAR_SIZE = Vector2(16, 3)
 const HP_BAR_GAP: float = 4.0
 const LEVEL_PIP_R: float = 2.0
@@ -64,6 +66,10 @@ var battle_cry_used: bool = false
 var extra_on_hit_status: String = ""
 var extra_on_hit_status_power: float = 0.0
 var extra_on_hit_status_duration: float = 0.0
+# Эффекты на бойце (Vfx) — только вид: статусы, оглушение / каст, лечение
+var _status_vfx: Dictionary = {}   # статус → Vfx
+var _state_vfx: Vfx
+var _heal_vfx: Vfx
 
 # Позиция в строю — смещение относительно центра отряда
 var formation_offset: Vector2 = Vector2.ZERO
@@ -134,6 +140,18 @@ static func _get_frames(sprite_path: String) -> SpriteFrames:
 			i += 1
 	_frames_cache[sprite_path] = frames
 	return frames
+
+func _ready() -> void:
+	sprite.animation_finished.connect(_on_animation_finished)
+
+# Выстрел / удар отыгран — стойка до следующего (последний кадр атаки — со вспышкой ствола)
+func _on_animation_finished() -> void:
+	if sprite.animation == "attack" and current_state != State.DEAD:
+		sprite.play("idle")
+
+# Бой окончен (BattleManager): выжившие опускают оружие — стойка, а не стрельба
+func stand_down() -> void:
+	transition_to(State.IDLE)
 
 func _load_animations() -> void:
 	var frames = _get_frames(data.sprite_path)
@@ -349,6 +367,8 @@ func heal(amount: float) -> void:
 		return
 	if status_effects.has(StatusEffects.POISONED):
 		amount *= StatusEffects.POISON_HEAL_MULT
+	if amount > 0.0 and current_hp < max_hp and not is_instance_valid(_heal_vfx):
+		_heal_vfx = Vfx.attach(self, "heal", data.sprite_scale * EFFECT_SCALE)
 	current_hp = min(current_hp + amount, max_hp)
 	queue_redraw()
 
@@ -417,6 +437,7 @@ func apply_knockback(direction: Vector2, force: float) -> void:
 		return
 	knockback_velocity = direction.normalized() * force
 	transition_to(State.KNOCKBACK)
+	Vfx.spawn(_world_parent(), "impact", global_position, data.sprite_scale * EFFECT_SCALE)
 
 # -------------------------------------------------------
 # АТАКА И УРОН
@@ -439,6 +460,8 @@ func _do_attack() -> void:
 		shot.status_duration = st[2]
 		return
 	target.take_damage(_roll_damage())
+	Vfx.spawn(_world_parent(), "blood",
+		target.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * target.data.sprite_scale), EFFECT_SCALE)
 	_apply_on_hit_effects()
 
 # Снаряд из ствола (метаданные muzzle кадров) на кадре вспышки (shot_frame);
@@ -534,6 +557,7 @@ func _die() -> void:
 		return
 	transition_to(State.DEAD)
 	status_effects.clear()
+	_sync_status_vfx()
 	queue_redraw()   # убрать полоску HP
 	emit_signal("died", self)
 
@@ -556,6 +580,7 @@ func apply_status(effect: String, power: float, duration: float, stackable: bool
 		e["power"] = maxf(e["power"], power)
 		e["time"] = maxf(e["time"], duration)
 		e["duration"] = maxf(e["duration"], duration)
+	_sync_status_vfx()
 	queue_redraw()
 
 func get_status_stacks(effect: String) -> int:
@@ -603,7 +628,23 @@ func _tick_status_effects(delta: float) -> void:
 	for effect in expired:
 		status_effects.erase(effect)
 	if not expired.is_empty():
+		_sync_status_vfx()
 		queue_redraw()
+
+# Эффект на бойце на каждый действующий статус (StatusEffects.VFX): появился — надеть, прошёл — снять
+func _sync_status_vfx() -> void:
+	for effect in _status_vfx.keys():
+		if not status_effects.has(effect):
+			if is_instance_valid(_status_vfx[effect]):
+				_status_vfx[effect].queue_free()
+			_status_vfx.erase(effect)
+	for effect in status_effects:
+		if not _status_vfx.has(effect) and StatusEffects.VFX.has(effect):
+			_status_vfx[effect] = Vfx.attach(self, StatusEffects.VFX[effect], data.sprite_scale * EFFECT_SCALE)
+
+# Куда класть разовые эффекты в мире — туда же, куда снаряды (узел отрядов)
+func _world_parent() -> Node:
+	return parent_squad.get_parent() if parent_squad else null
 
 # Огонь перекидывается на ближайшего негорящего соседа своей команды (1 стак)
 # с остатком своего времени: цепочка гаснет, соседи не поджигают друг друга вечно
@@ -721,6 +762,14 @@ func transition_to(new_state: State) -> void:
 	_on_state_enter(new_state)
 
 func _on_state_enter(state: State) -> void:
+	# Оглушение и каст видны, пока боец в этом состоянии
+	if is_instance_valid(_state_vfx):
+		_state_vfx.queue_free()
+	_state_vfx = null
+	if state == State.STUNNED:
+		_state_vfx = Vfx.attach(self, "stun", data.sprite_scale * EFFECT_SCALE)
+	elif state == State.CASTING:
+		_state_vfx = Vfx.attach(self, "cast", data.sprite_scale * EFFECT_SCALE)
 	match state:
 		State.IDLE, State.STUNNED, State.KNOCKBACK:
 			_play_animation("idle")
@@ -737,6 +786,7 @@ func _on_state_enter(state: State) -> void:
 		State.DEAD:
 			sprite.stop()
 			sprite.play("death")
+			Vfx.attach(self, "splatter", data.sprite_scale * EFFECT_SCALE)
 			sprite.animation_finished.connect(_on_death_finished)
 
 func _on_death_finished() -> void:
