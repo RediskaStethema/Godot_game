@@ -28,6 +28,13 @@ const FLOOR_PAD_TILES: int = 5          # поле шире раскладки �
 const FLOOR_TINT = Color(0.72, 0.70, 0.68)   # пол чуть темнее — юниты читаются лучше
 const DECOR_CHANCE: int = 12            # % клеток вне боевой полосы с декором
 const DECOR_FLAT_CHANCE: int = 4        # % клеток «ничьей земли» с кратером
+# Реки (тема: "river") — прямые линии через всё поле, своя раскладка в каждом забеге (seed забега):
+# первая поперёк ничьей земли, вторая (с этим шансом) вдоль поля в стороне от боевой полосы
+const RIVER_SECOND_CHANCE: float = 0.5
+# Местность (тема: "ground" / "features"): соседи клетки для роста групп деталей; группа, упёршаяся
+# в край или реку, бросает расти с таким шансом на каждой неудачной попытке
+const NEIGHBOURS = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+const CLUSTER_GIVE_UP: float = 0.2
 
 var hovered_tile: Vector2i = Vector2i(-1, -1)
 var occupied_tiles_player: Dictionary = {}
@@ -77,16 +84,115 @@ func _is_enemy_cell(c: Vector2i) -> bool:
 	var start = grid.grid_width + grid.gap_tiles
 	return c.x >= start and c.x < start + grid.enemy_width and c.y >= 0 and c.y < grid.enemy_height
 
+# Плита линии (край, река) вдоль оси line_axis ("u" / "v"); у плиты темы "axis" — вдоль какой оси
+# нарисована картинка, по другой оси — отражаем
+func _draw_line_tile(variants: Array, c: Vector2i, top: Vector2, line_axis: String) -> void:
+	var entry = TerrainTiles.pick_any(variants, c)
+	var art_axis: String = entry.get("axis", line_axis) if entry is Dictionary else line_axis
+	TerrainTiles.draw_theme_tile(_floor, entry, top, FLOOR_TINT, art_axis != line_axis)
+
+# Клетки рек: клетка → ось русла ("u" / "v"). Реки не идут по королевству, цитадели и зоне врага
+func _river_cells() -> Dictionary:
+	var cells: Dictionary = {}
+	if not theme.has("river"):
+		return cells
+	var rng = RandomNumberGenerator.new()
+	rng.seed = hash([RunManager.rng.seed, "rivers"])
+	var lo = -FLOOR_PAD_TILES + 1
+	var cols = grid.get_layout_cols()
+	var rows = grid.get_layout_rows()
+	# Поперёк ничьей земли: u постоянно, русло вдоль v
+	var u = rng.randi_range(grid.grid_width + 1, grid.grid_width + grid.gap_tiles - 2)
+	for v in range(lo, rows + FLOOR_PAD_TILES - 1):
+		cells[Vector2i(u, v)] = "v"
+	# Вдоль поля в стороне от боевой полосы: v постоянно, русло вдоль u
+	if rng.randf() < RIVER_SECOND_CHANCE:
+		var v = rng.randi_range(lo + 1, -2) if rng.randf() < 0.5 \
+			else rng.randi_range(rows + 1, rows + FLOOR_PAD_TILES - 3)
+		for uu in range(lo, cols + FLOOR_PAD_TILES - 1):
+			cells[Vector2i(uu, v)] = "u"
+	for c in cells.keys():
+		if grid.is_valid_tile(c) or c == grid.citadel_tile or _is_enemy_cell(c):
+			cells.erase(c)
+	return cells
+
+# Естественная местность (тема: "ground" + "features"): клетка → [плитка, отражена ли].
+# Основа — грунт (отражается по хэшу клетки, чтобы не было повторяющегося узора), поверх —
+# редкие детали: группы {"clusters": N, "size": [от, до]} растут от случайной клетки в соседние,
+# одиночные {"scatter": доля клеток}. Знамёна (тема: "flags") — count клеток на стороне игрока.
+# Раскладка — от seed забега и не зависит от купленных клеток: рамка королевства в списке
+# целиком (его клетки рисуются своей плиткой раньше), детали в неё не ставятся
+func _terrain_cells(cells: Array[Vector2i], rivers: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	if not theme.has("ground"):
+		return result
+	var free: Array[Vector2i] = []
+	for c in cells:
+		if not _is_floor_edge(c) and not rivers.has(c) and c != grid.citadel_tile:
+			free.append(c)
+			result[c] = [TerrainTiles.pick_any(theme["ground"], c), TerrainTiles.hash_cell(c, 53) % 2 == 1]
+	var spots = free.filter(func(c): return not grid.is_in_bounds(c))
+	if spots.is_empty():
+		return result
+	var rng = RandomNumberGenerator.new()
+	rng.seed = hash([RunManager.rng.seed, "terrain"])
+	var taken: Dictionary = {}
+	for f in theme.get("features", []):
+		if f.has("clusters"):
+			for i in f["clusters"]:
+				var cluster: Array[Vector2i] = [spots[rng.randi() % spots.size()]]
+				var size = rng.randi_range(f["size"][0], f["size"][1])
+				while cluster.size() < size:
+					var from: Vector2i = cluster[rng.randi() % cluster.size()]
+					var next: Vector2i = from + NEIGHBOURS[rng.randi() % NEIGHBOURS.size()]
+					if result.has(next) and not grid.is_in_bounds(next) and not cluster.has(next):
+						cluster.append(next)
+					elif rng.randf() < CLUSTER_GIVE_UP:
+						break   # упёрлись в край / реку — группа меньше
+				for c in cluster:
+					_put_feature(result, taken, c, f["tiles"])
+		else:
+			for c in spots:
+				if rng.randf() < f["scatter"]:
+					_put_feature(result, taken, c, f["tiles"])
+	if theme.has("flags"):
+		var player_side = spots.filter(func(c): return c.x < grid.grid_width + grid.gap_tiles / 2 \
+			and not taken.has(c))
+		for i in mini(theme["flags"]["count"], player_side.size()):
+			_put_feature(result, taken, player_side.pop_at(rng.randi() % player_side.size()), theme["flags"]["tiles"])
+	return result
+
+func _put_feature(result: Dictionary, taken: Dictionary, c: Vector2i, tiles: Array) -> void:
+	if taken.has(c):
+		return
+	taken[c] = true
+	result[c] = [TerrainTiles.pick_any(tiles, c), false]
+
+# Внешнее кольцо пола — край карты (тема: "edge")
+func _is_floor_edge(c: Vector2i) -> bool:
+	return c.x == -FLOOR_PAD_TILES or c.y == -FLOOR_PAD_TILES \
+		or c.x == grid.get_layout_cols() + FLOOR_PAD_TILES - 1 or c.y == grid.get_layout_rows() + FLOOR_PAD_TILES - 1
+
 # Боевая полоса: королевство, ничья земля и зона врага — здесь только плоский декор
 func _is_battle_strip(c: Vector2i) -> bool:
 	return c.x >= 0 and c.x < grid.get_layout_cols() and c.y >= 0 and c.y < grid.get_layout_rows()
 
 func _draw_floor() -> void:
 	var cells = _floor_cells()
+	var rivers = _river_cells()
+	var terrain = _terrain_cells(cells, rivers)
 	for c in cells:
 		var top = grid.lattice_to_screen(c.x, c.y)
 		if grid.is_valid_tile(c):
 			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["kingdom"], c), top)
+		elif _is_floor_edge(c) and theme.has("edge"):
+			# Края с постоянным u идут вдоль оси v, с постоянным v — вдоль u
+			var along_v = c.x == -FLOOR_PAD_TILES or c.x == grid.get_layout_cols() + FLOOR_PAD_TILES - 1
+			_draw_line_tile(theme["edge"], c, top, "v" if along_v else "u")
+		elif rivers.has(c):
+			_draw_line_tile(theme["river"], c, top, rivers[c])
+		elif terrain.has(c):
+			TerrainTiles.draw_theme_tile(_floor, terrain[c][0], top, FLOOR_TINT, terrain[c][1])
 		elif _is_enemy_cell(c):
 			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["enemy"], c), top, FLOOR_TINT)
 		else:
@@ -94,7 +200,7 @@ func _draw_floor() -> void:
 
 	# Декор — поверх пола. В боевой полосе только плоские кратеры, и не на клетках королевства
 	for c in cells:
-		if grid.is_in_bounds(c) or c == grid.citadel_tile:
+		if grid.is_in_bounds(c) or c == grid.citadel_tile or rivers.has(c):
 			continue
 		var in_strip = _is_battle_strip(c)
 		var roll = TerrainTiles.hash_cell(c, 7) % 100
