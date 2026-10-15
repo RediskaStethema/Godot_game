@@ -1,8 +1,8 @@
 extends SceneTree
 
-# Подсказка по зданию под курсором: что за здание, уровень, что делает; здание не гаснет
-# (OcclusionFader.pinned); зона действия Казарм (соседи по сторонам) — на расстановке подсвечена,
-# в бою — нет (поле без подсветки); курсор ушёл — подсказка и зона пропали.
+# Подсказка по зданию под курсором — только по его клетке: что за здание, уровень, что делает;
+# оно не гаснет (OcclusionFader.pinned); моделька над чужой клеткой — ни подсказки, ни зоны;
+# зона действия Казарм (соседи по сторонам) — на расстановке подсвечена, в бою — нет (поле без подсветки); курсор ушёл — подсказка и зона пропали.
 # Сохранение выключено — забег игрока не трогает.
 #   godot --headless --path . -s tests/test_building_hover.gd
 
@@ -59,6 +59,24 @@ func _main() -> void:
 		and text.contains("Barracks") and text.contains("ур. 1/") and scene.fader.pinned == b_node)
 	_check("зона Казарм — %d соседа по сторонам" % neighbours.size(),
 		neighbours.size() == 4 and scene.renderer.effect_tiles == neighbours)
+
+	# 1б. Курсор на модельке Казарм над клеткой без здания — здание не выбрано: ни подсказки, ни зоны
+	var grid = scene.iso_grid
+	var rect: Rect2 = b_node.get_occlusion_rect()
+	var on_model = Vector2.INF
+	var building_tiles = bm.player_buildings.values()   # клетка с другим зданием выберет его — не та проверка
+	for y in range(int(rect.position.y) + 2, int(rect.end.y), 4):
+		for x in range(int(rect.position.x) + 2, int(rect.end.x), 4):
+			var p = Vector2(x, y)
+			if not building_tiles.has(grid.screen_to_tile(p)):
+				on_model = p
+				break
+		if on_model != Vector2.INF:
+			break
+	await _move_mouse(scene.camera.world_to_screen(on_model))
+	_check("моделька Казарм над пустой клеткой: ни подсказки, ни зоны, здание не закреплено",
+		on_model != Vector2.INF and scene.hovered_building == null and not scene.inspector.is_building_hover_visible()
+		and scene.renderer.effect_tiles.is_empty() and scene.fader.pinned == null)
 
 	# 2. Текст описания — без буквальных переносов внутри строк, по строке на пункт
 	var turret_text: String = bm.buildings.filter(func(b): return b.building_type == "tower")[0].describe()

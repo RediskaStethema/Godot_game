@@ -246,8 +246,9 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_try_buy_tile(iso_grid.screen_to_tile(_screen_to_world(event.position)))
 
-# Здание под курсором (и на расстановке, и в бою): подсказка — что за здание, уровень, что делает;
-# здание не гаснет (OcclusionFader.pinned); на расстановке — его зона действия (Building.get_effect_tiles).
+# Здание под курсором (и на расстановке, и в бою) — только по его клетке (решение пользователя: моделька
+# над чужой клеткой не в счёт): подсказка — что за здание, уровень, что делает; оно не гаснет
+# (OcclusionFader.pinned); на расстановке — его зона действия (Building.get_effect_tiles).
 # Тащим карту здания — зона действия от клетки под курсором, как если бы здание встало туда.
 # Курсор над интерфейсом (скамейка, шапка) — ничего
 func _update_building_hover(screen_pos: Vector2) -> void:
@@ -257,7 +258,7 @@ func _update_building_hover(screen_pos: Vector2) -> void:
 	var found: Building = null
 	if dragging == null and merge_menu == null and get_viewport().gui_get_hovered_control() == null:
 		for b in BattleManager.buildings:
-			if is_instance_valid(b) and b.contains_point(world, tile):
+			if is_instance_valid(b) and b.tile == tile:
 				found = b
 				break
 	hovered_building = found

@@ -98,7 +98,14 @@ func _fill_body(data: CardData) -> void:
 	card_desc.theme_type_variation = "SmallLabel"
 	card_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	card_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	card_desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Длинное описание прокручивается, а не растягивает карту — иначе она налезает на руку под магазином
+	var scroll = ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	$VBoxContainer.add_child(scroll)
+	$VBoxContainer.move_child(scroll, card_desc.get_index())
+	card_desc.reparent(scroll)
+	card_desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 func _make_portrait(data: CardData) -> Control:
 	var frame = PanelContainer.new()

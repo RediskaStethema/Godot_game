@@ -135,9 +135,6 @@ func describe() -> String:
 	lines.append("Такая же карта — уровень +1" if card.can_level_up_building() else "Максимальный уровень")
 	return "\n".join(lines)
 
-# Курсор над зданием (мировые координаты): по его клетке или по блокам — высокое здание видно выше клетки
-func contains_point(world: Vector2, grid_tile: Vector2i) -> bool:
-	return grid_tile == tile or get_occlusion_rect().has_point(world)
 
 # Область экрана (мировые координаты), которую закрывают блоки здания —
 # OcclusionFader делает здание полупрозрачным, если за ним стоит боец

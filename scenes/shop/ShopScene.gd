@@ -4,13 +4,11 @@ extends Control
 @onready var requisition_label: Label = $TopBar/RequisitionLabel
 @onready var shop_slots: HBoxContainer = $ShopPanel/ShopSlots
 @onready var battle_button: Button = $BattleButton
-@onready var army_label: Label = $ArmyPanel/ArmyLabel
 
 const SHOP_SLOT_SCENE = preload("res://scenes/shop/ShopSlot.tscn")
 
-# Высоты нижних панелей магазина. Подобраны под минимальную высоту окна 648:
-# HUD + заголовок + карта (ShopSlot.CARD_SIZE) + рука + нижняя панель
-const BOTTOM_BAR_HEIGHT: float = 80.0
+# Высота панели руки внизу (с кнопкой «В БОЙ»). Подобрана под минимальную высоту окна 648:
+# HUD + заголовок + карта (ShopSlot.CARD_SIZE) + рука
 const HAND_PANEL_HEIGHT: float = 124.0
 const HAND_CARD_SIZE = Vector2(118, 96)
 # Карты руки сужаются, чтобы полная рука (MAX_HAND_SIZE) помещалась в панель без прокрутки:
@@ -25,7 +23,6 @@ const HAND_BUTTON_PAD: float = 4.0     # поля кнопки «Продать�
 var purchased_cards: Array[CardData] = []
 # Выжившие юниты из прошлого боя
 var surviving_units: Array[UnitData] = []
-var army_details: Label = null   # список отрядов-ветеранов под счётчиком армии
 var hand_title: Label = null
 var hand_row: HBoxContainer = null
 var hand_scroll: ScrollContainer = null
@@ -57,7 +54,6 @@ func _ready() -> void:
 	print("ShopScene: загружено выживших: %d, карт в руке: %d" % [surviving_units.size(), purchased_cards.size()])
 
 	_update_requisition_label(EconomyManager.requisition)
-	_update_army_label()
 	_refresh_hand()
 	round_label.text = "Волна %d/%d · %s" % [mini(EconomyManager.round_number, RunManager.get_total_waves()),
 		RunManager.get_total_waves(), Difficulty.level_name(RunManager.difficulty)]
@@ -100,7 +96,6 @@ func _on_purchase_requested(slot_index: int) -> void:
 	purchased_cards.append(card)
 	_show_message("Куплено: %s" % card.title)
 
-	_update_army_label()
 	_refresh_hand()
 	_populate_shop(ShopManager.current_offers)
 	SaveManager.save_run()
@@ -118,7 +113,6 @@ func _sell_card(card: CardData) -> void:
 	var refund = EconomyManager.sell_card(card)
 	_show_message("Продано: %s (+%d Req)" % [card.title, refund])
 	_refresh_catch_up_picker()
-	_update_army_label()
 	_refresh_hand()
 	_populate_shop(ShopManager.current_offers)
 	SaveManager.save_run()
@@ -196,9 +190,7 @@ func _show_message(text: String) -> void:
 	if message_label:
 		message_label.text = text
 
-# -------------------------------------------------------
-# АРМИЯ
-# -------------------------------------------------------
+# Бойцов в армии: выжившие + карты отрядов в руке (уход без армии — со второго нажатия)
 func _count_units() -> int:
 	# Считаем юнитов: бойцы выживших отрядов + из карт отрядов в руке
 	var count = 0
@@ -208,20 +200,6 @@ func _count_units() -> int:
 		if card.card_type == "squad":
 			count += card.unit_count
 	return count
-
-func _update_army_label() -> void:
-	var count = _count_units()
-	# Лимита армии нет — ограничена только рука (MAX_HAND_SIZE)
-	army_label.text = "Армия: %d бойцов" % count
-	army_label.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT)
-	if army_details:
-		var parts: Array[String] = []
-		for unit in surviving_units:
-			var ups = " [%s]" % ", ".join(unit.applied_upgrades) if not unit.applied_upgrades.is_empty() else ""
-			var lvl = " ур.%d" % unit.squad_level if unit.squad_level > 0 else ""
-			parts.append("%s ×%d%s%s" % [unit.unit_name, unit.saved_hp.size(), lvl, ups])
-		army_details.text = ("Ветераны: " + "   ·   ".join(parts)) if not parts.is_empty() \
-			else "Ветеранов нет — купите отряды и выложите их в бою"
 
 func _update_requisition_label(amount: int) -> void:
 	requisition_label.text = "%d Req" % amount
@@ -261,7 +239,6 @@ func _on_catch_up_picked(index: int) -> void:
 	if catch_up_picker:
 		catch_up_picker.close()
 	_refresh_catch_up_button()
-	_update_army_label()
 	_refresh_hand()
 	_populate_shop(ShopManager.current_offers)
 	SaveManager.save_run()
@@ -301,7 +278,6 @@ func _build_layout() -> void:
 	_build_hud()
 	_build_shop_panel()
 	_build_hand_panel()
-	_build_bottom_bar()
 
 # Шапка: название, сообщение, волна, Req, цитадель
 func _build_hud() -> void:
@@ -337,7 +313,7 @@ func _build_shop_panel() -> void:
 	var shop_panel: VBoxContainer = $ShopPanel
 	shop_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shop_panel.offset_top = UITheme.HUD_HEIGHT + 10
-	shop_panel.offset_bottom = -(BOTTOM_BAR_HEIGHT + HAND_PANEL_HEIGHT + 8)
+	shop_panel.offset_bottom = -(HAND_PANEL_HEIGHT + 8)
 	shop_panel.offset_left = 24
 	shop_panel.offset_right = -24
 	shop_panel.add_theme_constant_override("separation", 8)
@@ -359,13 +335,12 @@ func _build_shop_panel() -> void:
 	shop_slots.add_theme_constant_override("separation", 18)
 	shop_slots.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
-# Рука: карты с кнопкой продажи
+# Рука внизу: заголовок и кнопка «В БОЙ» слева, карты с кнопкой продажи
 func _build_hand_panel() -> void:
 	var hand_panel = PanelContainer.new()
 	hand_panel.theme_type_variation = "HudPanel"
 	hand_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	hand_panel.offset_top = -(BOTTOM_BAR_HEIGHT + HAND_PANEL_HEIGHT)
-	hand_panel.offset_bottom = -BOTTOM_BAR_HEIGHT
+	hand_panel.offset_top = -HAND_PANEL_HEIGHT
 	add_child(hand_panel)
 	var hand_box = HBoxContainer.new()
 	hand_box.add_theme_constant_override("separation", 14)
@@ -378,6 +353,10 @@ func _build_hand_panel() -> void:
 	hand_info.add_child(hand_title)
 	var sell_hint = UITheme.make_label("Продажа: 1/3 цены", "DimLabel")
 	hand_info.add_child(sell_hint)
+	battle_button.reparent(hand_info)
+	battle_button.theme_type_variation = "PrimaryButton"
+	battle_button.text = "В БОЙ"
+	battle_button.custom_minimum_size = Vector2(0, 52)
 	hand_scroll = ScrollContainer.new()
 	hand_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hand_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -387,31 +366,6 @@ func _build_hand_panel() -> void:
 	hand_row.add_theme_constant_override("separation", HAND_CARD_GAP)
 	hand_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	hand_scroll.add_child(hand_row)
-
-# Нижняя панель: армия + кнопка боя
-func _build_bottom_bar() -> void:
-	var bottom = PanelContainer.new()
-	bottom.theme_type_variation = "HudPanel"
-	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_top = -BOTTOM_BAR_HEIGHT
-	add_child(bottom)
-	var row = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 20)
-	bottom.add_child(row)
-	var army_col = VBoxContainer.new()
-	army_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	army_col.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_child(army_col)
-	army_label.reparent(army_col)
-	army_label.theme_type_variation = "ValueLabel"
-	army_details = UITheme.make_label("", "DimLabel")
-	army_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	army_col.add_child(army_details)
-	$ArmyPanel.hide()
-	battle_button.reparent(row)
-	battle_button.theme_type_variation = "PrimaryButton"
-	battle_button.text = "В БОЙ"
-	battle_button.custom_minimum_size = Vector2(220, 60)
 
 # Уход из магазина — сразу в бой волны: шаг магазина пройден, следующий шаг
 # цепочки — бой. Без армии — предупреждение, со второго нажатия уходим всё

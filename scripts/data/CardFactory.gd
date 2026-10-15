@@ -202,7 +202,7 @@ static func barracks() -> CardData:
 	var c = CardData.new()
 	c.id = "barracks"
 	c.title = "Barracks"
-	c.description = "После каждой победы возвращают павших бойцов (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Не лечат."
+	c.description = "После победы возвращают павших (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Не лечат."
 	c.faction = "space_marines"
 	c.cost = 7
 	c.rarity = "common"   # решение пользователя 15.10.2026: Common, 3 копии в пуле — выпадает чаще; цена прежняя
