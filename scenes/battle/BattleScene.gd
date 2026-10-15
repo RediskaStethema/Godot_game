@@ -21,6 +21,7 @@ var camera: BattleCamera = null
 var bench: Node = null
 var hud: BattleHud = null
 var inspector: SquadInspector = null
+var expansion_banner: ExpansionBanner = null   # объявление этапа расширения (на расстановке)
 var merge_menu: MergeMenu = null   # выбор «улучшить / вылечить» отряд его картой
 var pause_menu: PauseMenu = null
 var fader: OcclusionFader = null   # прозрачность построек — только на расстановке
@@ -129,6 +130,7 @@ func _populate_field() -> void:
 	_update_expansion()
 	if BattleManager.can_expand_kingdom() and not iso_grid.get_expansion_tiles().is_empty():
 		_show_message("Расширение: кликните по зелёной клетке")
+		_announce_expansion()
 	elif BattleManager.next_battle_note != "":
 		_show_message(BattleManager.next_battle_note)
 
@@ -267,6 +269,12 @@ func _update_building_hover(screen_pos: Vector2) -> void:
 	elif found:
 		effect = Building.get_effect_tiles(found.building_type, found.tile)
 	renderer.set_effect_tiles(effect)
+
+# Этап расширения объявляется баннером по центру (решение пользователя), подсказка в шапке остаётся
+func _announce_expansion() -> void:
+	expansion_banner = ExpansionBanner.new()
+	$UI.add_child(expansion_banner)
+	expansion_banner.setup(BattleManager.get_tile_cost())
 
 func _update_expansion() -> void:
 	var tiles: Array[Vector2i] = []
@@ -460,6 +468,8 @@ func get_same_card_tiles(card: CardData) -> Array[Vector2i]:
 
 func _on_start_pressed() -> void:
 	is_placement_phase = false
+	if is_instance_valid(expansion_banner):
+		expansion_banner.close()
 	_on_bench_card_hovered(null)
 	renderer.set_grid_overlay(false)   # в бою — только поле, здания, цитадель и бойцы
 	fader.enabled = false

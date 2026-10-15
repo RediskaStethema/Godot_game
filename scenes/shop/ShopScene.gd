@@ -13,6 +13,12 @@ const SHOP_SLOT_SCENE = preload("res://scenes/shop/ShopSlot.tscn")
 const BOTTOM_BAR_HEIGHT: float = 80.0
 const HAND_PANEL_HEIGHT: float = 124.0
 const HAND_CARD_SIZE = Vector2(118, 96)
+# Карты руки сужаются, чтобы полная рука (MAX_HAND_SIZE) помещалась в панель без прокрутки:
+# при 10 картах в окне 1152 px — ~90 px; уже этого — прокрутка
+const HAND_CARD_MIN_WIDTH: float = 84.0
+const HAND_CARD_GAP: int = 8
+const HAND_CARD_PAD: float = 5.0       # поля карты руки по бокам (у card_style — 10)
+const HAND_BUTTON_PAD: float = 4.0     # поля кнопки «Продать» по бокам
 
 # «Рука» — карты, ещё не выложенные на поле: купленные сейчас +
 # оставшиеся на скамейке с прошлого боя. Не больше BattleManager.MAX_HAND_SIZE.
@@ -22,6 +28,7 @@ var surviving_units: Array[UnitData] = []
 var army_details: Label = null   # список отрядов-ветеранов под счётчиком армии
 var hand_title: Label = null
 var hand_row: HBoxContainer = null
+var hand_scroll: ScrollContainer = null
 var message_label: Label = null
 var citadel_label: Label = null
 var reroll_button: Button = null   # обновить набор карт (ShopManager.try_reroll)
@@ -132,20 +139,37 @@ func _refresh_hand() -> void:
 		return
 	for card in purchased_cards:
 		hand_row.add_child(_make_hand_card(card))
+	_fit_hand_cards()
+
+# Ширина карт руки — под ширину панели (окно и число карт), не уже HAND_CARD_MIN_WIDTH
+func _fit_hand_cards() -> void:
+	if hand_row == null or hand_scroll == null:
+		return
+	var cards = hand_row.get_children().filter(func(c): return c is PanelContainer and not c.is_queued_for_deletion())
+	if cards.is_empty():
+		return
+	var n := cards.size()
+	var w := clampf((hand_scroll.size.x - HAND_CARD_GAP * (n - 1)) / n, HAND_CARD_MIN_WIDTH, HAND_CARD_SIZE.x)
+	for c in cards:
+		c.custom_minimum_size.x = floorf(w)
 
 func _make_hand_card(card: CardData) -> Control:
 	var panel = PanelContainer.new()
 	panel.custom_minimum_size = HAND_CARD_SIZE
-	panel.add_theme_stylebox_override("panel", UITheme.card_style(card.rarity))
+	var style := UITheme.card_style(card.rarity)
+	style.content_margin_left = HAND_CARD_PAD
+	style.content_margin_right = HAND_CARD_PAD
+	panel.add_theme_stylebox_override("panel", style)
 	panel.tooltip_text = card.description
 	var col = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 2)
 	panel.add_child(col)
 
 	var title = UITheme.make_label(card.title, "SmallLabel")
-	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD   # перенос только между словами: «Dreadnought» целиком
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	title.add_theme_font_size_override("font_size", 13)
 	col.add_child(title)
 
 	var info = "×%d" % card.unit_count if card.card_type == "squad" else UITheme.TYPE_NAMES.get(card.card_type, "")
@@ -155,7 +179,14 @@ func _make_hand_card(card: CardData) -> Control:
 
 	var sell = Button.new()
 	sell.text = "Продать +%d" % EconomyManager.get_sell_price(card)
-	sell.add_theme_font_size_override("font_size", 13)
+	sell.add_theme_font_size_override("font_size", 12)
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		var sb = UITheme.get_theme().get_stylebox(state, "Button")   # карта ещё не в дереве — тема напрямую
+		if sb:
+			sb = sb.duplicate()
+			sb.content_margin_left = HAND_BUTTON_PAD
+			sb.content_margin_right = HAND_BUTTON_PAD
+			sell.add_theme_stylebox_override(state, sb)
 	sell.pressed.connect(_sell_card.bind(card))
 	col.add_child(sell)
 	return panel
@@ -347,14 +378,15 @@ func _build_hand_panel() -> void:
 	hand_info.add_child(hand_title)
 	var sell_hint = UITheme.make_label("Продажа: 1/3 цены", "DimLabel")
 	hand_info.add_child(sell_hint)
-	var scroll = ScrollContainer.new()
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	hand_box.add_child(scroll)
+	hand_scroll = ScrollContainer.new()
+	hand_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hand_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	hand_scroll.resized.connect(_fit_hand_cards)
+	hand_box.add_child(hand_scroll)
 	hand_row = HBoxContainer.new()
-	hand_row.add_theme_constant_override("separation", 8)
+	hand_row.add_theme_constant_override("separation", HAND_CARD_GAP)
 	hand_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.add_child(hand_row)
+	hand_scroll.add_child(hand_row)
 
 # Нижняя панель: армия + кнопка боя
 func _build_bottom_bar() -> void:
