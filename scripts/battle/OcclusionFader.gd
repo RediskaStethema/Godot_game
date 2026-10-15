@@ -16,6 +16,7 @@ const REFRESH_INTERVAL: float = 0.1
 const SOLDIER_HALF_WIDTH: float = 18.0   # полуширина спрайта бойца, px мира
 
 var enabled: bool = true
+var pinned: Node2D = null   # постройка под курсором (BattleScene) — не гаснет, её видно целиком
 var _targets: Dictionary = {}   # постройка → целевая альфа
 var _refresh_left: float = 0.0
 
@@ -40,7 +41,7 @@ func _update_targets() -> void:
 	var soldiers = SoldierRegistry.get_all_alive_soldiers()
 	for occ in _occluders():
 		if occ.has_method("get_occlusion_rect"):
-			_targets[occ] = FADE_ALPHA if enabled and _hides_anyone(occ, soldiers) else 1.0
+			_targets[occ] = FADE_ALPHA if enabled and occ != pinned and _hides_anyone(occ, soldiers) else 1.0
 
 func _hides_anyone(occ: Node2D, soldiers: Array) -> bool:
 	var area: Rect2 = occ.get_occlusion_rect()

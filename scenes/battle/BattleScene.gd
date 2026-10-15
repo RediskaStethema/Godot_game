@@ -25,6 +25,7 @@ var merge_menu: MergeMenu = null   # выбор «улучшить / вылеч�
 var pause_menu: PauseMenu = null
 var fader: OcclusionFader = null   # прозрачность построек — только на расстановке
 var reticle: ArtilleryReticle = null   # прицел орудия игрока — в бою за курсором
+var hovered_building: Building = null   # здание под курсором (_update_building_hover)
 const BUILDING_HIGHLIGHT = Color(1.45, 1.2, 0.7)   # здание карты под курсором на скамейке — золотом
 # Скорость боя: Engine.time_scale = базовый × GameSettings.battle_speed, только
 # пока идёт бой; базовый — тот, что был до боя (тесты гоняют с ускорением)
@@ -233,12 +234,39 @@ func _get_player_squad_at(tile: Vector2i) -> Squad:
 # ВВОД: подсветка клеток, покупка клеток королевства (каждая 3-я волна)
 # -------------------------------------------------------
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		# В конце кадра: к тому времени окно знает, над интерфейсом ли курсор (gui_get_hovered_control)
+		_update_building_hover.call_deferred(event.position)
 	if not is_placement_phase or merge_menu:
 		return
 	if event is InputEventMouseMotion:
 		renderer.update_hover(iso_grid.screen_to_tile(_screen_to_world(event.position)))
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_try_buy_tile(iso_grid.screen_to_tile(_screen_to_world(event.position)))
+
+# Здание под курсором (и на расстановке, и в бою): подсказка — что за здание, уровень, что делает;
+# здание не гаснет (OcclusionFader.pinned); на расстановке — его зона действия (Building.get_effect_tiles).
+# Тащим карту здания — зона действия от клетки под курсором, как если бы здание встало туда.
+# Курсор над интерфейсом (скамейка, шапка) — ничего
+func _update_building_hover(screen_pos: Vector2) -> void:
+	var world = _screen_to_world(screen_pos)
+	var tile = iso_grid.screen_to_tile(world)
+	var dragging: CardData = bench.dragging_card
+	var found: Building = null
+	if dragging == null and merge_menu == null and get_viewport().gui_get_hovered_control() == null:
+		for b in BattleManager.buildings:
+			if is_instance_valid(b) and b.contains_point(world, tile):
+				found = b
+				break
+	hovered_building = found
+	fader.pinned = found
+	inspector.show_building_hover(found.describe() if found else "", screen_pos)
+	var effect: Array[Vector2i] = []
+	if dragging and dragging.card_type == "building" and iso_grid.is_valid_tile(tile):
+		effect = Building.get_effect_tiles(dragging.building_type, tile)
+	elif found:
+		effect = Building.get_effect_tiles(found.building_type, found.tile)
+	renderer.set_effect_tiles(effect)
 
 func _update_expansion() -> void:
 	var tiles: Array[Vector2i] = []
@@ -408,6 +436,8 @@ func _on_bench_card_hovered(card: CardData) -> void:
 	if is_placement_phase:
 		tiles = get_same_card_tiles(card)
 	renderer.set_highlighted(tiles)
+	if card == null:   # карту бросили / курсор ушёл — зоны действия перетаскиваемой карты больше нет
+		renderer.set_effect_tiles([] as Array[Vector2i])
 	# Здание закрывает свою клетку — подсвечивается и само (modulate: прозрачность OcclusionFader — self_modulate)
 	for b in BattleManager.buildings:
 		if is_instance_valid(b):
@@ -553,8 +583,7 @@ func _show_run_end(victory: bool) -> void:
 		Difficulty.describe(RunManager.difficulty), EconomyManager.wins + (1 if victory else 0),
 		ceili(BattleManager.citadel_hp), int(BattleManager.CITADEL_MAX_HP), EconomyManager.requisition]
 	if _unlocked_difficulty > 0:
-		subtitle += "
-Открыта новая сложность: %s" % Difficulty.describe(_unlocked_difficulty)
+		subtitle += "\nОткрыта новая сложность: %s" % Difficulty.describe(_unlocked_difficulty)
 	pause_menu.enabled = false
 	var screen = RunEndScreen.new()
 	$UI.add_child(screen)

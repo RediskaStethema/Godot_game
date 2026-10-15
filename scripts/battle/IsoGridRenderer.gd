@@ -15,6 +15,8 @@ const COLOR_HOVER    = Color(0.94, 0.83, 0.55, 0.40)   # светлое золо
 const COLOR_OCCUPIED = Color(0.79, 0.63, 0.29, 0.22)   # золото
 const COLOR_SAME_SQUAD = Color(0.98, 0.72, 0.29, 0.45)  # отряд карты под курсором (скамейка)
 const LINE_SAME_SQUAD  = Color(1.0, 0.82, 0.45, 1.0)
+const COLOR_EFFECT = Color(0.35, 0.85, 0.80, 0.30)     # зона действия здания (Казармы — соседи)
+const LINE_EFFECT  = Color(0.45, 0.95, 0.90, 0.95)
 const LINE_PLAYER    = Color(0.79, 0.63, 0.29, 0.45)
 const BORDER_PLAYER  = Color(0.79, 0.63, 0.29, 0.95)
 # --- Закрытые клетки рамки королевства ---
@@ -43,6 +45,8 @@ var occupied_tiles_player: Dictionary = {}
 var occupied_tiles_enemy: Dictionary = {}
 # Клетки отрядов карты под курсором на скамейке (BattleScene._on_bench_card_hovered)
 var highlighted_tiles: Array[Vector2i] = []
+# Зона действия здания под курсором / перетаскиваемой карты здания (Building.get_effect_tiles)
+var effect_tiles: Array[Vector2i] = []
 # Клетки, которые сейчас можно купить, и их цена (пусто — расширение недоступно)
 var expansion_tiles: Array[Vector2i] = []
 var expansion_cost: int = 0
@@ -245,6 +249,10 @@ func _draw_kingdom() -> void:
 	# Контур подсвеченных клеток — поверх общей рамки, чтобы читался и на краю королевства
 	for tile in highlighted_tiles:
 		_draw_diamond(grid.tile_to_screen(tile, false), Color(0, 0, 0, 0), LINE_SAME_SQUAD, 3.0)
+	# Зона действия здания — только открытые клетки королевства
+	for tile in effect_tiles:
+		if grid.is_valid_tile(tile):
+			_draw_diamond(grid.tile_to_screen(tile, false), COLOR_EFFECT, LINE_EFFECT, 2.5)
 
 	var font = ThemeDB.fallback_font
 	for tile in expansion_tiles:
@@ -302,6 +310,12 @@ func _draw_diamond(center: Vector2, color: Color, line_color: Color, line_width:
 		line_width,
 		true
 	)
+
+func set_effect_tiles(tiles: Array[Vector2i]) -> void:
+	if tiles == effect_tiles:
+		return
+	effect_tiles = tiles
+	queue_redraw()
 
 func set_highlighted(tiles: Array[Vector2i]) -> void:
 	highlighted_tiles = tiles
