@@ -105,10 +105,11 @@ func surrender() -> void:
 	print("BattleManager: игрок сдался")
 	emit_signal("battle_ended", winner_team)
 
-# Итог боя: выжившие обеих сторон в стойку — иначе застыли бы на кадре выстрела
-func _stand_down_soldiers() -> void:
+# Итог боя: выжившие обеих сторон в стойку — иначе застыли бы на кадре выстрела;
+# у победившей стороны — поза победы, если она есть в листе (Дредноут)
+func _stand_down_soldiers(winner: int = -1) -> void:
 	for s in SoldierRegistry.get_all_alive_soldiers().duplicate():
-		s.stand_down()
+		s.stand_down(s.team == winner)
 
 func stop_battle() -> void:
 	phase = BattlePhase.IDLE
@@ -191,15 +192,14 @@ func _check_battle_end() -> void:
 
 	phase = BattlePhase.FINISHED
 	clear_projectiles()
-	_stand_down_soldiers()
-	_check_catch_up()
-
 	if player_alive and not team1_alive:
 		winner_team = GameConstants.TEAM_PLAYER   # в т.ч. цитадель отбила штурм
 	elif team1_alive:
 		winner_team = GameConstants.TEAM_ENEMY
 	else:
 		winner_team = -1
+	_stand_down_soldiers(winner_team)
+	_check_catch_up()
 
 	print("BattleManager: бой закончен, победитель — команда ", winner_team)
 	emit_signal("battle_ended", winner_team)

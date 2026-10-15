@@ -89,9 +89,9 @@ func _main() -> void:
 	var raptor = UnitFactory.create("chaos_raptor")
 	var plague = UnitFactory.create("plague_marine")
 	var havoc = UnitFactory.create("chaos_havoc")
-	_check("юниты: рапторы ищут стрелков, рапторы и чумные без снаряда, хавоки — charged", ok_units
+	_check("юниты: рапторы ищут стрелков, рапторы и чумные без снаряда, хавоки — огненная струя (flame)", ok_units
 		and raptor.priority == GameConstants.PRIORITY_RANGED_FIRST and raptor.projectile == ""
-		and plague.projectile == "" and havoc.projectile == "charged")
+		and plague.projectile == "" and havoc.projectile == "flame")
 
 	# 7. Бой: рапторы целятся в стрелков игрока за спинами бойцов ближнего боя
 	var seed_with_raptor = 0

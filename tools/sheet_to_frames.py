@@ -33,6 +33,7 @@ HEAD_PART = 0.25
 LABEL_PART = 0.2     # отдельный кусок выше этой доли высоты кадра — подпись ряда
 STRAY_SIZE = 40      # меньше — крошка соседнего кадра
 SPLIT_WINDOW = 0.3   # где искать границу слипшихся кадров: ± доля шага
+NARROW_PART = 0.35   # кусок уже этой доли шага кадров — не кадр, а хвост кадра слева
 
 
 def is_flash(p):
@@ -65,24 +66,26 @@ def find_rows(img):
     return [b for b in bands if b[1] - b[0] >= MIN_ROW_HEIGHT]
 
 
-def find_cells(img, y0, y1, pitch=0.0):
+def find_cells(img, y0, y1, pitch=0.0, split=True):
     """Ячейки кадров ряда: от начала тела до начала следующего (вспышка уходит вправо).
     Кадры, слипшиеся силуэтами (ствол касается соседа), делятся по шагу кадров pitch:
-    кусок шириной в n шагов режется на n по самым «тонким» столбцам у ожидаемых границ."""
+    кусок шириной в n шагов режется на n по самым «тонким» столбцам у ожидаемых границ.
+    split = False — не делить (смерть: лежащий боец шире шага кадров)."""
     px = img.load()
     w = img.width
     counts = [sum(1 for y in range(y0, y1) if is_body(px[x, y])) for x in range(w)]
     segs = runs(counts)
     merged = []
     for s in segs:
-        if merged and s[1] - s[0] < MIN_FRAME_WIDTH:
+        # Узкий кусок (брызги крови, меч лежащего бойца) — часть кадра слева
+        if merged and s[1] - s[0] < max(MIN_FRAME_WIDTH, pitch * NARROW_PART):
             merged[-1] = (merged[-1][0], s[1])
         else:
             merged.append(s)
     starts = []
     for s0, s1 in merged:
         starts.append(s0)
-        n = round((s1 - s0) / pitch) if pitch > 0 else 1
+        n = round((s1 - s0) / pitch) if pitch > 0 and split else 1
         step = (s1 - s0) / max(n, 1)
         for k in range(1, n):
             mid = round(s0 + step * k)
@@ -231,7 +234,13 @@ def head_x(frame):
     return sum(xs) / len(xs)
 
 
-def main(sheet, folder):
+def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_order=None, drop=None):
+    if rows_order:   # ряды листа в другом порядке (Дредноут: удар — второй ряд, шаг — третий)
+        ROW_ANIMS[:] = rows_order
+    if extra_anim:   # пятый ряд под своим именем (Дредноут: victory — поза победы)
+        EXTRA_ROWS[0] = extra_anim
+        FOLDERS[extra_anim] = extra_anim
+        FPS[extra_anim] = FPS["battle_cry"]
     img = Image.open(sheet).convert("RGBA")
     # Полупрозрачный ореол фона (альфа 1–5 на листе) — в ноль
     img.putalpha(img.getchannel("A").point(lambda a: 0 if a < 16 else a))
@@ -249,7 +258,7 @@ def main(sheet, folder):
         if anim in EXTRA_ROWS:   # один кадр на весь ряд — подпись ряда сотрёт clear_label
             frames = [img.crop((0, y0, img.width, y1))]
         else:
-            frames = [img.crop((c0, y0, c1, y1)) for c0, c1 in find_cells(img, y0, y1, pitch)]
+            frames = [img.crop((c0, y0, c1, y1)) for c0, c1 in find_cells(img, y0, y1, pitch, anim != "death")]
         frames = [clear_label(f, anim in EXTRA_ROWS) for f in frames]
         if anim == "attack":
             frames = [clear_stray_flash(f) for f in frames]
@@ -262,6 +271,10 @@ def main(sheet, folder):
             anchors = [((b[0] + b[2]) / 2 + shift, ground) for b in map(body_box, frames)]
         else:
             anchors = [(head_x(f), ground) for f in frames]
+        if drop and anim in drop:   # кадры, выпадающие из цикла (кривой лист), — убрать
+            keep = [i for i in range(len(frames)) if i not in drop[anim]]
+            frames = [frames[i] for i in keep]
+            anchors = [anchors[i] for i in keep]
         src[anim] = (frames, anchors)
 
     half_w = top = 0
@@ -298,9 +311,11 @@ def main(sheet, folder):
                             f"metadata/shot_frame = {i}\n")
         tres_anims.append(
             f'{{\n"frames": [{", ".join(refs)}],\n"loop": {"true" if anim in LOOPING else "false"},\n'
-            f'"name": &"{anim}",\n"speed": {FPS[anim]}\n}}')
+            f'"name": &"{anim}",\n"speed": {attack_fps if anim == "attack" and attack_fps else FPS[anim]}\n}}')
         print(anim, len(frames), "кадров")
 
+    if hit_frame is not None:
+        meta += f"metadata/hit_frame = {hit_frame}\n"
     tres = (f'[gd_resource type="SpriteFrames" load_steps={len(ext) + 1} format=3]\n\n'
             + "\n".join(ext)
             + f'\n\n[resource]\n{meta}animations = [{", ".join(tres_anims)}]\n')
@@ -309,4 +324,22 @@ def main(sheet, folder):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    # Ближний бой: --hit-frame N — кадр атаки, на котором удар доходит до цели (Soldier бьёт на нём),
+    # --attack-fps F — своя скорость атаки (тяжёлый замах Дредноута),
+    # --extra-anim NAME — имя анимации пятого ряда вместо battle_cry (Дредноут: victory),
+    # --rows a,b,c,d — порядок первых четырёх рядов листа (по умолчанию idle,walk,attack,death),
+    # --drop anim:i,j[;anim:k] — убрать кадры анимации (номера после нарезки), выпадающие из цикла
+    args = sys.argv[1:]
+    opts = {}
+    for key in ("--hit-frame", "--attack-fps", "--extra-anim", "--rows", "--drop"):
+        if key in args:
+            i = args.index(key)
+            opts[key] = args[i + 1]
+            del args[i:i + 2]
+    main(args[0], args[1],
+         int(opts["--hit-frame"]) if "--hit-frame" in opts else None,
+         float(opts["--attack-fps"]) if "--attack-fps" in opts else None,
+         opts.get("--extra-anim"),
+         opts["--rows"].split(",") if "--rows" in opts else None,
+         {a: {int(i) for i in idx.split(",")} for a, idx in (p.split(":") for p in opts["--drop"].split(";"))}
+         if "--drop" in opts else None)

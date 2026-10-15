@@ -45,6 +45,13 @@ const EFFECTS = {
 	# каст (Librarian)
 	"cast":       {"sheet": "Eletric Aura.png", "size": Vector2i(96, 96), "frames": 7, "fps": 12.0,
 		"loop": true, "scale": 0.7, "pivot": Vector2(50, 89)},
+	# поджог при попадании (Havoc, Salamanders) — язык пламени по направлению удара
+	"flame_burst": {"sheet": "Flamethrower-Sheet.png", "size": Vector2i(96, 48), "frames": 10, "fps": 24.0,
+		"loop": false, "scale": 0.9, "pivot": Vector2(30, 24)},
+	# бурление ядовитой реки (IsoGridRenderer, только вид) — голубой лист, перекрашен в зелёный
+	"river_splash": {"sheet": "Water Vortex Splash-Sheet.png", "size": Vector2i(150, 150), "frames": 30,
+		"fps": 20.0, "loop": false, "scale": 0.5, "pivot": Vector2(75, 75), "flat": true,
+		"modulate": Color(0.55, 1.0, 0.35, 0.85)},
 	# статусы — StatusEffects.VFX
 	"burning":    {"sheet": "Fire+Sparks-Sheet.png", "size": Vector2i(96, 96), "frames": 19, "fps": 14.0,
 		"loop": true, "scale": 0.3, "pivot": Vector2(52, 96)},   # пламя ниже бойца — не закрывает его
@@ -89,6 +96,7 @@ static func _make(kind: String, size: float) -> Vfx:
 	v.offset = Vector2(e["size"]) / 2.0 - e["pivot"]
 	var s: float = e["scale"] * size
 	v.scale = Vector2(s, s * (FLAT_Y if e.get("flat", false) else 1.0))
+	v.modulate = e.get("modulate", Color.WHITE)
 	if not e["loop"]:
 		v.animation_finished.connect(v.queue_free)
 	v.play("play")
