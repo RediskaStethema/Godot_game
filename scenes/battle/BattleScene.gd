@@ -60,6 +60,7 @@ func _ready() -> void:
 	SquadRegistry.clear()
 	SoldierRegistry.clear()
 	battle_type = RunManager.get_battle_type()
+	AudioManager.play_music("boss" if battle_type == RunMapNode.BOSS else "battle")
 	battle_wave = RunManager.get_battle_wave()
 	_card_handlers = {
 		"squad": _play_squad_card,
@@ -286,6 +287,7 @@ func _update_building_hover(screen_pos: Vector2) -> void:
 # Этап расширения объявляется экраном в конце боя перед волной расширения — до магазина
 # (решение пользователя: успеть отложить Req на клетки). Дальше — по кнопке «В магазин»
 func _announce_expansion() -> void:
+	AudioManager.play("expansion")
 	expansion_banner = ExpansionBanner.new()
 	$UI.add_child(expansion_banner)
 	# Дальше — магазин, а после волн 4 / 8 / 12 / 14 сначала событие
@@ -309,10 +311,12 @@ func _try_buy_tile(tile: Vector2i) -> void:
 		return
 	var cost = BattleManager.get_tile_cost()
 	if not BattleManager.try_buy_tile(tile):
+		AudioManager.play("no_money")
 		_show_message("Не хватает Requisition: клетка стоит %d" % cost)
 		return
 	iso_grid.set_unlocked_tiles(BattleManager.kingdom_tiles)
 	_update_expansion()
+	AudioManager.play("tile_bought")
 	_show_message("Королевство расширено (−%d Req), клеток: %d" % [cost, BattleManager.kingdom_tiles.size()])
 	_update_synergy_preview()   # новый ряд меняет, кто впереди и сзади
 	_save_placement()
@@ -333,6 +337,7 @@ func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
 		_show_message("%s: эту карту нельзя сыграть на поле" % card.title)
 		return
 	if handler.call(card, tile):
+		AudioManager.play("place")
 		_consume_bench_card(card)
 
 # Отряд на пустую клетку; на свой отряд того же типа — меню «улучшить / вылечить»
@@ -541,6 +546,7 @@ func get_same_card_tiles(card: CardData) -> Array[Vector2i]:
 
 func _on_start_pressed() -> void:
 	is_placement_phase = false
+	AudioManager.play("battle_start")
 	_on_bench_card_hovered(null)
 	renderer.set_grid_overlay(false)   # в бою — только поле, здания, цитадель и бойцы
 	fader.enabled = false
@@ -567,6 +573,7 @@ func _on_start_pressed() -> void:
 	SynergyManager.apply_synergies_to_soldiers(my_soldiers)
 	SynergyManager.apply_position_bonuses(SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
 	SynergyManager.apply_chapter_bonus(my_soldiers)
+	SynergyManager.apply_meta_bonus(my_soldiers)
 	SynergyManager.apply_commander_bonus(my_soldiers)
 	hud.show_synergies()
 
@@ -614,6 +621,8 @@ func _on_battle_ended(winner_team: int) -> void:
 		_end_run(false, "Вы сдались")
 		return
 	var won = winner_team == GameConstants.TEAM_PLAYER
+	# Мета-прогрессия: статистика побед; открытые ордена / карты — в итоги боя
+	var unlocked: Array[String] = MetaProgress.on_battle_won(battle_wave, battle_type) if won else [] as Array[String]
 	if battle_type == RunMapNode.BOSS and won:
 		RunManager.complete_current_node()
 		_unlocked_difficulty = SaveManager.on_run_won(RunManager.difficulty)
@@ -629,7 +638,11 @@ func _on_battle_ended(winner_team: int) -> void:
 	if building_income > 0:
 		result_text += " · генераторы +%d Req" % building_income
 	hud.set_message(result_text)
-	hud.show_result(_result_title(winner_team), result_text + "\n" + _battle_summary(alive_at_end), won)
+	AudioManager.play("victory" if won else "defeat")
+	var summary := _battle_summary(alive_at_end)
+	if not unlocked.is_empty():
+		summary += "\nОткрыто: " + ", ".join(unlocked)
+	hud.show_result(_result_title(winner_team), result_text + "\n" + summary, won)
 	_play_finale_slowmo()
 	# BattleManager.pending_cards НЕ очищаем: невыложенные карты остаются в руке
 	SquadRegistry.clear()
@@ -709,10 +722,17 @@ func _end_run(victory: bool, message: String) -> void:
 	_show_run_end(victory)
 
 func _show_run_end(victory: bool) -> void:
+	AudioManager.play("run_won" if victory else "run_lost")
+	AudioManager.play_music("")
 	SaveManager.delete_save()
 	inspector.shutdown()
 	var subtitle = "Главный босс Хаоса повержен — забег выигран!" if victory \
 		else "Забег окончен на волне %d из %d." % [battle_wave, RunManager.get_total_waves()]
+	var meta: Dictionary = MetaProgress.on_run_end(victory)
+	if MetaProgress.active():
+		subtitle += "\nСлава +%d (всего %d) — тратится в «Арсенале» главного меню" % [meta["glory"], meta["total"]]
+		if not meta["unlocks"].is_empty():
+			subtitle += "\nОткрыто: " + ", ".join(meta["unlocks"])
 	var stats = "%s · Побед в волнах: %d · Цитадель %d/%d · %d Req" % [
 		Difficulty.describe(RunManager.difficulty), EconomyManager.wins + (1 if victory else 0),
 		ceili(BattleManager.citadel_hp), int(BattleManager.CITADEL_MAX_HP), EconomyManager.requisition]

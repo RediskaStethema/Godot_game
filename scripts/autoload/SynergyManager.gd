@@ -175,6 +175,17 @@ func apply_chapter_bonus(soldiers: Array) -> void:
 			s.extra_on_hit_status_power = c["on_hit_status_power"]
 			s.extra_on_hit_status_duration = c["on_hit_status_duration"]
 
+# Пассивка мета-прогрессии «Ветеранская выучка»: +% HP своим бойцам, один раз перед боем
+# (runtime-поля, доля HP сохраняется)
+func apply_meta_bonus(soldiers: Array) -> void:
+	var hp_bonus: float = MetaProgress.passive_value("veterans") / 100.0
+	if hp_bonus <= 0.0:
+		return
+	for s in soldiers:
+		var ratio: float = s.current_hp / s.max_hp
+		s.max_hp *= 1.0 + hp_bonus
+		s.current_hp = s.max_hp * ratio
+
 # Командир (Chapter Master): +урон всем союзникам, один раз перед боем.
 # Несколько командиров не суммируются — берётся самый сильный бонус.
 func apply_commander_bonus(soldiers: Array) -> void:

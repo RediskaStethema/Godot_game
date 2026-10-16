@@ -112,6 +112,7 @@ func goto_main_menu() -> void:
 # Сдача вне схватки (магазин, расстановка, итог боя) — конец забега без экрана
 # итога: сохранение удаляется, в главное меню. В схватке — BattleManager.surrender()
 func abandon_run() -> void:
+	MetaProgress.on_run_end(false)   # сдача — тоже конец забега: Слава за пройденное
 	SaveManager.delete_save()
 	goto_main_menu()
 

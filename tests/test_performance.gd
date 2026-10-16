@@ -350,7 +350,9 @@ func _test_shop_load() -> void:
 	# Сохранение — в свой файл: сохранение игрока не трогаем
 	var sm = root.get_node("SaveManager")
 	var old_path: String = sm.save_path
+	var old_profile: String = sm.profile_path
 	sm.save_path = "user://perf_test_save.json"
+	sm.profile_path = "user://perf_test_profile.cfg"   # нет файла — пустая мета, профиль игрока не читается
 	sm.enabled = true
 	_setup_run()
 	var t1 = Time.get_ticks_usec()
@@ -359,6 +361,7 @@ func _test_shop_load() -> void:
 	sm.delete_save()
 	sm.enabled = false
 	sm.save_path = old_path
+	sm.profile_path = old_profile
 	_report("сохранение забега (армия 12 отрядов, 4 здания)", "%.1f мс" % save_ms)
 	_check("сохранение быстрее %.0f мс: %.1f" % [SAVE_MS, save_ms], save_ms < SAVE_MS)
 	shop.queue_free()

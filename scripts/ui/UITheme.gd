@@ -213,6 +213,9 @@ static func card_style(rarity: String, highlighted: bool = false) -> StyleBoxFla
 # Портрет для карты отряда — первый кадр idle юнита (null для зданий/улучшений)
 static func card_portrait(card: CardData) -> Texture2D:
 	if card.card_type == "building":
+		var frames := Building.get_frames(card.building_type)
+		if frames and frames.has_animation("idle") and frames.get_frame_count("idle") > 0:
+			return frames.get_frame_texture("idle", 0)
 		# Своих спрайтов у зданий нет — блок тайлсета, из которого здание собрано
 		var blocks = Building.BLOCKS.get(card.building_type, [])
 		return TerrainTiles.tile(blocks[-1][0]) if not blocks.is_empty() else null
@@ -271,7 +274,15 @@ static func make_button(text: String, variation: String = "", on_pressed: Callab
 		b.theme_type_variation = variation
 	if on_pressed.is_valid():
 		b.pressed.connect(on_pressed)
+	b.pressed.connect(play_click)
 	return b
+
+# Щелчок кнопки (AudioManager «ui_click»); автолоад — из дерева, без имени при компиляции
+static func play_click() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	var audio = tree.root.get_node_or_null("AudioManager") if tree else null
+	if audio:
+		audio.play("ui_click")
 
 static func make_spacer() -> Control:
 	var c = Control.new()

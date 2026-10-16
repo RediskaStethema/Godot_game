@@ -102,12 +102,15 @@ func _main() -> void:
 	rm.player_chapter = "imperial_fists"
 	rm.difficulty = 5
 	bm.armed_events.append("orbital_strike")
+	root.get_node("MetaProgress").run_minibosses = 2
 	sv.save_run()
 	bm.reset_run()
 	rm.player_chapter = ""
 	rm.difficulty = 2
 	_check("загрузка", sv.load_run())
-	_check("орден и сложность забега сохранены", rm.player_chapter == "imperial_fists" and rm.difficulty == 5)
+	_check("орден и сложность забега сохранены; мини-боссов в забеге (мета) — 2",
+		rm.player_chapter == "imperial_fists" and rm.difficulty == 5
+		and root.get_node("MetaProgress").run_minibosses == 2)
 	var lt = bm.player_units[0]
 	var ls = bm.player_units[1]
 	_check("экономика и забег", em.requisition == 77 and em.round_number == 4 and em.wins == 4 \

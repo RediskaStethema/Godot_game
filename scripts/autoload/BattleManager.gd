@@ -296,6 +296,7 @@ func reset_run() -> void:
 	SynergyManager.reset()
 	ShopManager.reset()
 	RunManager.new_run()
+	MetaProgress.apply_run_start()   # пассивка «Резервы» и выбранная стартовая карта
 
 # -------------------------------------------------------
 # АРМИЯ ИГРОКА МЕЖДУ БОЯМИ
@@ -349,6 +350,10 @@ func refill_from_barracks() -> int:
 			for i in range(added):
 				d.saved_hp.append(1.0)
 			total += maxi(added, 0)
+			if added > 0:   # вид: ворота казарм на поле (анимация refill листа, если есть)
+				for b in buildings:
+					if is_instance_valid(b) and b.card == card:
+						b.play_once("refill")
 	return total
 
 # Поражение / ничья — армия потеряна
@@ -434,6 +439,7 @@ func fire_armed_events() -> Array:
 						# Пехоту в толпе накрывает втрое больше бойцов — урон × доля юнита, как у взрывов
 						e.take_damage(card.event_stats.get("damage", 0.0) * e.data.unit_weight)
 				hits.append({"pos": pos, "radius": r})
+				AudioManager.play("orbital_strike")
 	armed_events.clear()
 	return hits
 
@@ -454,7 +460,7 @@ func _densest_enemy_point(radius: float) -> Variant:
 
 # Щит цитадели на бой — сумма от зданий (Fortress Wall)
 func prepare_citadel_shield() -> void:
-	citadel_shield = 0.0
+	citadel_shield = MetaProgress.passive_value("walls")   # пассивка «Освящённые стены»
 	for b in buildings:
 		if is_instance_valid(b):
 			citadel_shield += b.get_citadel_shield()

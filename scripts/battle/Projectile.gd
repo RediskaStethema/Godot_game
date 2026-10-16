@@ -35,6 +35,7 @@ static var _warm_material: ShaderMaterial
 
 # --- Что делает попадание (заполняет стрелок) ---
 var damage: float = 0.0
+var _kind: String = ""        # вид снаряда — звук выстрела «shot_<вид>»
 var source: Squad = null   # чей выстрел — урон в итоги боя (BattleManager.credit_damage); здания — null
 var stun: float = 0.0               # сек оглушения цели (Librarian)
 var knockback: float = 0.0          # сила отбрасывания от точки выстрела
@@ -86,6 +87,9 @@ static func launch(parent: Node, kind: String, from: Vector2, target: Node2D, ai
 	parent.add_child(p)
 	p.global_position = from
 	p.visible = delay <= Soldier.TIMER_EPSILON
+	p._kind = kind
+	if p.visible:
+		AudioManager.play("shot_" + kind)
 	p._face(p._aim_point - from)
 	if p.sprite_frames:
 		p.play("fly")
@@ -138,6 +142,8 @@ func tick(delta: float) -> void:
 	if _delay > Soldier.TIMER_EPSILON:
 		_delay -= delta
 		return
+	if not visible:   # вылетел после задержки (кадр выстрела) — звук выстрела сейчас
+		AudioManager.play("shot_" + _kind)
 	visible = true
 	var step := SPEED * delta
 	if _pos.distance_to(_aim_point) <= step or _life > MAX_LIFETIME:
@@ -160,6 +166,7 @@ func _impact() -> void:
 	finished = true
 	var point := _aim_point - _aim_offset
 	if splash_radius > 0.0:
+		AudioManager.play("explosion")
 		for e in SoldierRegistry.get_alive_soldiers_of_team(splash_team).duplicate():
 			if e.global_position.distance_to(point) <= splash_radius:
 				var amount: float = damage * e.data.unit_weight   # пехоту в толпе накрывает втрое больше
@@ -174,6 +181,7 @@ func _impact() -> void:
 			# удалённый объект в Godot 4 равен null, а «is» на нём падает
 	elif _target is Soldier:
 		var s: Soldier = _target
+		AudioManager.play("hit")
 		BattleManager.credit_damage(source, clampf(damage - s.shield, 0.0, s.current_hp))
 		s.take_damage(damage)
 		Vfx.spawn(get_parent(), "hit_spark", _aim_point, Soldier.EFFECT_SCALE, rotation)

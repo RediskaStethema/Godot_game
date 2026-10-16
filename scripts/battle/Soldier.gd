@@ -142,6 +142,7 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 	has_revived = false
 
 	_load_animations()
+	_apply_chapter_colors()
 
 	# Враги смотрят влево
 	if team == GameConstants.TEAM_ENEMY:
@@ -159,6 +160,37 @@ const ANIMATION_FPS: float = 8.0
 # этого вида (раньше — заново на каждого бойца, с проверкой файлов на диске)
 static var _frames_cache: Dictionary = {}   # sprite_path → SpriteFrames
 static var _hit_flash_material: ShaderMaterial
+# Цвет брони ордена (Chapters "armor"): шейдер сдвигает синие насыщенные пиксели листа в тон ордена;
+# вспышка попадания — в том же шейдере (иначе вспышка снимала бы перекраску). Материалы общие:
+# на орден — обычный и со вспышкой. _base_material — материал спрайта вне вспышки (null — без шейдера)
+const ARMOR_SHADER = """shader_type canvas_item;
+uniform float target_hue = 0.0;
+uniform float sat_mult = 1.0;
+uniform float val_mult = 1.0;
+uniform float flash = 0.0;
+vec3 rgb2hsv(vec3 c) {
+	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+	vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+	vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+	float d = q.x - min(q.w, q.y);
+	return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + 1e-10)), d / (q.x + 1e-10), q.x);
+}
+vec3 hsv2rgb(vec3 c) {
+	vec3 p = abs(fract(c.xxx + vec3(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
+	return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
+}
+void fragment() {
+	vec4 c = texture(TEXTURE, UV) * COLOR;
+	vec3 hsv = rgb2hsv(c.rgb);
+	float blue = smoothstep(0.50, 0.55, hsv.x) * (1.0 - smoothstep(0.72, 0.77, hsv.x)) * smoothstep(0.2, 0.35, hsv.y);
+	vec3 armor = hsv2rgb(vec3(target_hue, clamp(hsv.y * sat_mult, 0.0, 1.0), clamp(hsv.z * val_mult, 0.0, 1.0)));
+	c.rgb = mix(c.rgb, armor, blue);
+	COLOR = vec4(mix(c.rgb, vec3(1.0), flash), c.a);
+}"""
+static var _armor_materials: Dictionary = {}   # "орден:вспышка" → ShaderMaterial
+static var _armor_shader: Shader = null        # один на все: в Compatibility шейдер компилируется при первом показе
+var _base_material: Material = null
+var _armor_chapter: String = ""   # орден, в цвет которого перекрашен боец ("" — нет)
 var _hit_flash_id: int = 0   # номер последней вспышки — старый таймер не гасит новую
 
 static func _get_frames(sprite_path: String) -> SpriteFrames:
@@ -440,6 +472,17 @@ func _tick_support(delta: float) -> void:
 			patient = ally
 	if patient:
 		patient.heal(current_heal_per_second * delta)
+	_show_heal_animation(patient != null)
+
+# Лечение листа (Apothecary: ряд heal, если есть) — пока лечит и стоит (стойка между ударами);
+# бег и удар его перебивают, кончил лечить — снова стойка. Только вид
+func _show_heal_animation(healing: bool) -> void:
+	if not sprite.sprite_frames.has_animation("heal"):
+		return
+	if healing and sprite.animation in ["idle", "heal"]:
+		_play_animation("heal")
+	elif not healing and sprite.animation == "heal":
+		_play_animation("idle")
 
 # Пересчитать базовые статы после изменения множителей отряда (карта-улучшение
 # во время расстановки). Доля HP сохраняется.
@@ -588,6 +631,7 @@ func _land_melee_hit(victim: Soldier) -> void:
 	var prev_target := target
 	target = victim   # эффекты попадания (_apply_on_hit_effects) — по тому, кого ударили
 	var dmg := _roll_damage()
+	AudioManager.play("melee_hit")
 	BattleManager.credit_damage(parent_squad, clampf(dmg - victim.shield, 0.0, victim.current_hp))
 	victim.take_damage(dmg)
 	Vfx.spawn(_world_parent(), "blood",
@@ -685,6 +729,33 @@ func take_damage(amount: float, flash: bool = true) -> void:
 
 # Только визуал: таймер дерева (на паузе стоит, ×2 ускоряет), а не тик боя —
 # иначе вспышка последнего тика осталась бы гореть после конца боя
+# Броня в цвет ордена игрока — только своим Космодесантникам (у врагов и Ultramarines — как нарисовано)
+func _apply_chapter_colors() -> void:
+	_armor_chapter = ""
+	_base_material = null
+	if team == GameConstants.TEAM_PLAYER and data.faction == Chapters.FACTION:
+		if Chapters.get_chapter(RunManager.player_chapter).has("armor"):
+			_armor_chapter = RunManager.player_chapter
+			_base_material = _armor_material(_armor_chapter, false)
+			_armor_material(_armor_chapter, true)   # вспышка — заранее, не на первом попадании в бою
+	sprite.material = _base_material
+
+static func _armor_material(chapter_id: String, flashing: bool) -> ShaderMaterial:
+	var key := "%s:%s" % [chapter_id, flashing]
+	if not _armor_materials.has(key):
+		var armor: Dictionary = Chapters.get_chapter(chapter_id).get("armor", {})
+		if _armor_shader == null:
+			_armor_shader = Shader.new()
+			_armor_shader.code = ARMOR_SHADER
+		var m := ShaderMaterial.new()
+		m.shader = _armor_shader
+		m.set_shader_parameter("target_hue", armor.get("hue", 0.6))
+		m.set_shader_parameter("sat_mult", armor.get("sat", 1.0))
+		m.set_shader_parameter("val_mult", armor.get("val", 1.0))
+		m.set_shader_parameter("flash", HIT_FLASH_STRENGTH if flashing else 0.0)
+		_armor_materials[key] = m
+	return _armor_materials[key]
+
 func _flash_hit() -> void:
 	if not is_inside_tree():
 		return
@@ -693,12 +764,12 @@ func _flash_hit() -> void:
 		shader.code = HIT_FLASH_SHADER % HIT_FLASH_STRENGTH
 		_hit_flash_material = ShaderMaterial.new()
 		_hit_flash_material.shader = shader
-	sprite.material = _hit_flash_material
+	sprite.material = _armor_material(_armor_chapter, true) if _armor_chapter != "" else _hit_flash_material
 	_hit_flash_id += 1
 	var id := _hit_flash_id
 	get_tree().create_timer(HIT_FLASH_TIME, false).timeout.connect(func():
 		if is_instance_valid(self) and _hit_flash_id == id:
-			sprite.material = null)
+			sprite.material = _base_material)
 
 # Apothecarion рядом: шанс встать с долей HP (один раз за бой, только игрок)
 func _try_revive() -> bool:
@@ -711,12 +782,14 @@ func _try_revive() -> bool:
 	current_hp = max_hp * r["hp"]
 	if BattleManager.is_battle_running():
 		_float_text("Встал!", FLOAT_HEAL)   # иначе подъём на поле незаметен
+		AudioManager.play("revive")
 	return true
 
 func _die() -> void:
 	if current_state == State.DEAD:
 		return
 	transition_to(State.DEAD)
+	AudioManager.play("death_vehicle" if "vehicle" in data.tags else "death")
 	status_effects.clear()
 	_sync_status_vfx()
 	queue_redraw()   # убрать полоску HP
@@ -732,6 +805,8 @@ func apply_status(effect: String, power: float, duration: float, stackable: bool
 		return
 	var e: Dictionary = status_effects.get(effect, {})
 	if e.is_empty():
+		if effect == StatusEffects.BURNING or effect == StatusEffects.POISONED:
+			AudioManager.play("burning" if effect == StatusEffects.BURNING else "poison")
 		e = {"stacks": 1, "power": power, "time": duration, "duration": duration,
 			"dot_timer": StatusEffects.DOT_TICK, "spread_timer": StatusEffects.BURN_SPREAD_EVERY}
 		status_effects[effect] = e
@@ -833,6 +908,7 @@ func _try_battle_cry() -> bool:
 	if battle_cry_used or data.battle_cry_status == "":
 		return false
 	battle_cry_used = true
+	AudioManager.play("battle_cry")
 	var r2 = data.battle_cry_radius * data.battle_cry_radius
 	for ally in SoldierRegistry.get_alive_soldiers_of_team(team):
 		if global_position.distance_squared_to(ally.global_position) <= r2:

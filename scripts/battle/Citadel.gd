@@ -223,6 +223,7 @@ func _show_explosion(point: Vector2) -> void:
 
 # Враг атаковал цитадель
 func take_hit(amount: float) -> void:
+	AudioManager.play("citadel_hit")
 	BattleManager.damage_citadel(amount)
 	play_state("fall" if BattleManager.citadel_hp <= 0.0 else "hit")
 	modulate = FLASH_COLOR

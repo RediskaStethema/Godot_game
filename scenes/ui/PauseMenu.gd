@@ -47,6 +47,7 @@ var _quick_label: Label = null
 func _set_quick_pause(on: bool) -> void:
 	_quick_paused = on
 	get_tree().paused = on
+	AudioManager.play("pause")
 	if on and _quick_label == null:
 		_quick_label = UITheme.make_label("ПАУЗА — пробел, чтобы продолжить", "HeaderLabel")
 		_quick_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
@@ -70,6 +71,7 @@ func is_open() -> bool:
 func open() -> void:
 	if _quick_paused:
 		_set_quick_pause(false)
+	AudioManager.play("pause")
 	get_tree().paused = true
 	_menu = ModalOverlay.new()
 	add_child(_menu)

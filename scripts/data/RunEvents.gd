@@ -248,7 +248,8 @@ static func _upgradable_buildings() -> Array:
 static func _give_card(rng: RandomNumberGenerator, rarity: String, card_type: String) -> String:
 	var options: Array = []
 	for card in CardFactory.build_pool():
-		if (rarity == "" or card.rarity == rarity) and (card_type == "" or card.card_type == card_type):
+		if (rarity == "" or card.rarity == rarity) and (card_type == "" or card.card_type == card_type) \
+				and MetaProgress.is_card_unlocked(card.id):   # закрытые мета-прогрессией — нет, как в магазине
 			options.append(card)
 	if options.is_empty():
 		return "Ничего не нашлось"
