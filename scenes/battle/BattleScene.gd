@@ -14,6 +14,7 @@ const BENCH_SCENE = preload("res://scenes/battle/Bench.tscn")
 const SQUAD_SCENE = preload("res://scenes/battle/Squad.tscn")
 # Область экрана под поле: под HUD; при расстановке — до скамейки
 const PLAY_AREA_MARGIN: float = 8.0
+const STRIKE_FLASH_TIME: float = 0.8   # вспышка орбитального удара, с
 
 var iso_grid: IsoGrid = IsoGrid.new()
 var renderer: IsoGridRenderer = null
@@ -64,6 +65,7 @@ func _ready() -> void:
 		"squad": _play_squad_card,
 		"upgrade": _play_upgrade_card,
 		"building": _play_building_card,
+		"event": _play_event_card,
 	}
 	_build_ui()
 	_build_field()
@@ -355,7 +357,7 @@ func _play_upgrade_card(card: CardData, tile: Vector2i) -> bool:
 		_show_message("%s: перетащите на свой отряд" % card.title)
 		return false
 	if not squad.apply_upgrade(card):
-		_show_message("%s действует только на отряды «%s»" % [card.title, card.affects_tag])
+		_show_message("%s: не подходит этому отряду (только «%s», знамя не складывается)" % [card.title, card.affects_tag])
 		return false
 	_show_message("%s → %s (%s)" % [card.title, squad.data.unit_name, card.description])
 	return true
@@ -377,6 +379,29 @@ func _play_building_card(card: CardData, tile: Vector2i) -> bool:
 	BattleManager.player_buildings[card] = tile
 	_show_message("Построено: %s" % card.title)
 	return true
+
+# Карты-события: подкрепление — сразу отряд; орбитальный удар — заряжается до боя
+func _play_event_card(card: CardData, tile: Vector2i) -> bool:
+	match card.event_type:
+		"reinforcements":
+			if _is_tile_occupied(tile):
+				_show_message("%s: нужна пустая клетка" % card.title)
+				return false
+			# Своя случайность (забег, шаг, клетка): общий RunManager.rng не сдвигается — наборы магазина те же
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash([RunManager.rng.seed, RunManager.current_node_id, tile])
+			var squad_card = CardFactory.random_squad_card(card.event_stats.get("rarity", "common"), rng)
+			var unit_data = UnitFactory.create(squad_card.unit_factory_id)
+			unit_data.squad_size = squad_card.unit_count
+			unit_data.squad_growth = UnitFactory.squad_growth_for(squad_card)
+			_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, squad_card.unit_count)
+			_show_message("Подкрепление: %s" % squad_card.title)
+			return true
+		"orbital_strike":
+			BattleManager.armed_events.append(card.id)
+			_show_message("Орбитальный удар наведён: ударит в начале боя")
+			return true
+	return false
 
 func _get_player_building_at(tile: Vector2i) -> Building:
 	for b in BattleManager.buildings:
@@ -551,9 +576,24 @@ func _on_start_pressed() -> void:
 		player_squads_at_start.append({"data": squad.data, "tile": squad.tile})
 	BattleManager.prepare_citadel_shield()
 	BattleManager.start_battle()
+	for hit in BattleManager.fire_armed_events():
+		_spawn_strike_flash(hit["pos"], hit["radius"])
 	_base_time_scale = Engine.time_scale
 	_speed_applied = true
 	_apply_battle_speed()
+
+# Вспышка орбитального удара: круг, гаснет за STRIKE_FLASH_TIME
+func _spawn_strike_flash(pos: Vector2, radius: float) -> void:
+	var flash = Node2D.new()
+	flash.position = pos
+	flash.z_index = 10
+	flash.draw.connect(func():
+		flash.draw_circle(Vector2.ZERO, radius, Color(1.0, 0.75, 0.3, 0.35))
+		flash.draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(1.0, 0.85, 0.5, 0.9), 3.0, true))
+	units_container.get_parent().add_child(flash)
+	var tw = flash.create_tween()
+	tw.tween_property(flash, "modulate:a", 0.0, STRIKE_FLASH_TIME)
+	tw.tween_callback(flash.queue_free)
 
 # -------------------------------------------------------
 # КОНЕЦ БОЯ
@@ -585,6 +625,9 @@ func _on_battle_ended(winner_team: int) -> void:
 	# Живые до итога: store_survivors возрождает павшие отряды, Казармы пополняют — потери считать раньше
 	var alive_at_end := SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER).size()
 	var result_text := _resolve_battle(winner_team)
+	var building_income := EconomyManager.collect_building_income(BattleManager.player_buildings)
+	if building_income > 0:
+		result_text += " · генераторы +%d Req" % building_income
 	hud.set_message(result_text)
 	hud.show_result(_result_title(winner_team), result_text + "\n" + _battle_summary(alive_at_end), won)
 	_play_finale_slowmo()

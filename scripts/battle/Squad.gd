@@ -139,6 +139,7 @@ func apply_upgrade(card: CardData) -> bool:
 	data.apply_upgrade(card)
 	for soldier in soldiers:
 		soldier.refresh_stats_from_data()
+	SoldierRegistry.mark_dirty()   # знамя — новый носитель ауры в кэше реестра
 	return true
 
 # Карта того же отряда → улучшение (до UnitFactory.MAX_SQUAD_LEVEL раз)

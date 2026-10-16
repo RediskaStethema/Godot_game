@@ -65,6 +65,9 @@ var current_hp: float
 var max_hp: float
 var current_damage: float
 var current_move_speed: float
+# Щит Iron Halo на этот бой: снимается уроном раньше HP (runtime, из data.shield_ratio)
+var shield: float = 0.0
+var has_revived: bool = false   # Apothecarion поднимает бойца не больше раза за бой
 var current_attack_range: float
 var current_attack_speed: float
 var current_heal_per_second: float
@@ -121,7 +124,8 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 	max_hp = data.get_max_hp()
 	current_damage = data.get_damage()
 	current_hp = max_hp * clampf(start_hp_ratio, 0.01, 1.0)
-	current_move_speed = data.move_speed
+	current_move_speed = data.get_move_speed()
+	shield = max_hp * data.shield_ratio
 	current_attack_range = data.attack_range
 	current_attack_speed = data.get_attack_speed()
 	current_heal_per_second = data.heal_per_second
@@ -135,6 +139,7 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 	has_retreated = false
 	status_effects.clear()
 	battle_cry_used = false
+	has_revived = false
 
 	_load_animations()
 
@@ -444,6 +449,8 @@ func refresh_stats_from_data() -> void:
 	current_hp = max_hp * ratio
 	current_damage = data.get_damage()
 	current_attack_speed = data.get_attack_speed()
+	current_move_speed = data.get_move_speed()
+	shield = max_hp * data.shield_ratio
 	queue_redraw()
 
 func heal(amount: float) -> void:
@@ -581,7 +588,7 @@ func _land_melee_hit(victim: Soldier) -> void:
 	var prev_target := target
 	target = victim   # эффекты попадания (_apply_on_hit_effects) — по тому, кого ударили
 	var dmg := _roll_damage()
-	BattleManager.credit_damage(parent_squad, minf(dmg, victim.current_hp))
+	BattleManager.credit_damage(parent_squad, clampf(dmg - victim.shield, 0.0, victim.current_hp))
 	victim.take_damage(dmg)
 	Vfx.spawn(_world_parent(), "blood",
 		victim.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * victim.data.sprite_scale), EFFECT_SCALE)
@@ -638,21 +645,26 @@ func _on_hit_status() -> Array:
 # Бонус урона от аур союзников рядом (Chaplain). Считается в момент удара —
 # runtime-поля не меняются, поэтому аура пропадает, как только отошли из радиуса.
 func get_aura_damage_bonus() -> float:
+	# Носители аур — кэш реестра: Chaplain (aura_damage_bonus, по тегу) и знамя Chapter Banner
+	# (banner_aura_bonus, всем в BANNER_RADIUS). Не суммируются — берётся сильнейшая
 	var best: float = 0.0
 	for ally in SoldierRegistry.get_aura_sources(team):
 		var a: UnitData = ally.data
-		if a.aura_damage_bonus <= best:
-			continue
-		if a.aura_tag != "" and not (a.aura_tag in data.tags):
-			continue
-		if global_position.distance_squared_to(ally.global_position) <= a.aura_radius * a.aura_radius:
+		var d2 := global_position.distance_squared_to(ally.global_position)
+		if a.aura_damage_bonus > best and (a.aura_tag == "" or a.aura_tag in data.tags) and d2 <= a.aura_radius * a.aura_radius:
 			best = a.aura_damage_bonus
+		if a.banner_aura_bonus > best and d2 <= UnitData.BANNER_RADIUS * UnitData.BANNER_RADIUS:
+			best = a.banner_aura_bonus
 	return best
 
 # flash = false — урон яда/огня: без вспышки каждые полсекунды
 func take_damage(amount: float, flash: bool = true) -> void:
 	if current_state == State.DEAD:
 		return
+	if shield > 0.0:
+		var absorbed = minf(shield, amount)
+		shield -= absorbed
+		amount -= absorbed
 	current_hp -= amount
 	queue_redraw()
 	if flash:
@@ -661,6 +673,8 @@ func take_damage(amount: float, flash: bool = true) -> void:
 			_float_text("%d" % roundi(amount),
 				FLOAT_HIT_TO_PLAYER if team == GameConstants.TEAM_PLAYER else FLOAT_HIT_TO_ENEMY)
 	if current_hp <= 0.0:
+		if _try_revive():
+			return
 		_die()
 		return
 	if not has_retreated and current_hp / max_hp < data.retreat_hp_threshold \
@@ -685,6 +699,19 @@ func _flash_hit() -> void:
 	get_tree().create_timer(HIT_FLASH_TIME, false).timeout.connect(func():
 		if is_instance_valid(self) and _hit_flash_id == id:
 			sprite.material = null)
+
+# Apothecarion рядом: шанс встать с долей HP (один раз за бой, только игрок)
+func _try_revive() -> bool:
+	if team != GameConstants.TEAM_PLAYER or has_revived:
+		return false
+	var r = Building.revive_at(global_position)
+	if r["chance"] <= 0.0 or randf() >= r["chance"]:
+		return false
+	has_revived = true
+	current_hp = max_hp * r["hp"]
+	if BattleManager.is_battle_running():
+		_float_text("Встал!", FLOAT_HEAL)   # иначе подъём на поле незаметен
+	return true
 
 func _die() -> void:
 	if current_state == State.DEAD:

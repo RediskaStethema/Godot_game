@@ -73,4 +73,50 @@ func _main() -> void:
 		and bm.citadel_shield > 0.0)
 
 	bm.stop_battle()
+
+	# Plasma Generatorium: доход после боя по уровню (2 → 3 → 5)
+	bm.reset_run()
+	var eco = root.get_node("EconomyManager")
+	var gen = CardFactory.plasma_generatorium()
+	bm.player_buildings[gen] = Vector2i(0, 0)
+	var req0 = eco.requisition
+	var inc1 = eco.collect_building_income(bm.player_buildings)
+	gen.level_up_building()
+	var inc2 = eco.collect_building_income(bm.player_buildings)
+	gen.level_up_building()
+	var inc3 = eco.collect_building_income(bm.player_buildings)
+	_check("генератор: +2 / +3 / +5 Req по уровням", inc1 == 2 and inc2 == 3 and inc3 == 5 \
+		and eco.requisition == req0 + 10)
+
+	# Apothecarion: павший рядом боец встаёт с 30% HP, второй раз — нет
+	bm.reset_run()
+	for n in rm.map.nodes:
+		if n.is_battle() and n.wave == 1:
+			rm.current_node_id = n.id
+			rm.current_completed = false
+			break
+	eco.round_number = 1
+	var apo = CardFactory.apothecarion()
+	apo.building_stats["revive_chance"] = 1.0   # для теста — всегда
+	bm.player_buildings[apo] = Vector2i(1, 0)
+	var u = UnitFactory.create("tactical_marine")
+	u.squad_size = 3
+	u.saved_hp = [1.0, 1.0, 1.0] as Array[float]
+	bm.player_units = [u] as Array[UnitData]
+	bm.player_placements[u] = Vector2i(0, 0)
+	change_scene_to_file("res://scenes/battle/BattleScene.tscn")
+	await _frames(3)
+	var s = root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0)[0]
+	s.take_damage(s.max_hp * 5.0)
+	var revived = s.current_hp > 0.0 and is_equal_approx(s.current_hp, s.max_hp * 0.3)
+	s.take_damage(s.max_hp * 5.0)
+	_check("апотекарион: встал с 30% HP, второй раз — пал", revived \
+		and not root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0).has(s))
+	var lvl = CardFactory.apothecarion()
+	lvl.level_up_building()
+	lvl.level_up_building()
+	_check("апотекарион ур.3: шанс 15% → ≈26.6%", \
+		absf(lvl.get_building_stats()["revive_chance"] - 0.15 * 1.33 * 1.33) < 0.001)
+
+	bm.stop_battle()
 	quit()

@@ -26,7 +26,7 @@ const RARITY_COLORS = {
 	"epic":   Color("b06ad8"),
 }
 const RARITY_NAMES = {"common": "Обычная", "rare": "Редкая", "epic": "Эпическая"}
-const TYPE_NAMES = {"squad": "Отряд", "building": "Здание", "upgrade": "Улучшение"}
+const TYPE_NAMES = {"squad": "Отряд", "building": "Здание", "upgrade": "Улучшение", "event": "Событие"}
 
 # Подпись типа шага забега (RunMapNode.*) — в HUD боя
 const NODE_NAMES = {

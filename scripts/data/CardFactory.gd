@@ -233,6 +233,38 @@ static func fortress_wall() -> CardData:
 	c.building_level_bonuses = {"shield": 0.50, "slow_radius": 0.20}
 	return c
 
+# TDD: «+2 Req/волна» (Rare 7–10). Доход после каждого боя, при любом итоге
+static func plasma_generatorium() -> CardData:
+	var c = CardData.new()
+	c.id = "plasma_generatorium"
+	c.title = "Plasma Generatorium"
+	c.description = "+2 Req после каждого боя. Стоит между раундами."
+	c.faction = "space_marines"
+	c.cost = 8
+	c.rarity = "rare"
+	c.card_type = "building"
+	c.building_type = "generator"
+	c.building_stats = {"income": 2.0}
+	# Уровень: +50% дохода (2 → 3 → 4.5 ≈ 5)
+	c.building_level_bonuses = {"income": 0.50}
+	return c
+
+# TDD: «Reanimation 15%». Павший рядом боец игрока встаёт с 30% HP (раз за бой)
+static func apothecarion() -> CardData:
+	var c = CardData.new()
+	c.id = "apothecarion"
+	c.title = "Apothecarion"
+	c.description = "Павший рядом боец встаёт с 30% HP (шанс 15%, раз за бой)."
+	c.faction = "space_marines"
+	c.cost = 8
+	c.rarity = "rare"
+	c.card_type = "building"
+	c.building_type = "apothecarion"
+	c.building_stats = {"revive_chance": 0.15, "revive_radius": 260.0, "revive_hp": 0.3}
+	# Уровень: +33% шанса (15% → 20% → 26.6%)
+	c.building_level_bonuses = {"revive_chance": 0.33}
+	return c
+
 # -------------------------------------------------------
 # КАРТЫ УЛУЧШЕНИЙ (upgrade)
 # -------------------------------------------------------
@@ -265,13 +297,88 @@ static func battle_fury() -> CardData:
 	c.affects_tag = "marine"
 	return c
 
+static func iron_halo() -> CardData:
+	var c = CardData.new()
+	c.id = "iron_halo"
+	c.title = "Iron Halo"
+	c.description = "Отряд Marines: щит 30% HP каждому бойцу в начале боя"
+	c.faction = "space_marines"
+	c.cost = 7
+	c.rarity = "rare"
+	c.card_type = "upgrade"
+	c.upgrade_type = "shield"
+	c.upgrade_value = 0.30
+	c.affects_tag = "marine"
+	return c
+
+static func combat_stimms() -> CardData:
+	var c = CardData.new()
+	c.id = "combat_stimms"
+	c.title = "Combat Stimms"
+	c.description = "Отряд Marines: +20% скорости бега и атаки"
+	c.faction = "space_marines"
+	c.cost = 7
+	c.rarity = "rare"
+	c.card_type = "upgrade"
+	c.upgrade_type = "stimms"
+	c.upgrade_value = 0.20
+	c.affects_tag = "marine"
+	return c
+
+static func chapter_banner() -> CardData:
+	var c = CardData.new()
+	c.id = "chapter_banner"
+	c.title = "Chapter Banner"
+	c.description = "Знамя отряду: союзники рядом +15% урона (не суммируется с аурами)"
+	c.faction = "space_marines"
+	c.cost = 7
+	c.rarity = "rare"
+	c.card_type = "upgrade"
+	c.upgrade_type = "banner"
+	c.upgrade_value = 0.15
+	c.affects_tag = "marine"
+	return c
+
+# -------------------------------------------------------
+# КАРТЫ СОБЫТИЙ (event)
+# -------------------------------------------------------
+
+# Случайный Common отряд полным составом (RunManager.rng) — дешевле любого из них
+static func emergency_reinforcements() -> CardData:
+	var c = CardData.new()
+	c.id = "emergency_reinforcements"
+	c.title = "Emergency Reinforcements"
+	c.description = "Случайный Common отряд на пустую клетку"
+	c.faction = "space_marines"
+	c.cost = 3
+	c.rarity = "common"
+	c.card_type = "event"
+	c.event_type = "reinforcements"
+	c.event_stats = {"rarity": "common"}
+	return c
+
+# Заряжается на расстановке, бьёт в начале боя по самому плотному скоплению врагов
+# (враги до боя скрыты — целиться вслепую незачем)
+static func orbital_strike() -> CardData:
+	var c = CardData.new()
+	c.id = "orbital_strike"
+	c.title = "Orbital Strike"
+	c.description = "В начале боя: 160 урона всем врагам в радиусе 130 — по самой плотной группе"
+	c.faction = "space_marines"
+	c.cost = 7
+	c.rarity = "rare"
+	c.card_type = "event"
+	c.event_type = "orbital_strike"
+	c.event_stats = {"damage": 160.0, "radius": 130.0}
+	return c
+
 # -------------------------------------------------------
 # ПУЛ КАРТ ДЛЯ МАГАЗИНА
 # -------------------------------------------------------
 # ShopManager будет брать карты отсюда.
 # Карты с большим весом появляются чаще.
 
-# Веса по TDD: common 60% (18), rare 30% (9), epic 10% (3) — из 30 копий.
+# Веса по TDD ~60/30/10: common 26, rare 15, epic 4 — из 45 копий.
 # Новая карта по id (сохранения). Все карты игрока есть в пуле магазина.
 static func create(id: String) -> CardData:
 	for card in build_pool():
@@ -279,6 +386,11 @@ static func create(id: String) -> CardData:
 			return card
 	push_warning("CardFactory: неизвестная карта '%s'" % id)
 	return null
+
+# Случайная карта отряда нужной редкости из пула (веса копий) — Emergency Reinforcements
+static func random_squad_card(rarity: String, rng: RandomNumberGenerator) -> CardData:
+	var squads = build_pool().filter(func(c): return c.card_type == "squad" and c.rarity == rarity)
+	return squads[rng.randi_range(0, squads.size() - 1)]
 
 # id карт (сохранения) и обратно
 static func ids_of(cards: Array) -> Array:
@@ -297,14 +409,16 @@ static func create_many(ids: Array) -> Array[CardData]:
 
 static func build_pool() -> Array:
 	var pool = []
-	# Common — 21 копия
+	# Common — 27 копий: доли ~60/30/10 держатся — на 6 новых Rare базовых отрядов по +1 (на одобрение цифр)
 	# Враги (chaos_*) в пул игрока не входят
-	for i in range(7): pool.append(tactical_squad())
-	for i in range(5): pool.append(assault_squad())
-	for i in range(4): pool.append(scout_squad())
+	for i in range(8): pool.append(tactical_squad())
+	for i in range(6): pool.append(assault_squad())
+	for i in range(5): pool.append(scout_squad())
 	for i in range(2): pool.append(fortress_wall())
 	for i in range(3): pool.append(barracks())
-	# Rare — 10 копий
+	for i in range(3): pool.append(emergency_reinforcements())
+	# Rare — 16 копий (по одной; MVP: Iron Halo, Combat Stimms, Chapter Banner, Orbital Strike,
+	# здания TDD: Plasma Generatorium, Apothecarion)
 	pool.append(devastator_squad())
 	pool.append(terminator_squad())
 	pool.append(apothecary_card())
@@ -315,7 +429,13 @@ static func build_pool() -> Array:
 	pool.append(thunderfire_cannon())
 	pool.append(blessed_armour())
 	pool.append(battle_fury())
-	# Epic — 3 копии
+	pool.append(iron_halo())
+	pool.append(combat_stimms())
+	pool.append(chapter_banner())
+	pool.append(orbital_strike())
+	pool.append(plasma_generatorium())
+	pool.append(apothecarion())
+	# Epic — 4 копии
 	for i in range(2): pool.append(dreadnought_card())
-	pool.append(chapter_master_card())
+	for i in range(2): pool.append(chapter_master_card())
 	return pool

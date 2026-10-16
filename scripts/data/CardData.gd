@@ -13,6 +13,7 @@ extends Resource
 # "squad" — даёт юнитов
 # "building" — ставит здание
 # "upgrade" — улучшает существующих юнитов
+# "event" — разовый эффект (event_type): подкрепление, орбитальный удар
 @export var card_type: String = "squad"
 
 # --- Если squad ---
@@ -35,14 +36,24 @@ var building_level: int = 1
 @export var upgrade_value: float = 0.0  # 0.2 = +20%
 @export var affects_tag: String = ""    # "marine", "chaos" — кого затрагивает
 
+# --- Если event ---
+@export var event_type: String = ""        # "reinforcements", "orbital_strike"
+@export var event_stats: Dictionary = {}
+
 # Куда класть карту в бою — подсказка для магазина и скамейки. Новый тип карты:
 # строка здесь + обработчик в BattleScene._card_handlers
 const PLAY_HINTS = {
 	"upgrade": "на свой отряд",
 	"building": "на клетку или на такое же",
 }
+const EVENT_HINTS = {
+	"reinforcements": "на пустую клетку",
+	"orbital_strike": "на свою клетку — удар в начале боя",
+}
 
 func get_play_hint() -> String:
+	if card_type == "event":
+		return EVENT_HINTS.get(event_type, "")
 	return PLAY_HINTS.get(card_type, "")
 
 # Статы здания с учётом уровня (building_stats — база 1-го уровня, не меняется)

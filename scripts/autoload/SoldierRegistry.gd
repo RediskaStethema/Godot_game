@@ -47,7 +47,11 @@ func get_all_alive_soldiers() -> Array[Soldier]:
 	_rebuild_if_dirty()
 	return _alive_all
 
-# Живые бойцы команды с аурой урона (Chaplain) — аура считается на каждом ударе
+# Отряд получил ауру (знамя Chapter Banner) после регистрации бойцов — пересобрать кэш
+func mark_dirty() -> void:
+	_dirty = true
+
+# Живые бойцы команды с аурой урона (Chaplain, знамя) — аура считается на каждом ударе
 func get_aura_sources(team_id: int) -> Array:
 	_rebuild_if_dirty()
 	return _aura_by_team.get(team_id, [])
@@ -188,7 +192,7 @@ func _rebuild_if_dirty() -> void:
 			var list: Array[Soldier] = []
 			_alive_by_team[s.team] = list
 		_alive_by_team[s.team].append(s)
-		if s.data.aura_damage_bonus > 0.0:
+		if s.data.aura_damage_bonus > 0.0 or s.data.banner_aura_bonus > 0.0:
 			if not _aura_by_team.has(s.team):
 				_aura_by_team[s.team] = []
 			_aura_by_team[s.team].append(s)

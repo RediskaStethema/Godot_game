@@ -163,7 +163,7 @@ func _impact() -> void:
 		for e in SoldierRegistry.get_alive_soldiers_of_team(splash_team).duplicate():
 			if e.global_position.distance_to(point) <= splash_radius:
 				var amount: float = damage * e.data.unit_weight   # пехоту в толпе накрывает втрое больше
-				BattleManager.credit_damage(source, minf(amount, e.current_hp))
+				BattleManager.credit_damage(source, clampf(amount - e.shield, 0.0, e.current_hp))
 				e.take_damage(amount)
 		if on_impact.is_valid():
 			on_impact.call(point)
@@ -174,7 +174,7 @@ func _impact() -> void:
 			# удалённый объект в Godot 4 равен null, а «is» на нём падает
 	elif _target is Soldier:
 		var s: Soldier = _target
-		BattleManager.credit_damage(source, minf(damage, s.current_hp))
+		BattleManager.credit_damage(source, clampf(damage - s.shield, 0.0, s.current_hp))
 		s.take_damage(damage)
 		Vfx.spawn(get_parent(), "hit_spark", _aim_point, Soldier.EFFECT_SCALE, rotation)
 		if stun > 0.0:

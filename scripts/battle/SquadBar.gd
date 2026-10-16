@@ -13,11 +13,14 @@ const COUNT_SCALE: float = 0.5
 const PIP_R: float = 2.0
 const PIP_STEP: float = 5.0
 const PIP_GAP: float = 4.0
+const SHIELD_COLOR = Color(0.45, 0.75, 1.0)   # щит Iron Halo — полоска под HP
+const SHIELD_HEIGHT: float = 2.0
 
 var squad: Squad
 var _ratio: float = -1.0
 var _count: int = -1
 var _level: int = -1
+var _shield: float = 0.0   # доля щита от полного HP отряда
 
 func _ready() -> void:
 	top_level = true   # своя позиция в мире — над бойцами, а не над клеткой отряда
@@ -29,6 +32,7 @@ func _process(_delta: float) -> void:
 		return
 	var alive := 0
 	var hp := 0.0
+	var shield := 0.0
 	var max_sum := 0.0
 	var x_sum := 0.0
 	var top := INF
@@ -37,6 +41,7 @@ func _process(_delta: float) -> void:
 			continue
 		alive += 1
 		hp += s.current_hp
+		shield += s.shield
 		max_sum += s.max_hp
 		x_sum += s.global_position.x
 		top = minf(top, s.global_position.y)
@@ -48,8 +53,10 @@ func _process(_delta: float) -> void:
 	# Полный состав — павшие считаются бойцами со средним max HP живых
 	var full := max_sum + maxi(squad.data.squad_size - alive, 0) * (max_sum / alive)
 	var ratio := clampf(hp / maxf(full, 0.001), 0.0, 1.0)
-	if absf(ratio - _ratio) * SIZE.x >= 0.5 or alive != _count or squad.data.squad_level != _level:
+	var shield_ratio := clampf(shield / maxf(full, 0.001), 0.0, 1.0)
+	if absf(ratio - _ratio) * SIZE.x >= 0.5 or absf(shield_ratio - _shield) * SIZE.x >= 0.5 or alive != _count or squad.data.squad_level != _level:
 		_ratio = ratio
+		_shield = shield_ratio
 		_count = alive
 		_level = squad.data.squad_level
 		queue_redraw()
@@ -61,6 +68,8 @@ func _draw() -> void:
 	draw_rect(rect.grow(1.0), Color(0, 0, 0, 0.75))
 	var color := UITheme.GREEN if squad.team == GameConstants.TEAM_PLAYER else UITheme.RED_BRIGHT
 	draw_rect(Rect2(rect.position, Vector2(rect.size.x * _ratio, rect.size.y)), color)
+	if _shield > 0.0:
+		draw_rect(Rect2(Vector2(rect.position.x, rect.end.y + 1.0), Vector2(rect.size.x * _shield, SHIELD_HEIGHT)), SHIELD_COLOR)
 	if squad.data.squad_size > 1:
 		draw_set_transform(Vector2(rect.end.x + 3.0, 1.0), 0.0, Vector2(COUNT_SCALE, COUNT_SCALE))
 		var font := ThemeDB.fallback_font
