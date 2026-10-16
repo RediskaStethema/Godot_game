@@ -169,6 +169,9 @@ func _impact() -> void:
 			on_impact.call(point)
 		for kind in impact_vfx:
 			Vfx.spawn(get_parent(), kind, point, splash_radius / EXPLOSION_VFX_RADIUS)
+	elif not is_instance_valid(_target):
+		pass   # цель удалена в полёте (погибла и исчезла) — урона нет. _track_target её не обнулит:
+			# удалённый объект в Godot 4 равен null, а «is» на нём падает
 	elif _target is Soldier:
 		var s: Soldier = _target
 		BattleManager.credit_damage(source, minf(damage, s.current_hp))
