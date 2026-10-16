@@ -96,6 +96,7 @@ func apply_theme(citadel_theme: Dictionary) -> void:
 	_sprite.scale = Vector2(k, k)
 	_sprite.position = -Vector2(_sheet.get("anchor", Vector2(frame.x / 2.0, frame.y))) * k
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_sprite.modulate = _sheet.get("tint", Color.WHITE)   # вспышка попадания — modulate узла, не спрайта
 	_sprite.animation_finished.connect(_on_sprite_animation_finished)
 	add_child(_sprite)
 	move_child(_sprite, 0)   # под HP-баром

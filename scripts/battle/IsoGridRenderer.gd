@@ -31,13 +31,17 @@ const FLOOR_PAD_TILES: int = 5          # поле шире раскладки �
 const FLOOR_TINT = Color(0.72, 0.70, 0.68)   # пол чуть темнее — юниты читаются лучше
 const DECOR_CHANCE: int = 12            # % клеток вне боевой полосы с декором
 const DECOR_FLAT_CHANCE: int = 4        # % клеток «ничьей земли» с кратером
-# Реки (тема: "river") — прямые линии через всё поле, своя раскладка в каждом забеге (seed забега):
-# первая поперёк ничьей земли, вторая (с этим шансом) вдоль поля в стороне от боевой полосы
-const RIVER_SECOND_CHANCE: float = 0.5
+# Река (тема: "river") — одна прямая линия вдоль поля боя (решение пользователя), в стороне от
+# боевой полосы и не у цитадели; ряд — от seed забега
 # Местность (тема: "ground" / "features"): соседи клетки для роста групп деталей; группа, упёршаяся
 # в край или реку, бросает расти с таким шансом на каждой неудачной попытке
 const NEIGHBOURS = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const CLUSTER_GIVE_UP: float = 0.2
+# Вокруг цитадели (клетки в стольких шагах) — просто грунт: ни руин, ни тумана, ни декора (решение пользователя)
+const CITADEL_CLEAR: int = 1
+# Знамёна (плитки и декор темы с "flag") — только на стороне игрока; декор-знамя — лишь на каждой
+# FLAG_DECOR_RARITY-й клетке, где выпал бы
+const FLAG_DECOR_RARITY: int = 3
 
 var grid_overlay: bool = true   # подсветка клеток королевства (в бою выключена)
 var hovered_tile: Vector2i = Vector2i(-1, -1)
@@ -51,8 +55,21 @@ var effect_tiles: Array[Vector2i] = []
 var expansion_tiles: Array[Vector2i] = []
 var expansion_cost: int = 0
 
-var _floor: Node2D = null   # пол рисуется один раз, отдельно от подсветки плотов
+var _floor: Node2D = null   # пол — отдельный узел под подсветкой плотов
 var theme: Dictionary = {}  # FactionTheme расы игрока
+# Анимированные плиты темы ({"frames", "fps"} — кратеры с туманом): время anim_time, сдвиг клетки
+# плавно растёт по полю — туман катится по местности волной, а не «дышит» разом;
+# пол перерисовывается ANIM_REDRAW_FPS раз в секунду.
+# Раскладка пола (клетки, реки, местность) считается один раз до refresh_floor
+const ANIM_REDRAW_FPS: float = 12.0
+const ANIM_WAVE = Vector2(0.25, 0.4)   # сдвиг времени клетки, с на шаг по u / v (соседи — почти в фазе)
+var anim_time: float = 0.0
+# Бурление реки (Vfx "river_splash", только вид): раз в RIVER_SPLASH_EVERY с — на случайной клетке русла
+const RIVER_SPLASH_EVERY: float = 0.7
+var _splash_left: float = RIVER_SPLASH_EVERY
+var _animated: bool = false
+var _anim_step: int = 0
+var _layout: Dictionary = {}
 
 func setup(iso_grid: IsoGrid) -> void:
 	grid = iso_grid
@@ -62,6 +79,20 @@ func setup(iso_grid: IsoGrid) -> void:
 	_floor.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # пиксель-арт без размытия
 	_floor.draw.connect(_draw_floor)
 	add_child(_floor)
+	refresh_floor()
+
+# Время анимированных плит — по часам, не по тикам боя (декор идёт и на паузе, и на расстановке)
+func _process(delta: float) -> void:
+	if not _floor:
+		return
+	_tick_river_splash(delta)
+	if not _animated:
+		return
+	var step := int(Time.get_ticks_msec() * ANIM_REDRAW_FPS / 1000.0)
+	if step != _anim_step:
+		_anim_step = step
+		anim_time = step / ANIM_REDRAW_FPS
+		_floor.queue_redraw()
 
 func _draw() -> void:
 	if not grid or not grid_overlay:
@@ -73,10 +104,43 @@ func set_grid_overlay(visible_overlay: bool) -> void:
 	grid_overlay = visible_overlay
 	queue_redraw()
 
-# Пол перерисовывается только при изменении королевства (покупка клетки)
+func _tick_river_splash(delta: float) -> void:
+	_splash_left -= delta
+	if _splash_left > 0.0 or not _layout.has("rivers") or _layout["rivers"].is_empty():
+		return
+	_splash_left = RIVER_SPLASH_EVERY * randf_range(0.5, 1.5)
+	var cells: Array = _layout["rivers"].keys()
+	var c: Vector2i = cells[randi() % cells.size()]
+	var jitter := Vector2(randf_range(-20.0, 20.0), randf_range(-8.0, 8.0))
+	var v := Vfx.spawn(self, "river_splash", to_global(grid.lattice_to_screen(c.x, c.y) + jitter))
+	if v:
+		v.z_index = 0   # на воде, под бойцами (Vfx.spawn ставит поверх)
+
+# Пол пересчитывается при изменении королевства (покупка клетки) или темы;
+# между ними — только смена кадра анимированных плит
 func refresh_floor() -> void:
+	_layout.clear()
+	_animated = _theme_has_frames()
 	if _floor:
 		_floor.queue_redraw()
+
+func _theme_has_frames() -> bool:
+	var lists: Array = []
+	for key in ["floor", "kingdom", "enemy", "ground", "edge", "river"]:
+		lists.append(theme.get(key, []))
+	for f in theme.get("features", []):
+		lists.append(f["tiles"])
+	if theme.has("flags"):
+		lists.append(theme["flags"]["tiles"])
+	for tiles in lists:
+		for entry in tiles:
+			if entry is Dictionary and entry.has("frames"):
+				return true
+	return false
+
+# Время анимированной плиты клетки — общее со сдвигом по положению (волна)
+func _cell_time(c: Vector2i) -> float:
+	return anim_time + c.x * ANIM_WAVE.x + c.y * ANIM_WAVE.y
 
 # -------------------------------------------------------
 # ПЛАТФОРМА
@@ -101,9 +165,31 @@ func _is_enemy_cell(c: Vector2i) -> bool:
 func _draw_line_tile(variants: Array, c: Vector2i, top: Vector2, line_axis: String) -> void:
 	var entry = TerrainTiles.pick_any(variants, c)
 	var art_axis: String = entry.get("axis", line_axis) if entry is Dictionary else line_axis
-	TerrainTiles.draw_theme_tile(_floor, entry, top, FLOOR_TINT, art_axis != line_axis)
+	TerrainTiles.draw_theme_tile(_floor, entry, top, FLOOR_TINT, art_axis != line_axis, _cell_time(c))
 
-# Клетки рек: клетка → ось русла ("u" / "v"). Реки не идут по королевству, цитадели и зоне врага
+# Плита реки: вдоль русла чередуются плита и её отражение (FactionTheme: "mirror") — у плиты русло
+# к одному концу шире, у отражения — к другому: стыки широкий к широкому и узкий к узкому.
+# Плита одна на всю реку (по хэшу реки): у разных плит узкие концы русла в разных местах —
+# на их стыке получалась грунтовая перемычка
+func _draw_river_tile(c: Vector2i, top: Vector2, line_axis: String) -> void:
+	var tile := river_tile_for(c, line_axis)
+	TerrainTiles.draw_theme_tile(_floor, tile[0], top, FLOOR_TINT, tile[1], _cell_time(c))
+
+# [плита темы, отразить ли по горизонтали] для клетки реки
+func river_tile_for(c: Vector2i, line_axis: String) -> Array:
+	var variants: Array = theme["river"]
+	var k: int = c.y if line_axis == "v" else c.x        # номер клетки вдоль русла
+	var across: int = c.x if line_axis == "v" else c.y   # какая это река
+	var entry = variants[TerrainTiles.hash_cell(Vector2i(across, RunManager.rng.seed % 1000), 71) % variants.size()]
+	var art_axis: String = line_axis
+	if entry is Dictionary:
+		art_axis = entry.get("axis", line_axis)
+		if posmod(k, 2) == 1 and entry.has("mirror"):
+			entry = entry["mirror"]
+	return [entry, art_axis != line_axis]
+
+# Клетки реки: клетка → ось русла ("u" / "v"). Одна река вдоль поля (v постоянно, русло вдоль u)
+# сверху или снизу от боевой полосы; ряды у цитадели (CITADEL_CLEAR) не берёт — там просто грунт
 func _river_cells() -> Dictionary:
 	var cells: Dictionary = {}
 	if not theme.has("river"):
@@ -113,16 +199,15 @@ func _river_cells() -> Dictionary:
 	var lo = -FLOOR_PAD_TILES + 1
 	var cols = grid.get_layout_cols()
 	var rows = grid.get_layout_rows()
-	# Поперёк ничьей земли: u постоянно, русло вдоль v
-	var u = rng.randi_range(grid.grid_width + 1, grid.grid_width + grid.gap_tiles - 2)
-	for v in range(lo, rows + FLOOR_PAD_TILES - 1):
-		cells[Vector2i(u, v)] = "v"
-	# Вдоль поля в стороне от боевой полосы: v постоянно, русло вдоль u
-	if rng.randf() < RIVER_SECOND_CHANCE:
-		var v = rng.randi_range(lo + 1, -2) if rng.randf() < 0.5 \
-			else rng.randi_range(rows + 1, rows + FLOOR_PAD_TILES - 3)
-		for uu in range(lo, cols + FLOOR_PAD_TILES - 1):
-			cells[Vector2i(uu, v)] = "u"
+	var options: Array[int] = []
+	for v in range(lo + 1, -1) + range(rows + 1, rows + FLOOR_PAD_TILES - 2):
+		if absi(v - grid.citadel_tile.y) > CITADEL_CLEAR:
+			options.append(v)
+	if options.is_empty():
+		return cells
+	var row: int = options[rng.randi() % options.size()]
+	for u in range(lo, cols + FLOOR_PAD_TILES - 1):
+		cells[Vector2i(u, row)] = "u"
 	for c in cells.keys():
 		if grid.is_valid_tile(c) or c == grid.citadel_tile or _is_enemy_cell(c):
 			cells.erase(c)
@@ -140,10 +225,13 @@ func _terrain_cells(cells: Array[Vector2i], rivers: Dictionary) -> Dictionary:
 		return result
 	var free: Array[Vector2i] = []
 	for c in cells:
-		if not _is_floor_edge(c) and not rivers.has(c) and c != grid.citadel_tile:
+		if not _is_floor_edge(c) and not rivers.has(c):
 			free.append(c)
 			result[c] = [TerrainTiles.pick_any(theme["ground"], c), TerrainTiles.hash_cell(c, 53) % 2 == 1]
-	var spots = free.filter(func(c): return not grid.is_in_bounds(c))
+	var spots = free.filter(func(c): return not grid.is_in_bounds(c) and not _near_citadel(c))
+	var spot_set: Dictionary = {}
+	for c in spots:
+		spot_set[c] = true
 	if spots.is_empty():
 		return result
 	var rng = RandomNumberGenerator.new()
@@ -157,7 +245,7 @@ func _terrain_cells(cells: Array[Vector2i], rivers: Dictionary) -> Dictionary:
 				while cluster.size() < size:
 					var from: Vector2i = cluster[rng.randi() % cluster.size()]
 					var next: Vector2i = from + NEIGHBOURS[rng.randi() % NEIGHBOURS.size()]
-					if result.has(next) and not grid.is_in_bounds(next) and not cluster.has(next):
+					if spot_set.has(next) and not cluster.has(next):
 						cluster.append(next)
 					elif rng.randf() < CLUSTER_GIVE_UP:
 						break   # упёрлись в край / реку — группа меньше
@@ -174,11 +262,27 @@ func _terrain_cells(cells: Array[Vector2i], rivers: Dictionary) -> Dictionary:
 			_put_feature(result, taken, player_side.pop_at(rng.randi() % player_side.size()), theme["flags"]["tiles"])
 	return result
 
+# Высокие руины ("tall" — постройки выше бойца) — не в боевой полосе: там бойцы ходят перед ними
+# и за ними, а пол рисуется под бойцами. В полосе — только низкие варианты (нет таких — клетка пуста)
 func _put_feature(result: Dictionary, taken: Dictionary, c: Vector2i, tiles: Array) -> void:
 	if taken.has(c):
 		return
+	var in_strip := _is_battle_strip(c)
+	var player_side := _is_player_side(c)
+	tiles = tiles.filter(func(t): return not (t is Dictionary and (
+		(in_strip and t.get("tall", false)) or (not player_side and t.get("flag", false)))))
+	if tiles.is_empty():
+		return
 	taken[c] = true
 	result[c] = [TerrainTiles.pick_any(tiles, c), false]
+
+func _near_citadel(c: Vector2i) -> bool:
+	var d := (c - grid.citadel_tile).abs()
+	return maxi(d.x, d.y) <= CITADEL_CLEAR
+
+# Сторона игрока — от королевства до середины ничьей земли
+func _is_player_side(c: Vector2i) -> bool:
+	return c.x < grid.grid_width + grid.gap_tiles / 2
 
 # Внешнее кольцо пола — край карты (тема: "edge")
 func _is_floor_edge(c: Vector2i) -> bool:
@@ -190,40 +294,58 @@ func _is_battle_strip(c: Vector2i) -> bool:
 	return c.x >= 0 and c.x < grid.get_layout_cols() and c.y >= 0 and c.y < grid.get_layout_rows()
 
 func _draw_floor() -> void:
-	var cells = _floor_cells()
-	var rivers = _river_cells()
-	var terrain = _terrain_cells(cells, rivers)
+	if _layout.is_empty():
+		var floor_cells = _floor_cells()
+		var river_cells = _river_cells()
+		_layout = {"cells": floor_cells, "rivers": river_cells, "terrain": _terrain_cells(floor_cells, river_cells)}
+	var cells: Array[Vector2i] = _layout["cells"]
+	var rivers: Dictionary = _layout["rivers"]
+	var terrain: Dictionary = _layout["terrain"]
 	for c in cells:
 		var top = grid.lattice_to_screen(c.x, c.y)
 		if grid.is_valid_tile(c):
-			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["kingdom"], c), top)
+			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["kingdom"], c), top, Color.WHITE, false, _cell_time(c))
 		elif _is_floor_edge(c) and theme.has("edge"):
 			# Края с постоянным u идут вдоль оси v, с постоянным v — вдоль u
 			var along_v = c.x == -FLOOR_PAD_TILES or c.x == grid.get_layout_cols() + FLOOR_PAD_TILES - 1
 			_draw_line_tile(theme["edge"], c, top, "v" if along_v else "u")
 		elif rivers.has(c):
-			_draw_line_tile(theme["river"], c, top, rivers[c])
+			_draw_river_tile(c, top, rivers[c])
 		elif terrain.has(c):
-			TerrainTiles.draw_theme_tile(_floor, terrain[c][0], top, FLOOR_TINT, terrain[c][1])
+			TerrainTiles.draw_theme_tile(_floor, terrain[c][0], top, FLOOR_TINT, terrain[c][1], _cell_time(c))
 		elif _is_enemy_cell(c):
-			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["enemy"], c), top, FLOOR_TINT)
+			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["enemy"], c), top, FLOOR_TINT, false, _cell_time(c))
 		else:
-			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["floor"], c), top, FLOOR_TINT)
+			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["floor"], c), top, FLOOR_TINT, false, _cell_time(c))
+		_draw_cell_decoration(c, top, rivers, terrain)
 
-	# Декор — поверх пола. В боевой полосе только плоские кратеры, и не на клетках королевства
-	for c in cells:
-		if grid.is_in_bounds(c) or c == grid.citadel_tile or rivers.has(c):
-			continue
-		var in_strip = _is_battle_strip(c)
-		var roll = TerrainTiles.hash_cell(c, 7) % 100
-		if roll >= (DECOR_FLAT_CHANCE if in_strip else DECOR_CHANCE):
-			continue
-		var options = theme["decorations"].filter(func(d): return d[1] or not in_strip)
-		if options.is_empty():
-			continue
-		var deco = options[TerrainTiles.hash_cell(c, 13) % options.size()]
-		var jitter = Vector2((TerrainTiles.hash_cell(c, 21) % 41) - 20, (TerrainTiles.hash_cell(c, 29) % 17) - 8)
-		TerrainTiles.draw_decoration(_floor, TerrainTiles.decoration(deco[0]), grid.lattice_to_screen(c.x, c.y) + jitter)
+# Декор — на своей клетке сразу после её плиты (передние клетки перекрывают задний декор)
+func _draw_cell_decoration(c: Vector2i, top: Vector2, rivers: Dictionary, terrain: Dictionary) -> void:
+	var deco = decoration_for(c, rivers, terrain)
+	if deco == null:
+		return
+	var jitter = Vector2((TerrainTiles.hash_cell(c, 21) % 41) - 20, (TerrainTiles.hash_cell(c, 29) % 17) - 8)
+	TerrainTiles.draw_prop(_floor, deco, top + jitter, FLOOR_TINT, TerrainTiles.hash_cell(c, 37) % 2 == 1)
+
+# Декор клетки (объект темы {"texture", "base", "scale", "flat", "flag"}) или null. Нет декора:
+# королевство, цитадель и клетки вокруг, реки, край поля, руины, туман и большие кратеры ("no_decor").
+# В боевой полосе — только плоский; знамёна — только на стороне игрока и реже прочего
+func decoration_for(c: Vector2i, rivers: Dictionary, terrain: Dictionary) -> Variant:
+	if grid.is_in_bounds(c) or _near_citadel(c) or rivers.has(c) or _is_floor_edge(c):
+		return null
+	if terrain.has(c) and terrain[c][0] is Dictionary:
+		var tile: Dictionary = terrain[c][0]
+		if tile.has("prop") or tile.get("no_decor", false):
+			return null
+	var in_strip = _is_battle_strip(c)
+	if TerrainTiles.hash_cell(c, 7) % 100 >= (DECOR_FLAT_CHANCE if in_strip else DECOR_CHANCE):
+		return null
+	var flag_ok := _is_player_side(c) and TerrainTiles.hash_cell(c, 41) % FLAG_DECOR_RARITY == 0
+	var options = theme["decorations"].filter(func(d):
+		return (d.get("flat", false) or not in_strip) and (flag_ok or not d.get("flag", false)))
+	if options.is_empty():
+		return null
+	return options[TerrainTiles.hash_cell(c, 13) % options.size()]
 
 # -------------------------------------------------------
 # КОРОЛЕВСТВО И ЗОНА ВРАГА

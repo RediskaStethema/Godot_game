@@ -20,24 +20,10 @@ const FLOOR = [36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 10, 4]  # пол: в 
 const KINGDOM = [16, 17, 18, 19, 20, 21, 22, 23, 24, 25] # плиты королевства: техно-панели
 const ENEMY = [43, 44, 45, 46, 47]                     # зона врага: тёмные панели
 
-# Декор пола: имя файла, плоский ли (плоский можно класть на «ничью землю» — не мешает виду боя)
-const DECORATIONS = [
-	["Small_rocks_1", false], ["Small_rocks_2", false], ["Small_rocks_3", false],
-	["Medium_rocks_1", false], ["Medium_rocks_2", false], ["Medium_rocks_3", false],
-	["Medium_rocks_4", false], ["Medium_rocks_5", false], ["Medium_rocks_6", false],
-	["Big_rocks_1", false], ["Spike_rock_1", false], ["Spike_rock_2", false],
-	["Small_Crater_hit_1", true], ["Small_Crater_hit_2", true], ["Big_Crater_hit_1", true],
-	["small_asteroid_impact_1", true], ["small_asteroid_impact_2", true],
-	["medium_asteroid_impact_1", true], ["Big_asteroid_impact_1", true], ["Big_asteroid_impact_2", true],
-]
-
 static var _cache: Dictionary = {}
 
 static func tile(n: int) -> Texture2D:
 	return _load(DIR + "Tiles/Slice %d.png" % n)
-
-static func decoration(file_name: String) -> Texture2D:
-	return _load(DIR + "Decorations_tiles/%s.png" % file_name)
 
 static func _load(path: String) -> Texture2D:
 	if not _cache.has(path):
@@ -65,14 +51,30 @@ static func block_rect(top_center: Vector2, scale_mult: float = 1.0) -> Rect2:
 
 # Плитка темы расы: int — блок тайлсета, String — картинка ромба клетки целиком,
 # {"texture": путь, "top": px} — то же, но над ромбом торчит что-то высотой top px картинки.
-# flip — отразить по горизонтали (русло / стена вдоль другой оси клеток)
+# flip — отразить по горизонтали (русло / стена вдоль другой оси клеток);
+# {"frames": [плитки], "fps"} — анимированная плита: на время time (с) кадр по кругу, следующий
+# кадр проступает поверх по мере приближения (туман густеет плавно, а не мигает);
+# "prop": объект — поверх плиты стоит объект (руины, draw_prop) основанием в центре клетки
 static func draw_theme_tile(canvas: CanvasItem, entry, top_center: Vector2, modulate: Color = Color.WHITE,
-		flip: bool = false) -> void:
+		flip: bool = false, time: float = 0.0) -> void:
+	if entry is Dictionary and entry.has("frames"):
+		var frames: Array = entry["frames"]
+		var phase: float = time * entry.get("fps", 1.0)
+		var i := int(floor(phase))
+		draw_theme_tile(canvas, frames[posmod(i, frames.size())], top_center, modulate, flip)
+		var blend := phase - i
+		if blend > 0.0:
+			var next_modulate := modulate
+			next_modulate.a *= blend
+			draw_theme_tile(canvas, frames[posmod(i + 1, frames.size())], top_center, next_modulate, flip)
+		return
 	if entry is String:
 		draw_tile_texture(canvas, FactionTheme.load_texture(entry), top_center, modulate, 0.0, flip)
 	elif entry is Dictionary:
 		draw_tile_texture(canvas, FactionTheme.load_texture(entry["texture"]), top_center, modulate,
 			entry.get("top", 0.0), flip)
+		if entry.has("prop"):
+			draw_prop(canvas, entry["prop"], top_center, modulate, flip)
 	else:
 		draw_block(canvas, tile(int(entry)), top_center, modulate)
 
@@ -94,9 +96,15 @@ static func draw_tile_texture(canvas: CanvasItem, tex: Texture2D, top_center: Ve
 static func pick_any(variants: Array, cell: Vector2i, salt: int = 0) -> Variant:
 	return variants[hash_cell(cell, salt) % variants.size()]
 
-# Декор стоит «ногами» (низом спрайта) в точке foot
-static func draw_decoration(canvas: CanvasItem, tex: Texture2D, foot: Vector2) -> void:
+# Объект темы {"texture": путь, "base": точка земли в картинке (px), "scale", "tint"} — основанием в точке foot
+# (руины на клетке, декор, tools/props_from_sheet.py); flip — отразить по горизонтали
+static func draw_prop(canvas: CanvasItem, prop: Dictionary, foot: Vector2, modulate: Color = Color.WHITE,
+		flip: bool = false) -> void:
+	var tex := FactionTheme.load_texture(prop["texture"])
 	if tex == null:
 		return
-	var size = tex.get_size() * SCALE
-	canvas.draw_texture_rect(tex, Rect2(foot - Vector2(size.x / 2.0, size.y * 0.75), size), false)
+	var k: float = prop.get("scale", 1.0)
+	var base: Vector2 = prop.get("base", Vector2(tex.get_width() / 2.0, tex.get_height()))
+	canvas.draw_set_transform(foot, 0.0, Vector2(-k if flip else k, k))
+	canvas.draw_texture_rect(tex, Rect2(-base, tex.get_size()), false, modulate * prop.get("tint", Color.WHITE))
+	canvas.draw_set_transform(Vector2.ZERO)

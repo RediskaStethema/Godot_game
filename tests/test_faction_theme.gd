@@ -48,7 +48,7 @@ func _main() -> void:
 	_check("раса в сохранении; без поля — десант", faction_loaded == "chaos" and rm.player_faction == "space_marines")
 	rm.player_faction = "chaos"   # темы нет — берётся тема по умолчанию
 
-	# 2. Бой: поле и цитадель из темы (неизвестная раса → тема по умолчанию, блоки)
+	# 2. Бой: поле и цитадель из темы (неизвестная раса → тема по умолчанию, цитадель — спрайт)
 	bm.reset_run()
 	rm.new_run(5)
 	for n in rm.map.nodes:
@@ -62,8 +62,15 @@ func _main() -> void:
 	var battle = current_scene
 	var theme: Dictionary = battle.renderer.theme
 	var citadel = bm.citadel
-	_check("тема по умолчанию: плитки и декор есть, цитадель — блоки", theme.has("floor") \
-		and not theme["floor"].is_empty() and not theme["decorations"].is_empty() and not citadel.has_sprite())
+	_check("тема по умолчанию: плитки и декор есть, цитадель — спрайт темы (готика)", theme.has("floor") \
+		and not theme["floor"].is_empty() and not theme["decorations"].is_empty() and citadel.has_sprite())
+	var cit_theme: Dictionary = theme.get("citadel", {})
+	var props_tinted = theme["decorations"].all(func(d): return d.has("tint"))
+	_check("готика темнее, ближе к грунту: декор с тоном, цитадель — тон темы",
+		props_tinted and cit_theme.has("tint") and citadel._sprite.modulate == cit_theme["tint"])
+	citadel.apply_theme({})
+	await _frames(1)
+	_check("пустая тема цитадели — башня из блоков", not citadel.has_sprite())
 
 	# 3. Плитки-картинки: пол из PNG ромба рисуется без ошибок
 	battle.renderer.theme = {"floor": [TILE_PATH], "kingdom": [TILE_PATH], "enemy": [TILE_PATH], "decorations": []}
