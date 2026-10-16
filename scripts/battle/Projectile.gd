@@ -35,6 +35,7 @@ static var _warm_material: ShaderMaterial
 
 # --- Что делает попадание (заполняет стрелок) ---
 var damage: float = 0.0
+var source: Squad = null   # чей выстрел — урон в итоги боя (BattleManager.credit_damage); здания — null
 var stun: float = 0.0               # сек оглушения цели (Librarian)
 var knockback: float = 0.0          # сила отбрасывания от точки выстрела
 var status: String = ""             # статус-эффект цели (StatusEffects), +1 стак
@@ -161,13 +162,16 @@ func _impact() -> void:
 	if splash_radius > 0.0:
 		for e in SoldierRegistry.get_alive_soldiers_of_team(splash_team).duplicate():
 			if e.global_position.distance_to(point) <= splash_radius:
-				e.take_damage(damage * e.data.unit_weight)   # пехоту в толпе накрывает втрое больше
+				var amount: float = damage * e.data.unit_weight   # пехоту в толпе накрывает втрое больше
+				BattleManager.credit_damage(source, minf(amount, e.current_hp))
+				e.take_damage(amount)
 		if on_impact.is_valid():
 			on_impact.call(point)
 		for kind in impact_vfx:
 			Vfx.spawn(get_parent(), kind, point, splash_radius / EXPLOSION_VFX_RADIUS)
 	elif _target is Soldier:
 		var s: Soldier = _target
+		BattleManager.credit_damage(source, minf(damage, s.current_hp))
 		s.take_damage(damage)
 		Vfx.spawn(get_parent(), "hit_spark", _aim_point, Soldier.EFFECT_SCALE, rotation)
 		if stun > 0.0:

@@ -76,6 +76,7 @@ signal battle_ended(winner_team: int)
 func start_battle() -> void:
 	if phase == BattlePhase.RUNNING:
 		return  # защита от двойного запуска
+	damage_by_unit.clear()
 
 	phase = BattlePhase.RUNNING
 	winner_team = -1
@@ -172,6 +173,22 @@ func clear_projectiles() -> void:
 		if is_instance_valid(p):
 			p.queue_free()
 	projectiles.clear()
+
+# Урон отрядов игрока за бой (UnitData → нанесённый урон, без перебора сверх HP цели) — итоги боя.
+# По UnitData, а не по узлу: отряд, павший целиком, тоже в итогах. Яд и огонь не считаются
+var damage_by_unit: Dictionary = {}
+func credit_damage(source, amount: float) -> void:
+	if amount <= 0.0 or not is_instance_valid(source) or source.team != GameConstants.TEAM_PLAYER:
+		return
+	damage_by_unit[source.data] = damage_by_unit.get(source.data, 0.0) + amount
+
+# Лучший отряд по урону за бой: [UnitData, урон] или [] — никто не нанёс
+func top_damage_dealer() -> Array:
+	var best = null
+	for d in damage_by_unit:
+		if best == null or damage_by_unit[d] > damage_by_unit[best]:
+			best = d
+	return [best, damage_by_unit[best]] if best != null else []
 
 # Доля FIXED_TICK, накопленная с последнего тика (0..1) — для плавной отрисовки между тиками
 func get_tick_alpha() -> float:

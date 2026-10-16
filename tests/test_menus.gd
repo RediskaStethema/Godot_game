@@ -63,7 +63,9 @@ func _main() -> void:
 	gs._load()
 	_check("настройки: запись и чтение", is_equal_approx(gs.battle_speed, 2.0) and is_equal_approx(gs.master_volume, 0.4))
 	gs.cycle_battle_speed()
-	_check("скорость по кругу ×2 → ×1", is_equal_approx(gs.battle_speed, 1.0))
+	var to_three: bool = is_equal_approx(gs.battle_speed, 3.0)
+	gs.cycle_battle_speed()
+	_check("скорость по кругу ×2 → ×3 → ×1", to_three and is_equal_approx(gs.battle_speed, 1.0))
 
 	# 2. Скорость ×2 действует только во время боя
 	gs.set_battle_speed(2.0)
@@ -72,7 +74,9 @@ func _main() -> void:
 	battle._on_start_pressed()
 	_check("бой — скорость ×2", is_equal_approx(Engine.time_scale, 2.0))
 	gs.cycle_battle_speed()
-	_check("переключение в бою → ×1 сразу", is_equal_approx(Engine.time_scale, 1.0))
+	var battle_three: bool = is_equal_approx(Engine.time_scale, 3.0)
+	gs.cycle_battle_speed()
+	_check("переключение в бою → ×3 → ×1 сразу", battle_three and is_equal_approx(Engine.time_scale, 1.0))
 	gs.set_battle_speed(2.0)
 
 	# 3. Пауза останавливает бой

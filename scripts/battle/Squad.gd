@@ -36,6 +36,10 @@ func setup(unit_data: UnitData, team_id: int, grid_tile: Vector2i, count: int, h
 
 	# Спавним бойцов в строю на клетке
 	_spawn_soldiers(count, hp_list)
+	# Полоска HP отряда над бойцами (у самих бойцов полосок нет)
+	var bar := SquadBar.new()
+	bar.squad = self
+	add_child(bar)
 
 func _spawn_soldiers(count: int, hp_list: Array[float]) -> void:
 	# Вычисляем смещения для строя на клетке
@@ -184,6 +188,10 @@ func _on_soldier_died(soldier: Soldier) -> void:
 	# Если все бойцы мертвы — отряд уничтожен
 	if soldiers.is_empty():
 		current_state = State.DEAD
+		# Свой отряд пал целиком — надпись над местом гибели последнего бойца (только вид)
+		if team == GameConstants.TEAM_PLAYER and BattleManager.is_battle_running():
+			FloatingText.spawn(get_parent(), soldier.global_position + Vector2(0.0, -Soldier.TARGET_SPRITE_HEIGHT * 1.5),
+				"%s пал" % data.unit_name, Soldier.FLOAT_HIT_TO_PLAYER, 0.9, true)
 		emit_signal("squad_wiped", self)
 
 # -------------------------------------------------------

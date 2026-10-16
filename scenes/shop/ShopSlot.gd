@@ -14,6 +14,8 @@ var card_data: CardData = null
 var hand_full: bool = false
 var free: bool = false   # карта подкрепления — всегда бесплатно
 var owned_note: PanelContainer = null   # сноска «на поле: ур. N» при наведении
+var synergy_note: PanelContainer = null # под ней — синергии с этой картой (ShopManager.get_synergy_note)
+var _synergy_label: Label
 var _owned_label: Label = null
 
 signal purchase_requested(slot_index: int)
@@ -45,6 +47,7 @@ func _on_mouse_exited() -> void:
 		return
 	add_theme_stylebox_override("panel", UITheme.card_style(card_data.rarity))
 	owned_note.hide()
+	synergy_note.hide()
 
 # Сноска поверх портрета: такой отряд / здание уже на поле — уровень (ShopManager.get_owned_note).
 # Текст — в момент наведения: армия могла измениться, пока магазин открыт
@@ -52,17 +55,34 @@ func show_owned_note() -> void:
 	var text := ShopManager.get_owned_note(card_data)
 	_owned_label.text = text
 	owned_note.visible = text != ""
+	var syn := ShopManager.get_synergy_note(card_data)
+	_synergy_label.text = syn
+	synergy_note.visible = syn != ""
 
 func _build_owned_note() -> void:
 	var layer := Control.new()   # слой поверх содержимого карты, клики не ловит
 	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(layer)
+	var notes := VBoxContainer.new()   # «на поле» и синергии — друг под другом
+	notes.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	notes.add_theme_constant_override("separation", 2)
+	layer.add_child(notes)
+	notes.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	notes.offset_top = OWNED_NOTE_TOP
 	owned_note = UITheme.make_panel("HudPanel", true)
 	owned_note.add_theme_stylebox_override("panel", UITheme.panel_style(UITheme.BG_DEEP, UITheme.GOLD, 1, 4, 4))
-	owned_note.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	owned_note.offset_top = OWNED_NOTE_TOP
 	owned_note.hide()
-	layer.add_child(owned_note)
+	notes.add_child(owned_note)
+	synergy_note = UITheme.make_panel("HudPanel", true)
+	synergy_note.add_theme_stylebox_override("panel", UITheme.panel_style(UITheme.BG_DEEP, UITheme.GREEN, 1, 4, 4))
+	synergy_note.hide()
+	notes.add_child(synergy_note)
+	_synergy_label = UITheme.make_label("", "SmallLabel")
+	_synergy_label.add_theme_color_override("font_color", UITheme.GREEN)
+	_synergy_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_synergy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_synergy_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	synergy_note.add_child(_synergy_label)
 	_owned_label = UITheme.make_label("", "SmallLabel")
 	_owned_label.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT)
 	_owned_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

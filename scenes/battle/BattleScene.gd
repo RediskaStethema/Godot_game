@@ -32,6 +32,9 @@ const BUILDING_HIGHLIGHT = Color(1.45, 1.2, 0.7)   # здание карты п�
 # пока идёт бой; базовый — тот, что был до боя (тесты гоняют с ускорением)
 var _base_time_scale: float = 1.0
 var _speed_applied: bool = false
+const FINALE_SLOWMO: float = 0.35       # скорость мира в финале боя
+const FINALE_SLOWMO_TIME: float = 0.6   # сколько реальных секунд
+var _finale_base_scale: float = -1.0    # скорость до замедления (-1 — замедления нет)
 
 var battle_type: String = RunMapNode.BATTLE   # тип боя шага забега: battle / miniboss / boss
 var battle_wave: int = 1
@@ -100,6 +103,10 @@ func _build_ui() -> void:
 	$UI.add_child(inspector)
 	pause_menu = PauseMenu.new()
 	add_child(pause_menu)
+	# Камера мышью — отдельным узлом, работает и на паузе (пробел — осмотреть поле)
+	var camera_input := CameraInput.new()
+	camera_input.handler = _handle_camera_input
+	add_child(camera_input)
 	GameSettings.changed.connect(_apply_battle_speed)
 	BattleManager.battle_ended.connect(_on_battle_ended)
 
@@ -424,6 +431,34 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	fire_artillery(_screen_to_world(event.position))
 
+# Камера мышью (решение пользователя): колесо — зум к курсору, правая / средняя кнопка — тянуть.
+# true — событие съедено. Зовёт CameraInput (PROCESS_MODE_ALWAYS — и на паузе)
+class CameraInput extends Node:
+	var handler: Callable
+	func _init() -> void:
+		process_mode = Node.PROCESS_MODE_ALWAYS
+	func _unhandled_input(event: InputEvent) -> void:
+		if handler.call(event):
+			get_viewport().set_input_as_handled()
+
+var _camera_dragging: bool = false
+func _handle_camera_input(event: InputEvent) -> bool:
+	if event is InputEventMouseButton:
+		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and event.pressed:
+			camera.zoom_at(event.position, 1.0 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0)
+			return true
+		if event.button_index in [MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]:
+			_camera_dragging = event.pressed
+			return true
+	elif event is InputEventMouseMotion and _camera_dragging:
+		# Кнопку отпустили над панелью (UI съел отпускание) — перетаскивание кончилось
+		if not (Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE)):
+			_camera_dragging = false
+			return false
+		camera.pan(event.relative)
+		return true
+	return false
+
 # Клик в бою уйдёт на залп — справка по отряду его не трогает
 func _artillery_takes_click() -> bool:
 	if not BattleManager.is_battle_running():
@@ -539,7 +574,12 @@ func _on_battle_ended(winner_team: int) -> void:
 	# Последствие события действовало на этот бой
 	BattleManager.next_battle_enemy_hp = 1.0
 	BattleManager.next_battle_note = ""
-	hud.set_message(_resolve_battle(winner_team))
+	# Живые до итога: store_survivors возрождает павшие отряды, Казармы пополняют — потери считать раньше
+	var alive_at_end := SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER).size()
+	var result_text := _resolve_battle(winner_team)
+	hud.set_message(result_text)
+	hud.show_result(_result_title(winner_team), result_text + "\n" + _battle_summary(alive_at_end), won)
+	_play_finale_slowmo()
 	# BattleManager.pending_cards НЕ очищаем: невыложенные карты остаются в руке
 	SquadRegistry.clear()
 	SoldierRegistry.clear()
@@ -554,6 +594,33 @@ func _on_battle_ended(winner_team: int) -> void:
 	# Подключение к методу сцены, а не await: если игрок за эти 2 с ушёл из боя
 	# (пауза → меню / сдаться), сцена удалена и связь снимается сама
 	get_tree().create_timer(2.0, false).timeout.connect(_go_to_next_step)
+
+# Итоги боя для баннера: лучший отряд по урону и потери (решение пользователя)
+func _battle_summary(alive_at_end: int) -> String:
+	var parts: Array[String] = []
+	var top := BattleManager.top_damage_dealer()
+	if not top.is_empty():
+		parts.append("Лучший отряд: %s — %d урона" % [top[0].unit_name, roundi(top[1])])
+	var lost := maxi(player_soldiers_at_start - alive_at_end, 0)
+	parts.append("Потери: %d из %d бойцов" % [lost, player_soldiers_at_start] if lost > 0 else "Без потерь")
+	return " · ".join(parts)
+
+func _result_title(winner_team: int) -> String:
+	if winner_team == GameConstants.TEAM_PLAYER:
+		return "ЦИТАДЕЛЬ ВЫСТОЯЛА" if BattleManager.siege_started else "ПОБЕДА"
+	return "ПОРАЖЕНИЕ" if winner_team == GameConstants.TEAM_ENEMY else "НИЧЬЯ"
+
+# Финал боя (решение пользователя): мир на миг замедляется — последние падения, позы победы.
+# Бой уже закончен — на исход не влияет; таймер по реальному времени, на паузе стоит
+func _play_finale_slowmo() -> void:
+	_finale_base_scale = Engine.time_scale
+	Engine.time_scale = _finale_base_scale * FINALE_SLOWMO
+	get_tree().create_timer(FINALE_SLOWMO_TIME, false, false, true).timeout.connect(_end_finale_slowmo)
+
+func _end_finale_slowmo() -> void:
+	if _finale_base_scale > 0.0:
+		Engine.time_scale = _finale_base_scale
+		_finale_base_scale = -1.0
 
 func _go_to_next_step() -> void:
 	RunManager.advance()
@@ -625,6 +692,7 @@ func _restore_time_scale() -> void:
 # Ушли со сцены посреди боя (в меню) — скорость не должна остаться ускоренной
 func _exit_tree() -> void:
 	_restore_time_scale()
+	_end_finale_slowmo()
 
 # -------------------------------------------------------
 # UI

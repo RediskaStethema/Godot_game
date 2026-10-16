@@ -13,6 +13,13 @@ var _synergy_label: Label
 var _speed_button: Button   # скорость боя ×1/×2 (GameSettings.battle_speed)
 var _artillery: Label       # орудия игрока в бою: готово / перезарядка (только если есть)
 var _artillery_state: String = ""   # последняя надпись — метка меняется только при смене
+# Баннер итога боя по центру экрана (решение пользователя): появляется, держится, гаснет —
+# по реальному времени (замедление финала и ×2 на него не влияют)
+const RESULT_FONT_SIZE: int = 56
+const RESULT_FADE_IN: float = 0.25
+const RESULT_HOLD: float = 1.5
+const RESULT_FADE_OUT: float = 0.4
+var result_banner: Control = null
 
 func setup(wave_text: String, message_label: Label, start_button: Button, synergy_width: float) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -84,6 +91,35 @@ func _build_synergy_panel(width: float) -> void:
 # -------------------------------------------------------
 func set_message(text: String) -> void:
 	_message.text = text
+
+# Итог боя крупно по центру: заголовок (янтарь — победа, красный — нет) и строка дохода
+func show_result(title: String, subtitle: String, victory: bool) -> void:
+	if is_instance_valid(result_banner):
+		result_banner.queue_free()
+	var banner := VBoxContainer.new()
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner.alignment = BoxContainer.ALIGNMENT_CENTER
+	add_child(banner)
+	banner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var head = UITheme.make_label(title, "TitleLabel")
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_theme_font_size_override("font_size", RESULT_FONT_SIZE)
+	head.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT if victory else UITheme.RED_BRIGHT)
+	head.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	head.add_theme_constant_override("outline_size", 12)
+	banner.add_child(head)
+	var sub = UITheme.make_label(subtitle, "ValueLabel")
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	sub.add_theme_constant_override("outline_size", 8)
+	banner.add_child(sub)
+	banner.modulate.a = 0.0
+	result_banner = banner
+	var tween := banner.create_tween().set_ignore_time_scale(true)
+	tween.tween_property(banner, "modulate:a", 1.0, RESULT_FADE_IN)
+	tween.tween_interval(RESULT_HOLD)
+	tween.tween_property(banner, "modulate:a", 0.0, RESULT_FADE_OUT)
+	tween.tween_callback(banner.queue_free)
 
 # Бой: панель синергий прячется, чтобы было видно всё поле
 func set_battle_mode() -> void:

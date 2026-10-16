@@ -16,13 +16,21 @@ const KNOCKBACK_STOP_SPEED: float = 5.0
 const TARGET_SPRITE_HEIGHT: float = 31.0
 # Эффекты на бойце (Vfx) подобраны под рост 62 px
 const EFFECT_SCALE: float = TARGET_SPRITE_HEIGHT / 62.0
-const HP_BAR_SIZE = Vector2(16, 3)
-const HP_BAR_GAP: float = 4.0
-const LEVEL_PIP_R: float = 2.0
-const LEVEL_PIP_STEP: float = 5.0
-const LEVEL_PIP_GAP: float = 4.0
+# Полоска HP и уровень — у отряда (SquadBar); у бойца — тень, кольцо стороны и точки статусов
 const STATUS_DOT_R: float = 1.5
 const STATUS_DOT_GAP: float = 3.0
+const SHADOW_RADIUS: float = 6.0       # × sprite_scale; эллипс сплюснут, как клетка изометрии
+const SHADOW_FLATTEN: float = 0.5
+const SHADOW_COLOR = Color(0, 0, 0, 0.35)
+const RING_WIDTH: float = 1.5
+const RING_ALPHA: float = 0.75
+# Всплывающие цифры (FloatingText) — только в схватке: удар не меньше FLOAT_MIN_DAMAGE
+# (герои, техника, орудие; не каждый болт и не яд / огонь), лечение — порциями FLOAT_HEAL_STEP
+const FLOAT_MIN_DAMAGE: float = 20.0
+const FLOAT_HEAL_STEP: float = 10.0
+const FLOAT_HIT_TO_ENEMY = Color(1.0, 0.86, 0.55)
+const FLOAT_HIT_TO_PLAYER = Color(1.0, 0.45, 0.4)
+const FLOAT_HEAL = Color(0.55, 1.0, 0.55)
 # Боевой клич (Chaplain): кадр клича (анимация battle_cry листа, если есть), первый выстрел — после него
 const BATTLE_CRY_TIME: float = 0.6
 # Вспышка попадания: боец, получивший урон, на мгновение белеет (общий шейдер на всех)
@@ -86,6 +94,7 @@ var extra_on_hit_status_duration: float = 0.0
 var _status_vfx: Dictionary = {}   # статус → Vfx
 var _state_vfx: Vfx
 var _heal_vfx: Vfx
+var _heal_unshown: float = 0.0   # вылечено, но ещё не показано цифрой
 
 # Позиция в строю — смещение относительно центра отряда
 var formation_offset: Vector2 = Vector2.ZERO
@@ -444,32 +453,38 @@ func heal(amount: float) -> void:
 		amount *= StatusEffects.POISON_HEAL_MULT
 	if amount > 0.0 and current_hp < max_hp and not is_instance_valid(_heal_vfx):
 		_heal_vfx = Vfx.attach(self, "heal", data.sprite_scale * EFFECT_SCALE)
+	var before := current_hp
 	current_hp = min(current_hp + amount, max_hp)
 	queue_redraw()
+	if BattleManager.is_battle_running():
+		_heal_unshown += current_hp - before
+		if _heal_unshown >= FLOAT_HEAL_STEP:
+			_float_text("+%d" % roundi(_heal_unshown), FLOAT_HEAL)
+			_heal_unshown = 0.0
 
 # -------------------------------------------------------
-# ПОЛОСКА HP над головой
+# ВИД: тень, кольцо стороны, статусы
 # -------------------------------------------------------
+# Рисуется под спрайтом (дочерним): тень и кольцо стороны у ног — свои янтарные, враги красные
+# (решение пользователя: стороны различимы не только оттенком спрайта). Статусы — точки над головой
 func _draw() -> void:
 	if data == null or current_state == State.DEAD or max_hp <= 0.0:
 		return
-	var top = -TARGET_SPRITE_HEIGHT * data.sprite_scale - HP_BAR_GAP
-	var rect = Rect2(Vector2(-HP_BAR_SIZE.x / 2.0, top), HP_BAR_SIZE)
-	draw_rect(rect.grow(1.0), Color(0, 0, 0, 0.75))
-	var ratio = clampf(current_hp / max_hp, 0.0, 1.0)
-	var color = UITheme.GREEN if team == GameConstants.TEAM_PLAYER else UITheme.RED_BRIGHT
-	draw_rect(Rect2(rect.position, Vector2(rect.size.x * ratio, rect.size.y)), color)
-	# Уровень отряда — золотые ромбики над полоской HP
-	for i in data.squad_level:
-		var c = Vector2((i - (data.squad_level - 1) / 2.0) * LEVEL_PIP_STEP, top - LEVEL_PIP_GAP)
-		draw_colored_polygon(PackedVector2Array([c + Vector2(0, -LEVEL_PIP_R), c + Vector2(LEVEL_PIP_R, 0),
-			c + Vector2(0, LEVEL_PIP_R), c + Vector2(-LEVEL_PIP_R, 0)]), UITheme.GOLD_BRIGHT)
-	# Статус-эффекты — точки под полоской HP, по точке на стак
-	var dot_x = -HP_BAR_SIZE.x / 2.0
+	var r := SHADOW_RADIUS * data.sprite_scale
+	var ring := Color(UITheme.GOLD if team == GameConstants.TEAM_PLAYER else UITheme.RED_BRIGHT, RING_ALPHA)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, SHADOW_FLATTEN))
+	draw_circle(Vector2.ZERO, r, SHADOW_COLOR)
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 20, ring, RING_WIDTH)
+	draw_set_transform(Vector2.ZERO)
+	# Статус-эффекты — точки над головой, по точке на стак
+	var stacks := 0
+	for effect in status_effects:
+		stacks += status_effects[effect]["stacks"]
+	var dot_x := -stacks * (STATUS_DOT_R * 2.0 + 1.0) / 2.0
+	var dot_y := -TARGET_SPRITE_HEIGHT * data.sprite_scale - STATUS_DOT_GAP
 	for effect in status_effects:
 		for i in status_effects[effect]["stacks"]:
-			draw_circle(Vector2(dot_x + STATUS_DOT_R, top + HP_BAR_SIZE.y + STATUS_DOT_GAP), STATUS_DOT_R,
-				StatusEffects.COLORS.get(effect, Color.WHITE))
+			draw_circle(Vector2(dot_x + STATUS_DOT_R, dot_y), STATUS_DOT_R, StatusEffects.COLORS.get(effect, Color.WHITE))
 			dot_x += STATUS_DOT_R * 2.0 + 1.0
 
 # -------------------------------------------------------
@@ -565,7 +580,9 @@ func _resolve_melee_hit() -> void:
 func _land_melee_hit(victim: Soldier) -> void:
 	var prev_target := target
 	target = victim   # эффекты попадания (_apply_on_hit_effects) — по тому, кого ударили
-	victim.take_damage(_roll_damage())
+	var dmg := _roll_damage()
+	BattleManager.credit_damage(parent_squad, minf(dmg, victim.current_hp))
+	victim.take_damage(dmg)
 	Vfx.spawn(_world_parent(), "blood",
 		victim.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * victim.data.sprite_scale), EFFECT_SCALE)
 	_apply_on_hit_effects()
@@ -585,8 +602,10 @@ func _shoot_projectile(to: Node2D, aim_offset: Vector2) -> Projectile:
 	var delay := 0.0
 	if frames.has_meta("shot_frame"):
 		delay = frames.get_meta("shot_frame") / frames.get_animation_speed("attack")
-	return Projectile.launch(parent_squad.get_parent(), data.projectile, global_position + muzzle * sprite.scale,
+	var shot := Projectile.launch(parent_squad.get_parent(), data.projectile, global_position + muzzle * sprite.scale,
 			to, aim_offset, delay, data.projectile_warm)
+	shot.source = parent_squad
+	return shot
 
 # Урон одного удара: аура союзников + разброс damage_variance
 func _roll_damage() -> float:
@@ -638,6 +657,9 @@ func take_damage(amount: float, flash: bool = true) -> void:
 	queue_redraw()
 	if flash:
 		_flash_hit()
+		if amount >= FLOAT_MIN_DAMAGE and BattleManager.is_battle_running():
+			_float_text("%d" % roundi(amount),
+				FLOAT_HIT_TO_PLAYER if team == GameConstants.TEAM_PLAYER else FLOAT_HIT_TO_ENEMY)
 	if current_hp <= 0.0:
 		_die()
 		return
@@ -755,6 +777,10 @@ func _sync_status_vfx() -> void:
 			_status_vfx[effect] = Vfx.attach(self, StatusEffects.VFX[effect], data.sprite_scale * EFFECT_SCALE)
 
 # Куда класть разовые эффекты в мире — туда же, куда снаряды (узел отрядов)
+func _float_text(label: String, tint: Color, size: float = 1.0) -> void:
+	FloatingText.spawn(_world_parent(), global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * data.sprite_scale - 6.0),
+		label, tint, size)
+
 func _world_parent() -> Node:
 	return parent_squad.get_parent() if parent_squad else null
 

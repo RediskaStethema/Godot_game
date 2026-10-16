@@ -57,6 +57,8 @@ static func block_rect(top_center: Vector2, scale_mult: float = 1.0) -> Rect2:
 # "prop": объект — поверх плиты стоит объект (руины, draw_prop) основанием в центре клетки
 static func draw_theme_tile(canvas: CanvasItem, entry, top_center: Vector2, modulate: Color = Color.WHITE,
 		flip: bool = false, time: float = 0.0) -> void:
+	if entry is Dictionary and entry.has("tint"):   # оттенок плитки темы (туман — тусклее)
+		modulate *= entry["tint"]
 	if entry is Dictionary and entry.has("frames"):
 		var frames: Array = entry["frames"]
 		var phase: float = time * entry.get("fps", 1.0)
