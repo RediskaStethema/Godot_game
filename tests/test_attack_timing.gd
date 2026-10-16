@@ -18,6 +18,26 @@ func _initialize() -> void:
 	root.get_node("GameSettings").battle_speed = 1.0
 	_main()
 
+# Размеры групп соседних (по сторонам) клеток
+func _group_sizes(cells: Dictionary) -> Array:
+	var seen = {}
+	var sizes = []
+	for c in cells:
+		if seen.has(c):
+			continue
+		seen[c] = true
+		var stack = [c]
+		var n = 0
+		while not stack.is_empty():
+			var x = stack.pop_back()
+			n += 1
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				if cells.has(x + d) and not seen.has(x + d):
+					seen[x + d] = true
+					stack.append(x + d)
+		sizes.append(n)
+	return sizes
+
 func _check(label: String, ok: bool) -> void:
 	print("%s %s" % ["PASS" if ok else "FAIL", label])
 
@@ -192,21 +212,32 @@ func _main() -> void:
 	_check("река одна: %d клеток в ряду вдоль поля, вне боевой полосы и не у цитадели" % river_cells.size(),
 		river_ok and river_rows.size() == 1)
 
-	# 4. Туман — местностями: клетки тумана держатся группами
+	# 4. Карта одна на расу (решение пользователя): раскладка не зависит от seed забега.
+	#    Группы деталей (туманные местности, руины) — ровно столько, сколько в теме, каждая
+	#    своего размера, отдельно друг от друга
 	var terrain: Dictionary = r._terrain_cells(r._floor_cells(), r._river_cells())
-	var fog: Array = []
-	for c in terrain:
-		var entry = terrain[c][0]
-		if entry is Dictionary and entry.has("frames"):
-			fog.append(c)
-	var grouped = 0
-	for c in fog:
-		for n in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			if fog.has(c + n):
-				grouped += 1
-				break
-	_check("туман: %d клеток, в группах %d" % [fog.size(), grouped],
-		fog.size() >= 10 and grouped >= fog.size() * 0.8)
+	var river_before: Dictionary = r._river_cells()
+	var river_tile_before = str(r.river_tile_for(river_before.keys()[0], "u"))
+	var run_seed: int = rm.rng.seed
+	var same_map := true
+	for k in range(1, 6):   # вариантов ряда реки немного — один другой seed мог совпасть случайно
+		rm.rng.seed = run_seed + 7919 * k
+		same_map = same_map and r._river_cells() == river_before 			and str(r.river_tile_for(river_before.keys()[0], "u")) == river_tile_before 			and str(r._terrain_cells(r._floor_cells(), r._river_cells())) == str(terrain)
+	rm.rng.seed = run_seed
+	var groups_ok = true
+	var groups_text: Array = []
+	for f in r.theme["features"]:
+		if not f.has("clusters"):
+			continue
+		var cells = {}
+		for c in terrain:
+			if f["tiles"].has(terrain[c][0]):
+				cells[c] = true
+		var sizes = _group_sizes(cells)
+		groups_text.append(str(sizes))
+		groups_ok = groups_ok and sizes.size() == f["clusters"] 			and sizes.all(func(n): return n >= f["size"][0] and n <= f["size"][1])
+	_check("карта одна при другом seed забега; группы как в теме: %s" % ", ".join(groups_text),
+		same_map and groups_ok)
 
 	# 5. Руины готики: высокие — только вне боевой полосы (бойцы не ходят «сквозь» здания)
 	var tall_total = 0

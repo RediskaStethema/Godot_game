@@ -31,12 +31,17 @@ const FLOOR_PAD_TILES: int = 5          # поле шире раскладки �
 const FLOOR_TINT = Color(0.72, 0.70, 0.68)   # пол чуть темнее — юниты читаются лучше
 const DECOR_CHANCE: int = 12            # % клеток вне боевой полосы с декором
 const DECOR_FLAT_CHANCE: int = 4        # % клеток «ничьей земли» с кратером
+# Карта поля — одна на расу, не новая в каждом забеге (решение пользователя): раскладка реки,
+# местности и знамён — от seed карты темы ("map_seed"), не от seed забега
+const DEFAULT_MAP_SEED: int = 1
 # Река (тема: "river") — одна прямая линия вдоль поля боя (решение пользователя), в стороне от
-# боевой полосы и не у цитадели; ряд — от seed забега
-# Местность (тема: "ground" / "features"): соседи клетки для роста групп деталей; группа, упёршаяся
-# в край или реку, бросает расти с таким шансом на каждой неудачной попытке
+# боевой полосы и не у цитадели; ряд — от seed карты
+# Местность (тема: "ground" / "features"): соседи клетки для роста групп деталей. Группа растёт
+# только в свободные клетки, где её плитка допустима, и не касается других групп того же вида —
+# иначе туман рвался на куски (кратеры раньше него) и группы сливались; не выросла за
+# CLUSTER_TRIES попыток — остаётся меньше
 const NEIGHBOURS = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-const CLUSTER_GIVE_UP: float = 0.2
+const CLUSTER_TRIES: int = 40
 # Вокруг цитадели (клетки в стольких шагах) — просто грунт: ни руин, ни тумана, ни декора (решение пользователя)
 const CITADEL_CLEAR: int = 1
 # Знамёна (плитки и декор темы с "flag") — только на стороне игрока; декор-знамя — лишь на каждой
@@ -180,7 +185,7 @@ func river_tile_for(c: Vector2i, line_axis: String) -> Array:
 	var variants: Array = theme["river"]
 	var k: int = c.y if line_axis == "v" else c.x        # номер клетки вдоль русла
 	var across: int = c.x if line_axis == "v" else c.y   # какая это река
-	var entry = variants[TerrainTiles.hash_cell(Vector2i(across, RunManager.rng.seed % 1000), 71) % variants.size()]
+	var entry = variants[TerrainTiles.hash_cell(Vector2i(across, map_seed() % 1000), 71) % variants.size()]
 	var art_axis: String = line_axis
 	if entry is Dictionary:
 		art_axis = entry.get("axis", line_axis)
@@ -195,7 +200,7 @@ func _river_cells() -> Dictionary:
 	if not theme.has("river"):
 		return cells
 	var rng = RandomNumberGenerator.new()
-	rng.seed = hash([RunManager.rng.seed, "rivers"])
+	rng.seed = hash([map_seed(), "rivers"])
 	var lo = -FLOOR_PAD_TILES + 1
 	var cols = grid.get_layout_cols()
 	var rows = grid.get_layout_rows()
@@ -217,7 +222,7 @@ func _river_cells() -> Dictionary:
 # Основа — грунт (отражается по хэшу клетки, чтобы не было повторяющегося узора), поверх —
 # редкие детали: группы {"clusters": N, "size": [от, до]} растут от случайной клетки в соседние,
 # одиночные {"scatter": доля клеток}. Знамёна (тема: "flags") — count клеток на стороне игрока.
-# Раскладка — от seed забега и не зависит от купленных клеток: рамка королевства в списке
+# Раскладка — от seed карты и не зависит от купленных клеток: рамка королевства в списке
 # целиком (его клетки рисуются своей плиткой раньше), детали в неё не ставятся
 func _terrain_cells(cells: Array[Vector2i], rivers: Dictionary) -> Dictionary:
 	var result: Dictionary = {}
@@ -235,22 +240,27 @@ func _terrain_cells(cells: Array[Vector2i], rivers: Dictionary) -> Dictionary:
 	if spots.is_empty():
 		return result
 	var rng = RandomNumberGenerator.new()
-	rng.seed = hash([RunManager.rng.seed, "terrain"])
+	rng.seed = hash([map_seed(), "terrain"])
 	var taken: Dictionary = {}
 	for f in theme.get("features", []):
 		if f.has("clusters"):
+			var kind: Dictionary = {}   # клетки прошлых групп этой детали
 			for i in f["clusters"]:
-				var cluster: Array[Vector2i] = [spots[rng.randi() % spots.size()]]
+				var starts = spots.filter(func(c): return _cluster_cell_ok(c, f["tiles"], taken, kind))
+				if starts.is_empty():
+					break
+				var cluster: Array[Vector2i] = [starts[rng.randi() % starts.size()]]
 				var size = rng.randi_range(f["size"][0], f["size"][1])
-				while cluster.size() < size:
+				for attempt in CLUSTER_TRIES:
+					if cluster.size() >= size:
+						break
 					var from: Vector2i = cluster[rng.randi() % cluster.size()]
 					var next: Vector2i = from + NEIGHBOURS[rng.randi() % NEIGHBOURS.size()]
-					if spot_set.has(next) and not cluster.has(next):
+					if spot_set.has(next) and not cluster.has(next) and _cluster_cell_ok(next, f["tiles"], taken, kind):
 						cluster.append(next)
-					elif rng.randf() < CLUSTER_GIVE_UP:
-						break   # упёрлись в край / реку — группа меньше
 				for c in cluster:
 					_put_feature(result, taken, c, f["tiles"])
+					kind[c] = true
 		else:
 			for c in spots:
 				if rng.randf() < f["scatter"]:
@@ -267,14 +277,31 @@ func _terrain_cells(cells: Array[Vector2i], rivers: Dictionary) -> Dictionary:
 func _put_feature(result: Dictionary, taken: Dictionary, c: Vector2i, tiles: Array) -> void:
 	if taken.has(c):
 		return
-	var in_strip := _is_battle_strip(c)
-	var player_side := _is_player_side(c)
-	tiles = tiles.filter(func(t): return not (t is Dictionary and (
-		(in_strip and t.get("tall", false)) or (not player_side and t.get("flag", false)))))
+	tiles = _tiles_allowed_at(c, tiles)
 	if tiles.is_empty():
 		return
 	taken[c] = true
 	result[c] = [TerrainTiles.pick_any(tiles, c), false]
+
+# Seed карты расы: одна и та же карта в каждом забеге
+func map_seed() -> int:
+	return int(theme.get("map_seed", DEFAULT_MAP_SEED))
+
+# Плитки, допустимые на клетке: высокие — не в боевой полосе, знамёна — только на стороне игрока
+func _tiles_allowed_at(c: Vector2i, tiles: Array) -> Array:
+	var in_strip := _is_battle_strip(c)
+	var player_side := _is_player_side(c)
+	return tiles.filter(func(t): return not (t is Dictionary and (
+		(in_strip and t.get("tall", false)) or (not player_side and t.get("flag", false)))))
+
+# Клетка годится группе: свободна, плитка на ней допустима, не касается прошлых групп того же вида
+func _cluster_cell_ok(c: Vector2i, tiles: Array, taken: Dictionary, kind: Dictionary) -> bool:
+	if taken.has(c) or _tiles_allowed_at(c, tiles).is_empty():
+		return false
+	for d in NEIGHBOURS:
+		if kind.has(c + d):
+			return false
+	return true
 
 func _near_citadel(c: Vector2i) -> bool:
 	var d := (c - grid.citadel_tile).abs()

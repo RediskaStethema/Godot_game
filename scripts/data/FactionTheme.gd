@@ -147,6 +147,10 @@ const THEMES = {
 		"ground": SM_TERRAIN,
 		"features": SM_FEATURES,
 		"flags": {"tiles": SM_FLAG, "count": 2},
+		# Карта одна во всех забегах (решение пользователя): seed подобран перебором — 4 туманные
+		# местности по 8–9 клеток (у королевства, внизу посередине, справа), 5 групп руин,
+		# центр боевой полосы чистый
+		"map_seed": 131,
 		"edge": SM_DEBRIS_WALL,
 		"river": SM_RIVER,
 		"decorations": SM_GOTHIC_DECOR,
