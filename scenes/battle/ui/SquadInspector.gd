@@ -25,6 +25,8 @@ var _hover_text: Label
 var _info_panel: PanelContainer
 var _info_title: Label
 var _info_text: Label
+var _building_panel: PanelContainer   # подсказка по зданию под курсором (BattleScene)
+var _building_text: Label
 var _hover_squad: Squad = null
 var _hover_time: float = 0.0
 var _refresh_left: float = 0.0
@@ -55,6 +57,15 @@ func _build() -> void:
 	_hover_text = UITheme.make_label("", "SmallLabel")
 	_hover_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hover_panel.add_child(_hover_text)
+
+	_building_panel = UITheme.make_panel("HudPanel", true)
+	_building_panel.hide()
+	add_child(_building_panel)
+	_building_text = UITheme.make_label("", "SmallLabel")
+	_building_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_building_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_building_text.custom_minimum_size = Vector2(INFO_WIDTH, 0)
+	_building_panel.add_child(_building_text)
 
 # -------------------------------------------------------
 # ОПРОС
@@ -106,10 +117,25 @@ func close_info() -> void:
 	info_squad = null
 	_info_panel.hide()
 
+# Подсказка по зданию (Building.describe) у точки экрана; пустой текст — скрыть
+func show_building_hover(text: String, screen_pos: Vector2) -> void:
+	if text == "" or not enabled:
+		_building_panel.hide()
+		return
+	_building_text.text = text
+	_building_panel.reset_size()
+	var pos = screen_pos + Vector2(16, 12)
+	_building_panel.position = pos.clamp(Vector2.ZERO, get_viewport_rect().size - _building_panel.size)
+	_building_panel.show()
+
+func is_building_hover_visible() -> bool:
+	return _building_panel.visible
+
 # Всё скрыть и больше не реагировать (конец забега)
 func shutdown() -> void:
 	close_info()
 	_hover_panel.hide()
+	_building_panel.hide()
 	enabled = false
 	set_process(false)
 

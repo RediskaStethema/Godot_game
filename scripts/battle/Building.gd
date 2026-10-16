@@ -101,6 +101,44 @@ func _block_top(i: float, j: float, level: int) -> Vector2:
 	var sub = Vector2(IsoGrid.TILE_WIDTH, IsoGrid.TILE_HEIGHT) * BLOCK_SCALE / 2.0
 	return Vector2((i - j) * sub.x, (i + j - 1) * sub.y) - Vector2(0, TerrainTiles.LEVEL_HEIGHT * BLOCK_SCALE * level)
 
+# -------------------------------------------------------
+# ПОДСКАЗКА И ЗОНА ДЕЙСТВИЯ (наведение на здание, перетаскивание карты — BattleScene)
+# -------------------------------------------------------
+# Клетки, на которые действует здание этого типа, стоящее на клетке at (без проверки, открыта ли
+# клетка): Казармы — соседние по сторонам; у стены зона — круг замедления (рисуется в _draw),
+# турель бьёт всё поле, орудие — куда кликнули: клеток нет
+static func get_effect_tiles(type: String, at: Vector2i) -> Array[Vector2i]:
+	var tiles: Array[Vector2i] = []
+	if type == "barracks":
+		for n in BattleManager.NEIGHBOUR_TILES:
+			tiles.append(at + n)
+	return tiles
+
+# Подсказка: название и уровень, что делает (с текущими цифрами), можно ли улучшить
+func describe() -> String:
+	var lines: Array[String] = ["%s · ур. %d/%d" % [card.title, card.building_level, CardData.MAX_BUILDING_LEVEL]]
+	match building_type:
+		"tower":
+			lines.append("Стреляет в ближайшего врага на всём поле: %d урона, %.1f выстр./с" % [
+				stats.get("damage", 0.0), stats.get("attack_speed", 0.0)])
+		"wall":
+			lines.append("Щит цитадели +%d в каждом бою. Замедляет врагов на %d%% в круге %d px" % [
+				stats.get("shield", 0.0), roundi((1.0 - stats.get("slow_mult", 1.0)) * 100.0), stats.get("slow_radius", 0.0)])
+		"artillery":
+			lines.append("В бою — клик по полю: залп %d урона в радиусе %d px, перезарядка %.1f с" % [
+				stats.get("damage", 0.0), stats.get("splash_radius", 0.0), stats.get("cooldown", 0.0)])
+		"barracks":
+			lines.append("После каждой победы возвращают %d павших бойцов отрядам на соседних клетках (подсвечены). Не лечат" \
+				% floori(stats.get("refill", 0.0)))
+		_:
+			lines.append(card.description)
+	lines.append("Такая же карта — уровень +1" if card.can_level_up_building() else "Максимальный уровень")
+	return "\n".join(lines)
+
+# Курсор над зданием (мировые координаты): по его клетке или по блокам — высокое здание видно выше клетки
+func contains_point(world: Vector2, grid_tile: Vector2i) -> bool:
+	return grid_tile == tile or get_occlusion_rect().has_point(world)
+
 # Область экрана (мировые координаты), которую закрывают блоки здания —
 # OcclusionFader делает здание полупрозрачным, если за ним стоит боец
 func get_occlusion_rect() -> Rect2:
