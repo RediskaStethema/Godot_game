@@ -102,6 +102,11 @@ static func _make(kind: String, size: float) -> Vfx:
 	v.play("play")
 	return v
 
+# Все листы — заранее (BattleScene._ready): иначе первый эффект каждого вида читает лист посреди боя
+static func warm_cache() -> void:
+	for kind in EFFECTS:
+		_get_frames(kind)
+
 static func _get_frames(kind: String) -> SpriteFrames:
 	if _frames_cache.has(kind):
 		return _frames_cache[kind]

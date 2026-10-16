@@ -53,16 +53,6 @@ vertical_alignment = 1
 layout_mode = 2
 alignment = 1
 
-[node name="ArmyPanel" type="VBoxContainer" parent="." unique_id=150081023]
-layout_mode = 0
-offset_left = 1.0
-offset_top = 359.0
-offset_right = 1147.0
-offset_bottom = 359.0
-
-[node name="ArmyLabel" type="Label" parent="ArmyPanel" unique_id=1785395402]
-layout_mode = 2
-
 [node name="BattleButton" type="Button" parent="." unique_id=1627938163]
 layout_mode = 0
 offset_left = 991.0

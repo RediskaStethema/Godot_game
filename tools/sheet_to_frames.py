@@ -23,9 +23,11 @@ from gif_to_frames import IMPORT_PARAMS, FILL
 ROW_ANIMS = ["idle", "walk", "attack", "death"]
 # Необязательный пятый ряд — боевой клич (Chaplain): кадр показывается, пока он кричит (Soldier.BATTLE_CRY_TIME)
 EXTRA_ROWS = ["battle_cry"]
-FOLDERS = {"idle": "idle", "walk": "run", "attack": "attack", "death": "death", "battle_cry": "battle_cry"}
+FOLDERS = {"idle": "idle", "walk": "run", "attack": "attack", "death": "death", "battle_cry": "battle_cry",
+           "cast": "cast", "victory": "victory"}
 LOOPING = {"idle", "walk"}
-FPS = {"idle": 8.0, "walk": 14.0, "attack": 16.0, "death": 10.0, "battle_cry": 1.5}
+# cast — замах псайкера (Librarian, пока идёт CASTING), victory — поза победы рядом кадров (Chapter Master)
+FPS = {"idle": 8.0, "walk": 14.0, "attack": 16.0, "death": 10.0, "battle_cry": 1.5, "cast": 12.0, "victory": 10.0}
 ALPHA_MIN = 128
 MIN_ROW_HEIGHT = 80
 MIN_FRAME_WIDTH = 20
@@ -234,9 +236,11 @@ def head_x(frame):
     return sum(xs) / len(xs)
 
 
-def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_order=None, drop=None):
+def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_order=None, drop=None, shot_frame=None):
     if rows_order:   # ряды листа в другом порядке (Дредноут: удар — второй ряд, шаг — третий)
-        ROW_ANIMS[:] = rows_order
+        ROW_ANIMS[:] = rows_order   # больше четырёх — все ряды режутся по кадрам (Librarian: cast, Chapter Master: victory)
+        if len(rows_order) > 4:
+            EXTRA_ROWS.clear()
     if extra_anim:   # пятый ряд под своим именем (Дредноут: victory — поза победы)
         EXTRA_ROWS[0] = extra_anim
         FOLDERS[extra_anim] = extra_anim
@@ -316,6 +320,8 @@ def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_o
 
     if hit_frame is not None:
         meta += f"metadata/hit_frame = {hit_frame}\n"
+    if shot_frame is not None and "shot_frame" not in meta:   # выстрел без оранжевой вспышки (псайкер)
+        meta += f"metadata/shot_frame = {shot_frame}\n"
     tres = (f'[gd_resource type="SpriteFrames" load_steps={len(ext) + 1} format=3]\n\n'
             + "\n".join(ext)
             + f'\n\n[resource]\n{meta}animations = [{", ".join(tres_anims)}]\n')
@@ -327,11 +333,12 @@ if __name__ == "__main__":
     # Ближний бой: --hit-frame N — кадр атаки, на котором удар доходит до цели (Soldier бьёт на нём),
     # --attack-fps F — своя скорость атаки (тяжёлый замах Дредноута),
     # --extra-anim NAME — имя анимации пятого ряда вместо battle_cry (Дредноут: victory),
-    # --rows a,b,c,d — порядок первых четырёх рядов листа (по умолчанию idle,walk,attack,death),
+    # --rows a,b,c,d[,e] — порядок рядов листа (по умолчанию idle,walk,attack,death; пятое имя — ряд режется по кадрам),
+    # --shot-frame N — кадр выстрела, если вспышки на листе нет (Librarian: луч синий),
     # --drop anim:i,j[;anim:k] — убрать кадры анимации (номера после нарезки), выпадающие из цикла
     args = sys.argv[1:]
     opts = {}
-    for key in ("--hit-frame", "--attack-fps", "--extra-anim", "--rows", "--drop"):
+    for key in ("--hit-frame", "--attack-fps", "--extra-anim", "--rows", "--drop", "--shot-frame"):
         if key in args:
             i = args.index(key)
             opts[key] = args[i + 1]
@@ -342,4 +349,5 @@ if __name__ == "__main__":
          opts.get("--extra-anim"),
          opts["--rows"].split(",") if "--rows" in opts else None,
          {a: {int(i) for i in idx.split(",")} for a, idx in (p.split(":") for p in opts["--drop"].split(";"))}
-         if "--drop" in opts else None)
+         if "--drop" in opts else None,
+         int(opts["--shot-frame"]) if "--shot-frame" in opts else None)
