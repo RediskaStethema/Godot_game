@@ -35,6 +35,17 @@ void fragment() {
 }"""
 # Таймеры уменьшаются на 0.1 — из-за погрешности float 1.0 - 10*0.1 != 0
 const TIMER_EPSILON: float = 0.001
+# Темп бега — по скорости бойца, чтобы ноги не скользили: за цикл анимации бега боец проходит
+# WALK_CYCLE_HEIGHTS своих ростов (два шага); множитель скорости анимации — в пределах WALK_SCALE_LIMITS
+const WALK_CYCLE_HEIGHTS: float = 2.0
+const WALK_SCALE_LIMITS = Vector2(0.5, 2.0)
+# Бойцы отряда бьют вразнобой, а не залпом: первый удар после входа в ATTACK — со сдвигом
+# до этой доли перезарядки (доля бойца — по номеру в отряде, золотое сечение: без случайности)
+const ATTACK_STAGGER: float = 0.5
+const GOLDEN_RATIO_FRAC: float = 0.618034
+# Удар ближнего боя проходит на кадре hit_frame анимации атаки (метаданные frames.tres), если цель
+# ещё рядом: дальность × это
+const MELEE_HIT_REACH: float = 1.5
 
 # -------------------------------------------------------
 # ДАННЫЕ
@@ -55,7 +66,10 @@ var parent_squad: Squad     # отряд которому принадлежит
 var current_state: State = State.IDLE
 var previous_state: State = State.IDLE
 var attack_timer: float = 0.0
+var attack_stagger: float = 0.0   # доля сдвига первого удара [0, 1) — номер бойца в отряде
 var cast_timer: float = 0.0
+var _hit_timer: float = 0.0       # до удара ближнего боя на кадре hit_frame (0 — удара не ждём)
+var _hit_target: Soldier = null
 var stun_timer: float = 0.0
 var retreat_timer: float = 0.0
 var has_retreated: bool = false   # отступаем максимум один раз за бой
@@ -97,6 +111,9 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 	current_heal_per_second = data.heal_per_second
 	formation_offset = offset
 	attack_timer = 0.0
+	attack_stagger = fmod(squad.soldiers.size() * GOLDEN_RATIO_FRAC, 1.0) if squad else 0.0
+	_hit_timer = 0.0
+	_hit_target = null
 	current_state = State.IDLE
 	previous_state = State.IDLE
 	has_retreated = false
@@ -145,15 +162,38 @@ static func _get_frames(sprite_path: String) -> SpriteFrames:
 
 func _ready() -> void:
 	sprite.animation_finished.connect(_on_animation_finished)
+	sprite.animation_changed.connect(_on_animation_changed)
+
+# Темп своей скорости — только у бега; остальные анимации — как в листе
+func _on_animation_changed() -> void:
+	if sprite.animation != "walk":
+		sprite.speed_scale = 1.0
+
+# Множитель скорости анимации бега при скорости speed (px/с): цикл листа — за WALK_CYCLE_HEIGHTS ростов
+func walk_anim_scale(speed: float) -> float:
+	var frames := sprite.sprite_frames
+	if frames == null or not frames.has_animation("walk") or frames.get_frame_count("walk") == 0:
+		return 1.0
+	var cycle_time: float = frames.get_frame_count("walk") / frames.get_animation_speed("walk")
+	var stride: float = WALK_CYCLE_HEIGHTS * TARGET_SPRITE_HEIGHT * data.sprite_scale
+	return clampf(speed * cycle_time / stride, WALK_SCALE_LIMITS.x, WALK_SCALE_LIMITS.y)
 
 # Выстрел / удар отыгран — стойка до следующего (последний кадр атаки — со вспышкой ствола)
 func _on_animation_finished() -> void:
 	if sprite.animation in ["attack", "battle_cry"] and current_state != State.DEAD:
 		sprite.play("idle")
 
-# Бой окончен (BattleManager): выжившие опускают оружие — стойка, а не стрельба
-func stand_down() -> void:
+# Бой окончен (BattleManager): выжившие опускают оружие — стойка, а не стрельба.
+# won — сторона бойца победила: поза победы (анимация victory листа, решение пользователя —
+# Дредноут поднимает кулак), держится на последнем кадре
+func stand_down(won: bool = false) -> void:
 	transition_to(State.IDLE)
+	if current_state != State.IDLE:
+		return
+	if won and sprite.sprite_frames.has_animation("victory"):
+		sprite.play("victory")
+	else:
+		_play_animation("idle")
 
 func _load_animations() -> void:
 	var frames = _get_frames(data.sprite_path)
@@ -184,6 +224,7 @@ func tick(delta: float) -> void:
 	if current_state == State.DEAD:
 		return
 	_tick_support(delta)
+	_tick_melee_hit(delta)
 	match current_state:
 		State.IDLE:       _state_idle()
 		State.MOVE:       _state_move(delta)
@@ -408,6 +449,7 @@ func _move_towards(point: Vector2, delta: float) -> void:
 	global_position += direction * speed * delta
 	_face(direction)
 	_play_animation("walk")
+	sprite.speed_scale = walk_anim_scale(speed)
 
 func _face(direction: Vector2) -> void:
 	if absf(direction.x) > 0.01:
@@ -461,10 +503,42 @@ func _do_attack() -> void:
 		shot.status_power = st[1]
 		shot.status_duration = st[2]
 		return
-	target.take_damage(_roll_damage())
+	var frames := sprite.sprite_frames
+	if frames and frames.has_meta("hit_frame"):
+		# Удар — когда кулак / меч дойдёт до цели (кадр hit_frame), а не в начале замаха.
+		# Прошлый замах ещё не дошёл (атака быстрее анимации) — он засчитывается сейчас, не теряется
+		if _hit_timer > 0.0:
+			_resolve_melee_hit()
+		_hit_target = target
+		_hit_timer = maxf(frames.get_meta("hit_frame") / frames.get_animation_speed("attack"), GameConstants.FIXED_TICK)
+		return
+	_land_melee_hit(target)
+
+func _tick_melee_hit(delta: float) -> void:
+	if _hit_timer <= 0.0:
+		return
+	_hit_timer -= delta
+	if _hit_timer <= TIMER_EPSILON:
+		_resolve_melee_hit()
+
+# Замах дошёл: урон, если цель жива и рядом (дальность × MELEE_HIT_REACH), иначе мимо
+func _resolve_melee_hit() -> void:
+	_hit_timer = 0.0
+	var victim := _hit_target
+	_hit_target = null
+	if is_instance_valid(victim) and victim.current_state != State.DEAD \
+			and global_position.distance_to(victim.global_position) <= current_attack_range * MELEE_HIT_REACH:
+		_land_melee_hit(victim)
+
+func _land_melee_hit(victim: Soldier) -> void:
+	var prev_target := target
+	target = victim   # эффекты попадания (_apply_on_hit_effects) — по тому, кого ударили
+	victim.take_damage(_roll_damage())
 	Vfx.spawn(_world_parent(), "blood",
-		target.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * target.data.sprite_scale), EFFECT_SCALE)
+		victim.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * victim.data.sprite_scale), EFFECT_SCALE)
 	_apply_on_hit_effects()
+	if is_instance_valid(prev_target):
+		target = prev_target
 
 # Снаряд из ствола (метаданные muzzle кадров) на кадре вспышки (shot_frame);
 # null — юнит без снаряда (ближний бой)
@@ -497,6 +571,10 @@ func _apply_on_hit_effects() -> void:
 	var st = _on_hit_status()
 	if st[0] != "":
 		target.apply_status(st[0], st[1], st[2])
+		if st[0] == StatusEffects.BURNING:   # поджог (Salamanders) — язык пламени по удару
+			Vfx.spawn(_world_parent(), "flame_burst",
+				target.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * target.data.sprite_scale),
+				EFFECT_SCALE, (target.global_position - global_position).angle())
 	if data.on_hit_knockback > 0.0:
 		target.apply_knockback(target.global_position - global_position, data.on_hit_knockback)
 
@@ -770,6 +848,9 @@ func _on_state_enter(state: State) -> void:
 	if is_instance_valid(_state_vfx):
 		_state_vfx.queue_free()
 	_state_vfx = null
+	if state in [State.STUNNED, State.KNOCKBACK, State.DEAD]:
+		_hit_timer = 0.0   # замах сорван
+		_hit_target = null
 	if state == State.STUNNED:
 		_state_vfx = Vfx.attach(self, "stun", data.sprite_scale * EFFECT_SCALE)
 	elif state == State.CASTING:
@@ -780,13 +861,14 @@ func _on_state_enter(state: State) -> void:
 		State.MOVE, State.CHASE, State.RETREATING:
 			_play_animation("walk")
 		State.ATTACK:
-			attack_timer = 0.0
+			# Первый удар — со сдвигом бойца (отряд бьёт вразнобой); до него — стойка
+			attack_timer = attack_stagger * ATTACK_STAGGER / maxf(current_attack_speed * get_attack_speed_mult(), 0.01)
 			sprite.stop()
 			if _try_battle_cry() and sprite.sprite_frames.has_animation("battle_cry"):
 				attack_timer = BATTLE_CRY_TIME   # сначала клич, выстрел — после
 				sprite.play("battle_cry")
 			else:
-				sprite.play("attack")
+				sprite.play("idle")
 		State.CASTING:
 			cast_timer = data.cast_time
 			_play_animation("idle")

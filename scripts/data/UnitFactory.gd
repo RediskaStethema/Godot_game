@@ -236,7 +236,8 @@ static func chaos_havoc() -> UnitData:
 	d.attack_range = 260.0   # дальше Tactical, но в зоне орудия цитадели (260 + HIT_RADIUS < 320)
 	d.move_speed = 60.0
 	d.priority = GameConstants.PRIORITY_HIGHEST_THREAT
-	d.projectile = "charged"
+	d.projectile = "flame"   # огненная струя (Flamethrower-Sheet) — уже тёплая, без перекраски
+	d.projectile_warm = false
 	d.on_hit_status = StatusEffects.BURNING   # попадание поджигает, огонь перекидывается
 	d.on_hit_status_power = 3.0
 	d.on_hit_status_duration = 3.0
@@ -334,9 +335,7 @@ static func terminator() -> UnitData:
 	d.retreat_hp_threshold = 0.0   # терминаторы не отступают
 	d.cost = 10
 	d.rarity = GameConstants.RARITY_RARE
-	# TODO: свой спрайт terminator
-	d.sprite_path = "res://assets/sprites/space_marine"
-	d.tint = Color(1.0, 0.9, 0.55)
+	d.sprite_path = "res://assets/sprites/space_marine_terminator"  # лист assets/Terminator_assets.png (tools/sheet_to_frames.py)
 	d.sprite_scale = 1.35
 	return d
 
@@ -428,10 +427,8 @@ static func land_speeder() -> UnitData:
 	d.retreat_hp_threshold = 0.0
 	d.cost = 9
 	d.rarity = GameConstants.RARITY_RARE
-	# TODO: свой спрайт land_speeder
-	d.sprite_path = "res://assets/sprites/space_marine"
-	d.tint = Color(1.0, 0.85, 0.4)
-	d.sprite_scale = 1.1
+	d.sprite_path = "res://assets/sprites/space_marine_land_speeder"  # лист assets/Landspeeder_assets.png (tools/sheet_to_frames.py)
+	d.sprite_scale = 1.35   # холст листа выше машины (взрыв в смерти) — иначе выйдет мельче пехоты
 	d.projectile = "bolt"
 	return d
 
@@ -451,9 +448,7 @@ static func dreadnought() -> UnitData:
 	d.retreat_hp_threshold = 0.0
 	d.cost = 14
 	d.rarity = GameConstants.RARITY_EPIC
-	# TODO: свой спрайт dreadnought
-	d.sprite_path = "res://assets/sprites/space_marine"
-	d.tint = Color(0.7, 0.7, 0.75)
+	d.sprite_path = "res://assets/sprites/space_marine_dreadnought"  # лист assets/Dreadnought_assets.png (tools/sheet_to_frames.py)
 	d.sprite_scale = 1.6
 	return d
 

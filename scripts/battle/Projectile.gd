@@ -16,6 +16,9 @@ const EFFECTS = {
 	# снаряд Thunderfire Cannon: огненный хвост, кадры горения после поджига (поджиг — Vfx "muzzle_flash")
 	"rocket":  {"sheet": "res://assets/Spritesheets/Rocket Fire 2-Sheet.png", "size": Vector2i(150, 150),
 		"from": 5, "frames": 15, "fps": 20.0, "scale": 1.3, "pivot": Vector2(66, 76), "angle": PI / 2.0},
+	# огненная струя Havoc: лист 96×48, 10 кадров, голова пламени справа
+	"flame":   {"sheet": "res://assets/Spritesheets/Flamethrower-Sheet.png", "size": Vector2i(96, 48),
+		"frames": 10, "fps": 18.0, "scale": 0.4, "pivot": Vector2(84, 24)},
 }
 const FPS: float = 14.0             # кадры эффектов — по 70 мс
 const SCALE: float = 0.4            # листы рисованы крупно: шар charged — с голову марина (рост 31 px)
@@ -168,6 +171,8 @@ func _impact() -> void:
 			s.apply_knockback(s.global_position - _origin, knockback)
 		if status != "":
 			s.apply_status(status, status_power, status_duration)
+			if status == StatusEffects.BURNING:
+				Vfx.spawn(get_parent(), "flame_burst", _aim_point, Soldier.EFFECT_SCALE, rotation)
 	elif _target is Citadel:
 		_target.take_hit(damage)
 		Vfx.spawn(get_parent(), "hit_spark", _aim_point, 1.0, rotation)
