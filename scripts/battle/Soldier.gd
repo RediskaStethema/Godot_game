@@ -89,6 +89,13 @@ var _heal_vfx: Vfx
 
 # Позиция в строю — смещение относительно центра отряда
 var formation_offset: Vector2 = Vector2.ZERO
+# Плавное движение (только вид): логика двигает бойца раз в тик, между тиками узел рисуется
+# между позициями до и после последнего тика (BattleManager.get_tick_alpha). В начале тика
+# позиция возвращается в логическую (SoldierRegistry.begin_tick) — бой считается как раньше
+var _tick_from: Vector2 = Vector2.ZERO
+var _tick_to: Vector2 = Vector2.ZERO
+var _has_tick_from: bool = false
+var _drawn_between: bool = false   # узел стоит в промежуточной точке, логическая — _tick_to
 
 @onready var sprite: AnimatedSprite2D = $Sprite
 
@@ -164,6 +171,22 @@ func _ready() -> void:
 	sprite.animation_finished.connect(_on_animation_finished)
 	sprite.animation_changed.connect(_on_animation_changed)
 
+func _process(_delta: float) -> void:
+	if not _has_tick_from or current_state == State.DEAD or not BattleManager.is_battle_running():
+		return
+	if not _drawn_between:
+		_tick_to = global_position
+		_drawn_between = true
+	global_position = _tick_from.lerp(_tick_to, BattleManager.get_tick_alpha())
+
+# Начало тика боя: узел — обратно в логическую позицию, от неё отсчитывается следующий шаг
+func restore_tick_position() -> void:
+	if _drawn_between:
+		global_position = _tick_to
+		_drawn_between = false
+	_tick_from = global_position
+	_has_tick_from = true
+
 # Темп своей скорости — только у бега; остальные анимации — как в листе
 func _on_animation_changed() -> void:
 	if sprite.animation != "walk":
@@ -220,11 +243,15 @@ func _play_animation(anim_name: String) -> void:
 # ГЛАВНЫЙ ТИК
 # -------------------------------------------------------
 func tick(delta: float) -> void:
-	_tick_status_effects(delta)
+	# Проверки — до вызова: тик идёт у сотен бойцов, вызов функции в GDScript не бесплатен
+	if not status_effects.is_empty():
+		_tick_status_effects(delta)
 	if current_state == State.DEAD:
 		return
-	_tick_support(delta)
-	_tick_melee_hit(delta)
+	if current_heal_per_second > 0.0:
+		_tick_support(delta)
+	if _hit_timer > 0.0:
+		_tick_melee_hit(delta)
 	match current_state:
 		State.IDLE:       _state_idle()
 		State.MOVE:       _state_move(delta)
@@ -253,8 +280,8 @@ func _state_move(delta: float) -> void:
 			_play_animation("idle")
 		return
 
-	var nearest = _get_nearest(enemies)
-	if global_position.distance_squared_to(nearest.global_position) <= data.vision_range * data.vision_range:
+	# Враг в поле зрения — поиск по сетке реестра (на марше каждый боец каждый тик)
+	if SoldierRegistry.find_nearest(1 - team, global_position, data.vision_range):
 		target = _find_target()
 		transition_to(State.CHASE)
 		return
@@ -344,9 +371,14 @@ func _state_casting(delta: float) -> void:
 		return
 	cast_timer -= delta
 	if cast_timer <= TIMER_EPSILON:
+		# Сначала в ATTACK, потом удар: вход в ATTACK ставит стойку и перебил бы анимацию атаки.
+		# Каст — часть перезарядки (отсчитана перед кастом): цикл «каст + удар» = 1 / attack_speed;
+		# вход в ATTACK её не сбрасывает
+		var cooldown := attack_timer
+		transition_to(State.ATTACK)
+		attack_timer = maxf(cooldown - data.cast_time, 0.0)
 		if global_position.distance_to(target.global_position) <= current_attack_range:
 			_do_attack()
-		transition_to(State.ATTACK)
 
 func _state_stunned(delta: float) -> void:
 	stun_timer -= delta
@@ -369,7 +401,7 @@ func _state_retreating(delta: float) -> void:
 	if retreat_timer <= TIMER_EPSILON or enemies.is_empty():
 		transition_to(State.CHASE)
 		return
-	var threat = _get_nearest(enemies)
+	var threat = SoldierRegistry.find_nearest(1 - team, global_position)
 	var away = global_position - threat.global_position
 	_move_towards(global_position + away, delta)
 
@@ -588,7 +620,7 @@ func _on_hit_status() -> Array:
 # runtime-поля не меняются, поэтому аура пропадает, как только отошли из радиуса.
 func get_aura_damage_bonus() -> float:
 	var best: float = 0.0
-	for ally in SoldierRegistry.get_alive_soldiers_of_team(team):
+	for ally in SoldierRegistry.get_aura_sources(team):
 		var a: UnitData = ally.data
 		if a.aura_damage_bonus <= best:
 			continue
@@ -767,7 +799,7 @@ func _find_target() -> Soldier:
 
 	match data.priority:
 		GameConstants.PRIORITY_NEAREST:
-			return _get_nearest(enemies)
+			return SoldierRegistry.find_nearest(1 - team, global_position)
 		GameConstants.PRIORITY_LOWEST_HP:
 			return _get_lowest_hp(enemies)
 		GameConstants.PRIORITY_HIGHEST_THREAT:
@@ -777,32 +809,14 @@ func _find_target() -> Soldier:
 		GameConstants.PRIORITY_RANDOM:
 			return enemies[randi() % enemies.size()]
 		GameConstants.PRIORITY_RANGED_FIRST:
-			return _get_nearest_ranged(enemies)
+			return _get_nearest_ranged()
 		_:
-			return _get_nearest(enemies)
-
-func _get_nearest(units: Array) -> Soldier:
-	var closest: Soldier = null
-	var min_dist: float = INF
-	for u in units:
-		var d = global_position.distance_squared_to(u.global_position)
-		if d < min_dist:
-			min_dist = d
-			closest = u
-	return closest
+			return SoldierRegistry.find_nearest(1 - team, global_position)
 
 # Ближайший стрелок; стрелков нет — просто ближайший
-func _get_nearest_ranged(units: Array) -> Soldier:
-	var closest: Soldier = null
-	var min_dist: float = INF
-	for u in units:
-		if not "ranged" in u.data.tags:
-			continue
-		var d = global_position.distance_squared_to(u.global_position)
-		if d < min_dist:
-			min_dist = d
-			closest = u
-	return closest if closest else _get_nearest(units)
+func _get_nearest_ranged() -> Soldier:
+	var closest = SoldierRegistry.find_nearest(1 - team, global_position, INF, true)
+	return closest if closest else SoldierRegistry.find_nearest(1 - team, global_position)
 
 func _get_farthest(units: Array) -> Soldier:
 	var farthest: Soldier = null
@@ -853,8 +867,8 @@ func _on_state_enter(state: State) -> void:
 		_hit_target = null
 	if state == State.STUNNED:
 		_state_vfx = Vfx.attach(self, "stun", data.sprite_scale * EFFECT_SCALE)
-	elif state == State.CASTING:
-		_state_vfx = Vfx.attach(self, "cast", data.sprite_scale * EFFECT_SCALE)
+	elif state == State.CASTING and not sprite.sprite_frames.has_animation("cast"):
+		_state_vfx = Vfx.attach(self, "cast", data.sprite_scale * EFFECT_SCALE)   # своего каста на листе нет
 	match state:
 		State.IDLE, State.STUNNED, State.KNOCKBACK:
 			_play_animation("idle")
@@ -871,7 +885,8 @@ func _on_state_enter(state: State) -> void:
 				sprite.play("idle")
 		State.CASTING:
 			cast_timer = data.cast_time
-			_play_animation("idle")
+			# Каст листа (Librarian: ряд cast) — замах посохом, держится на последнем кадре
+			_play_animation("cast" if sprite.sprite_frames.has_animation("cast") else "idle")
 		State.DEAD:
 			sprite.stop()
 			sprite.play("death")

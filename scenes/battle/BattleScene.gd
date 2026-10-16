@@ -65,6 +65,8 @@ func _ready() -> void:
 	_build_ui()
 	_build_field()
 	_populate_field()
+	Vfx.warm_cache()          # листы эффектов и снарядов — на загрузке, не посреди схватки
+	Projectile.warm_cache()
 	SaveManager.save_run()
 	# Загрузили сохранение посреди боя: армия уже стоит как была — сразу в бой
 	if BattleManager.battle_in_progress:

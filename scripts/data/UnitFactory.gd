@@ -369,7 +369,9 @@ static func librarian() -> UnitData:
 	d.tags = ["marine", "psyker", "elite"]
 	d.hp = 450.0
 	d.damage = 90.0
-	d.attack_speed = 0.6
+	# 0.9: каст 0.8 с — часть перезарядки (цикл 1.1 с). Было 0.6, но вход в ATTACK после каста
+	# сбрасывал перезарядку — по факту ≈ 0.86–0.95 удара/с; сила прежняя
+	d.attack_speed = 0.9
 	d.attack_range = 220.0
 	d.move_speed = 75.0
 	d.priority = GameConstants.PRIORITY_NEAREST
@@ -377,9 +379,7 @@ static func librarian() -> UnitData:
 	d.on_hit_stun = 1.0
 	d.cost = 10
 	d.rarity = GameConstants.RARITY_RARE
-	# TODO: свой спрайт librarian
-	d.sprite_path = "res://assets/sprites/space_marine"
-	d.tint = Color(0.55, 0.7, 1.0)
+	d.sprite_path = "res://assets/sprites/space_marine_librarian"  # лист assets/Librarian_assets.png (tools/sheet_to_frames.py, + ряд каста)
 	d.sprite_scale = 1.05
 	d.projectile = "charged"
 	return d
@@ -468,8 +468,6 @@ static func chapter_master() -> UnitData:
 	d.retreat_hp_threshold = 0.0
 	d.cost = 16
 	d.rarity = GameConstants.RARITY_EPIC
-	# TODO: свой спрайт chapter_master
-	d.sprite_path = "res://assets/sprites/space_marine"
-	d.tint = Color(1.0, 0.8, 0.3)
+	d.sprite_path = "res://assets/sprites/space_marine_chapter_master"  # лист assets/chapter_master.png (tools/sheet_to_frames.py, + поза победы)
 	d.sprite_scale = 1.3
 	return d

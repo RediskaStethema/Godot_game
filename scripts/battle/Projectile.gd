@@ -91,6 +91,11 @@ static func launch(parent: Node, kind: String, from: Vector2, target: Node2D, ai
 	BattleManager.projectiles.append(p)
 	return p
 
+# Все листы — заранее (BattleScene._ready): иначе первый выстрел каждого вида читает лист посреди боя
+static func warm_cache() -> void:
+	for kind in EFFECTS:
+		_get_frames(kind)
+
 static func _get_frames(kind: String) -> SpriteFrames:
 	if _frames_cache.has(kind):
 		return _frames_cache[kind]

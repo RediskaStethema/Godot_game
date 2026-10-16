@@ -145,6 +145,29 @@ func _main() -> void:
 	assault._do_attack()
 	_check("без hit_frame — урон сразу", e3.current_hp < hp3)
 
+	# Каст — часть перезарядки: Библиарий колдует раз в 1 / attack_speed, а не каст + перезарядка
+	# (раньше вход в ATTACK после каста сбрасывал перезарядку на короткий сдвиг первого удара)
+	scene._spawn_squad(UnitFactory.create("librarian"), GameConstants.TEAM_PLAYER, Vector2i(0, 0), 1)
+	var lib = _of(0, "librarian")[0]
+	var e5 = enemies[3]
+	e5.max_hp = 1e9
+	e5.current_hp = 1e9
+	e5.global_position = lib.global_position + Vector2(120, 0)
+	lib.target = e5
+	lib.transition_to(lib.State.ATTACK)
+	var casts := 0
+	var was_casting := false
+	var seconds := 10.0
+	for i in range(roundi(seconds / TICK)):
+		lib.tick(TICK)
+		var casting: bool = lib.current_state == lib.State.CASTING
+		if casting and not was_casting:
+			casts += 1
+		was_casting = casting
+	var expected: float = seconds * lib.current_attack_speed
+	_check("Библиарий: %d кастов за %.0f с (ожидалось ≈ %.1f — раз в 1 / attack_speed)" % [casts, seconds, expected],
+		absf(casts - expected) <= 1.0)
+
 	# 3. Река: плита и её отражение по очереди, плита одна на всю реку (стыки без перемычек);
 	#    на линии по u — отражена по горизонтали
 	var r = scene.renderer

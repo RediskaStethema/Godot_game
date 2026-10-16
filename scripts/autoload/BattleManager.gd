@@ -156,6 +156,7 @@ func _battle_tick() -> void:
 	if siege_started and has_citadel():
 		citadel.tick(FIXED_TICK)
 	_tick_projectiles()
+	SoldierRegistry.end_tick()
 	_check_battle_end()
 
 # Снаряды летят после выстрелов этого тика; попавшие и сгинувшие со сценой — из списка
