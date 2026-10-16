@@ -1,0 +1,189 @@
+extends Node
+
+# Звук (решение пользователя 16.10.2026: система готова к ассетам — файлы кладутся в папку и играют).
+# Событие → файл AUDIO_DIR/<событие>.ogg|.wav|.mp3 или варианты <событие>_1, _2, … (случайный);
+# файла нет — событие молча пропускается (сейчас звуков в проекте нет — игра тихая, как раньше).
+# Частые звуки (выстрелы сотен бойцов) ограничены: не чаще max_per_sec в секунду на событие и не больше
+# MAX_VOICES одновременно. Шины SFX и Music создаются, если их нет; общая громкость — Master (GameSettings).
+# Музыка: play_music(трек) — цикл, смена трека — плавно за MUSIC_FADE.
+
+const AUDIO_DIR: String = "res://assets/audio/"
+const MUSIC_DIR: String = "res://assets/audio/music/"
+const EXTENSIONS = ["ogg", "wav", "mp3"]
+const MAX_VARIANTS: int = 8
+const MAX_VOICES: int = 24
+const MUSIC_FADE: float = 1.2
+const SFX_BUS: String = "SFX"
+const MUSIC_BUS: String = "Music"
+const HISTORY_SIZE: int = 64
+
+# volume — дБ, max_per_sec — предел частоты (0 — без предела), pitch — разброс высоты ±
+const EVENTS = {
+	# Выстрелы (Projectile: по виду снаряда, когда снаряд вылетел)
+	"shot_bolt":    {"volume": -12.0, "max_per_sec": 14, "pitch": 0.08},
+	"shot_charged": {"volume": -8.0,  "max_per_sec": 8,  "pitch": 0.06},
+	"shot_spark":   {"volume": -10.0, "max_per_sec": 8,  "pitch": 0.08},
+	"shot_flame":   {"volume": -10.0, "max_per_sec": 6,  "pitch": 0.05},
+	"shot_rocket":  {"volume": -4.0,  "max_per_sec": 4,  "pitch": 0.03},
+	"explosion":    {"volume": -4.0,  "max_per_sec": 6,  "pitch": 0.05},
+	# Попадания и гибель
+	"hit":          {"volume": -16.0, "max_per_sec": 12, "pitch": 0.12},
+	"melee_hit":    {"volume": -10.0, "max_per_sec": 12, "pitch": 0.1},
+	"death":        {"volume": -12.0, "max_per_sec": 8,  "pitch": 0.1},
+	"death_vehicle": {"volume": -6.0, "max_per_sec": 4,  "pitch": 0.05},
+	"citadel_hit":  {"volume": -8.0,  "max_per_sec": 4,  "pitch": 0.05},
+	"citadel_shot": {"volume": -6.0,  "max_per_sec": 4,  "pitch": 0.04},
+	# Статусы и способности
+	"burning":      {"volume": -14.0, "max_per_sec": 4,  "pitch": 0.1},
+	"poison":       {"volume": -14.0, "max_per_sec": 4,  "pitch": 0.1},
+	"battle_cry":   {"volume": -6.0,  "max_per_sec": 2,  "pitch": 0.03},
+	"revive":       {"volume": -8.0,  "max_per_sec": 3,  "pitch": 0.05},
+	"orbital_strike": {"volume": -2.0, "max_per_sec": 2, "pitch": 0.0},
+	# Интерфейс
+	"ui_click":     {"volume": -10.0, "max_per_sec": 20, "pitch": 0.0},
+	"buy":          {"volume": -6.0,  "max_per_sec": 8,  "pitch": 0.0},
+	"sell":         {"volume": -6.0,  "max_per_sec": 8,  "pitch": 0.0},
+	"no_money":     {"volume": -6.0,  "max_per_sec": 4,  "pitch": 0.0},
+	"reroll":       {"volume": -6.0,  "max_per_sec": 6,  "pitch": 0.0},
+	"place":        {"volume": -8.0,  "max_per_sec": 8,  "pitch": 0.05},
+	"tile_bought":  {"volume": -6.0,  "max_per_sec": 4,  "pitch": 0.0},
+	"pause":        {"volume": -8.0,  "max_per_sec": 4,  "pitch": 0.0},
+	# Итоги и переходы
+	"battle_start": {"volume": -4.0,  "max_per_sec": 1,  "pitch": 0.0},
+	"victory":      {"volume": -2.0,  "max_per_sec": 1,  "pitch": 0.0},
+	"defeat":       {"volume": -2.0,  "max_per_sec": 1,  "pitch": 0.0},
+	"run_won":      {"volume": 0.0,   "max_per_sec": 1,  "pitch": 0.0},
+	"run_lost":     {"volume": 0.0,   "max_per_sec": 1,  "pitch": 0.0},
+	"expansion":    {"volume": -4.0,  "max_per_sec": 1,  "pitch": 0.0},
+}
+const MUSIC_TRACKS = ["menu", "shop", "battle", "boss"]
+
+var record_history: bool = false  # тесты / отладка: писать события в history (в игре — нет, лишние строки на выстрел)
+var history: Array[String] = []   # последние запрошенные события: «имя» или «имя (нет файла)»
+var _streams: Dictionary = {}     # событие → Array[AudioStream] (пусто — файла нет)
+var _last_play: Dictionary = {}   # событие → [время окна, сыграно в окне]
+var _voices: Array[AudioStreamPlayer] = []
+var _music: AudioStreamPlayer = null
+var _music_track: String = ""
+var _music_tween: Tween = null
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS   # интерфейс и музыка звучат и на паузе
+	_ensure_bus(SFX_BUS)
+	_ensure_bus(MUSIC_BUS)
+	for i in MAX_VOICES:
+		var p := AudioStreamPlayer.new()
+		p.bus = SFX_BUS
+		add_child(p)
+		_voices.append(p)
+	_music = AudioStreamPlayer.new()
+	_music.bus = MUSIC_BUS
+	add_child(_music)
+
+func _ensure_bus(bus_name: String) -> void:
+	if AudioServer.get_bus_index(bus_name) >= 0:
+		return
+	AudioServer.add_bus()
+	var i := AudioServer.bus_count - 1
+	AudioServer.set_bus_name(i, bus_name)
+	AudioServer.set_bus_send(i, "Master")
+
+# Сыграть событие. true — звук пошёл; false — файла нет, предел частоты или все голоса заняты
+func play(event: String) -> bool:
+	var streams := _get_streams(event)
+	if streams.is_empty():
+		if record_history:
+			_log(event + " (нет файла)")
+		return false
+	var cfg: Dictionary = EVENTS.get(event, {})
+	if not _rate_ok(event, cfg.get("max_per_sec", 0)):
+		return false
+	var voice := _free_voice()
+	if voice == null:
+		return false
+	voice.stream = streams[randi() % streams.size()]
+	voice.volume_db = cfg.get("volume", 0.0)
+	var jitter: float = cfg.get("pitch", 0.0)
+	voice.pitch_scale = 1.0 + randf_range(-jitter, jitter)
+	voice.play()
+	if record_history:
+		_log(event)
+	return true
+
+# Музыка: трек MUSIC_DIR/<трек>.ogg|… по кругу; тот же — ничего; "" или нет файла — тишина (плавно)
+func play_music(track: String) -> void:
+	if track == _music_track:
+		return
+	_music_track = track
+	var stream: AudioStream = null
+	for ext in EXTENSIONS:
+		var path := "%s%s.%s" % [MUSIC_DIR, track, ext]
+		if track != "" and ResourceLoader.exists(path):
+			stream = load(path)
+			break
+	if _music_tween and _music_tween.is_valid():
+		_music_tween.kill()   # быстрая смена сцены — прошлый переход не спорит с новым
+	var tw := create_tween().set_ignore_time_scale(true)   # по реальному времени, ×2 боя ни при чём
+	_music_tween = tw
+	if _music.playing:
+		tw.tween_property(_music, "volume_db", -40.0, MUSIC_FADE / 2.0)
+	tw.tween_callback(func():
+		_music.stop()
+		if stream:
+			if stream is AudioStreamWAV:
+				stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+				stream.loop_end = int(stream.get_length() * stream.mix_rate)
+			elif "loop" in stream:
+				stream.loop = true
+			_music.stream = stream
+			_music.volume_db = -40.0
+			_music.play())
+	if stream:
+		tw.tween_property(_music, "volume_db", 0.0, MUSIC_FADE / 2.0)
+
+func current_music() -> String:
+	return _music_track
+
+# Звук для теста / подмены без файлов: событие → свой поток (пустой массив — снова искать файл)
+func set_streams(event: String, streams: Array) -> void:
+	_streams[event] = streams
+
+func _get_streams(event: String) -> Array:
+	if not _streams.has(event):
+		var found: Array = []
+		var names: Array[String] = [event]
+		for i in range(1, MAX_VARIANTS + 1):
+			names.append("%s_%d" % [event, i])
+		for n in names:
+			for ext in EXTENSIONS:
+				var path := "%s%s.%s" % [AUDIO_DIR, n, ext]
+				if ResourceLoader.exists(path):
+					found.append(load(path))
+					break
+		_streams[event] = found
+	return _streams[event]
+
+func _rate_ok(event: String, per_sec: int) -> bool:
+	if per_sec <= 0:
+		return true
+	var now := Time.get_ticks_msec() / 1000.0
+	var w: Array = _last_play.get(event, [now, 0])
+	if now - w[0] >= 1.0:
+		w = [now, 0]
+	if w[1] >= per_sec:
+		_last_play[event] = w
+		return false
+	w[1] += 1
+	_last_play[event] = w
+	return true
+
+func _free_voice() -> AudioStreamPlayer:
+	for v in _voices:
+		if not v.playing:
+			return v
+	return null
+
+func _log(entry: String) -> void:
+	history.append(entry)
+	if history.size() > HISTORY_SIZE:
+		history.pop_front()
