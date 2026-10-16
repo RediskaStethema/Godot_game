@@ -83,7 +83,9 @@ const SM_SMALL_CRATERS = [{"texture": SM_TILES + "terrain_craters.png", "top": 1
 # Воронки в тумане: туман густеет и редеет — кадры плавно перетекают (TerrainTiles.draw_theme_tile),
 # по туманной местности — волной (IsoGridRenderer._cell_time). Туман — из ScatteredDebrisTilecrator1/2
 # на плите SM_SMALL_CRATERS (tools/fog_overlay.py: у кадров чужая палитра)
-const SM_FOG_CRATERS = [{"fps": 0.4, "no_decor": true, "frames": [
+# Туман приглушён (решение пользователя): почти белые плиты перетягивали внимание с бойцов
+const FOG_TINT = Color(0.55, 0.6, 0.72)
+const SM_FOG_CRATERS = [{"fps": 0.4, "no_decor": true, "tint": FOG_TINT, "frames": [
 	{"texture": SM_TILES + "fog_crater_0.png", "top": 10},   # лёгкий туман
 	{"texture": SM_TILES + "fog_crater_1.png", "top": 10},   # густой туман
 ]}]

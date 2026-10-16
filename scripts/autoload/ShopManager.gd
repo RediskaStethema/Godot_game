@@ -145,6 +145,44 @@ func get_owned_note(card: CardData) -> String:
 		tail = "можно поставить ещё"
 	return "%s%s\n%s" % [head, ", ".join(levels), tail]
 
+# Синергии с этой картой (новым отрядом): тег «было → станет» по армии на поле и отрядам в руке,
+# какой уровень синергии откроется или сколько до следующего. Только подсказка магазина
+func get_synergy_note(card: CardData) -> String:
+	if card.card_type != "squad":
+		return ""
+	var unit := UnitFactory.create(card.unit_factory_id)
+	var have := _owned_tag_weights()
+	var lines: Array[String] = []
+	for tag in SynergyManager.SYNERGY_DEFINITIONS:
+		if not tag in unit.tags:
+			continue
+		var before := int(have.get(tag, 0.0) + 0.001)
+		var after := int(have.get(tag, 0.0) + card.unit_count * unit.unit_weight + 0.001)
+		var line := "%s %d → %d" % [tag.capitalize(), before, after]
+		for level in SynergyManager.SYNERGY_DEFINITIONS[tag]:
+			if before < level["threshold"] and after >= level["threshold"]:
+				line += " — откроет «%s»" % level["name"]
+				break
+			if after < level["threshold"]:
+				line += " (до «%s» ещё %d)" % [level["name"], level["threshold"] - after]
+				break
+		lines.append(line)
+	return "\n".join(lines)
+
+# Теги армии в пересчёте на юниты (как SynergyManager): отряды на поле — по живым бойцам,
+# отряды в руке — полным составом карты
+func _owned_tag_weights() -> Dictionary:
+	var w: Dictionary = {}
+	for d in BattleManager.player_units:
+		for tag in d.tags:
+			w[tag] = w.get(tag, 0.0) + d.saved_hp.size() * d.unit_weight
+	for c in BattleManager.pending_cards:
+		if c.card_type == "squad":
+			var u := UnitFactory.create(c.unit_factory_id)
+			for tag in u.tags:
+				w[tag] = w.get(tag, 0.0) + c.unit_count * u.unit_weight
+	return w
+
 func try_purchase(slot_index: int) -> CardData:
 	if slot_index < 0 or slot_index >= current_offers.size():
 		return null

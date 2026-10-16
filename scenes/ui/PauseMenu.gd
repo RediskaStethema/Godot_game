@@ -9,6 +9,7 @@ extends CanvasLayer
 # и экран итога боя, вне её — RunManager.abandon_run() (сохранение удаляется, в меню).
 
 const LAYER: int = 10   # поверх UI сцены
+const QUICK_PAUSE_TOP: float = 90.0   # подпись паузы пробелом — под шапкой боя
 
 var enabled: bool = true   # выключается на экране конца забега
 var _menu: ModalOverlay = null
@@ -18,6 +19,14 @@ var _dialog: ModalOverlay = null
 func _init() -> void:
 	layer = LAYER
 	process_mode = Node.PROCESS_MODE_ALWAYS
+
+# Пробел в схватке — пауза без меню (решение пользователя): осмотреть поле (камера на паузе работает).
+# В _input, раньше интерфейса: у кнопки в фокусе («×N», «В БОЙ») пробел — нажатие, он съел бы паузу
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
+		if _menu == null and enabled and (BattleManager.is_battle_running() or _quick_paused):
+			get_viewport().set_input_as_handled()
+			_set_quick_pause(not _quick_paused)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed("ui_cancel"):
@@ -32,10 +41,35 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif enabled:
 		open()
 
+# Пауза пробелом: дерево на паузе, сверху по центру подпись; меню (Esc) поверх неё снимает и её
+var _quick_paused: bool = false
+var _quick_label: Label = null
+func _set_quick_pause(on: bool) -> void:
+	_quick_paused = on
+	get_tree().paused = on
+	if on and _quick_label == null:
+		_quick_label = UITheme.make_label("ПАУЗА — пробел, чтобы продолжить", "HeaderLabel")
+		_quick_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+		_quick_label.add_theme_constant_override("outline_size", 8)
+		_quick_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_quick_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_quick_label)
+		_quick_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+		_quick_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		_quick_label.offset_top = QUICK_PAUSE_TOP
+	elif not on and _quick_label:
+		_quick_label.queue_free()
+		_quick_label = null
+
+func is_quick_paused() -> bool:
+	return _quick_paused
+
 func is_open() -> bool:
 	return _menu != null
 
 func open() -> void:
+	if _quick_paused:
+		_set_quick_pause(false)
 	get_tree().paused = true
 	_menu = ModalOverlay.new()
 	add_child(_menu)

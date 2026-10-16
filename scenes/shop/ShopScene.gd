@@ -20,6 +20,7 @@ const HAND_BUTTON_PAD: float = 4.0     # поля кнопки «Продать�
 
 # «Рука» — карты, ещё не выложенные на поле: купленные сейчас +
 # оставшиеся на скамейке с прошлого боя. Не больше BattleManager.MAX_HAND_SIZE.
+var timeline: RunTimeline   # лента забега в шапке
 var purchased_cards: Array[CardData] = []
 # Выжившие юниты из прошлого боя
 var surviving_units: Array[UnitData] = []
@@ -298,6 +299,8 @@ func _build_hud() -> void:
 	hud_row.add_child(message_label)
 	round_label.reparent(hud_row)
 	round_label.theme_type_variation = "HeaderLabel"
+	timeline = RunTimeline.new()   # 15 волн: мини-боссы, босс, события, ближайшая волна
+	hud_row.add_child(timeline)
 	requisition_label.reparent(hud_row)
 	requisition_label.theme_type_variation = "ValueLabel"
 	citadel_label = UITheme.make_label("Цитадель %d/%d" % [ceili(BattleManager.citadel_hp), int(BattleManager.CITADEL_MAX_HP)], "ValueLabel")

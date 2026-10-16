@@ -5,7 +5,7 @@ extends Node
 # Новая настройка: поле + строка в _save / _load + применение в apply().
 
 const CONFIG_PATH: String = "user://settings.cfg"
-const BATTLE_SPEEDS: Array[float] = [1.0, 2.0]
+const BATTLE_SPEEDS: Array[float] = [1.0, 2.0, 3.0]   # ×3 — решение пользователя 16.10.2026
 
 signal changed
 
