@@ -588,7 +588,7 @@ func _land_melee_hit(victim: Soldier) -> void:
 	var prev_target := target
 	target = victim   # эффекты попадания (_apply_on_hit_effects) — по тому, кого ударили
 	var dmg := _roll_damage()
-	BattleManager.credit_damage(parent_squad, minf(dmg, victim.current_hp))
+	BattleManager.credit_damage(parent_squad, clampf(dmg - victim.shield, 0.0, victim.current_hp))
 	victim.take_damage(dmg)
 	Vfx.spawn(_world_parent(), "blood",
 		victim.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * victim.data.sprite_scale), EFFECT_SCALE)

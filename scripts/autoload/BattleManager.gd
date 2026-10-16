@@ -178,7 +178,7 @@ func clear_projectiles() -> void:
 			p.queue_free()
 	projectiles.clear()
 
-# Урон отрядов игрока за бой (UnitData → нанесённый урон, без перебора сверх HP цели) — итоги боя.
+# Урон отрядов игрока за бой (UnitData → урон по HP: без щита и перебора сверх HP цели) — итоги боя.
 # По UnitData, а не по узлу: отряд, павший целиком, тоже в итогах. Яд и огонь не считаются
 var damage_by_unit: Dictionary = {}
 func credit_damage(source, amount: float) -> void:

@@ -387,7 +387,10 @@ func _play_event_card(card: CardData, tile: Vector2i) -> bool:
 			if _is_tile_occupied(tile):
 				_show_message("%s: нужна пустая клетка" % card.title)
 				return false
-			var squad_card = CardFactory.random_squad_card(card.event_stats.get("rarity", "common"), RunManager.rng)
+			# Своя случайность (забег, шаг, клетка): общий RunManager.rng не сдвигается — наборы магазина те же
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash([RunManager.rng.seed, RunManager.current_node_id, tile])
+			var squad_card = CardFactory.random_squad_card(card.event_stats.get("rarity", "common"), rng)
 			var unit_data = UnitFactory.create(squad_card.unit_factory_id)
 			unit_data.squad_size = squad_card.unit_count
 			unit_data.squad_growth = UnitFactory.squad_growth_for(squad_card)
