@@ -205,7 +205,7 @@ static func barracks() -> CardData:
 	c.description = "После каждой победы возвращают павших бойцов (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Не лечат."
 	c.faction = "space_marines"
 	c.cost = 7
-	c.rarity = "rare"
+	c.rarity = "common"   # решение пользователя 15.10.2026: Common, 3 копии в пуле — выпадает чаще; цена прежняя
 	c.card_type = "building"
 	c.building_type = "barracks"
 	c.building_stats = {"refill": 2.0}   # бойцов каждому соседнему отряду за ход
@@ -297,13 +297,14 @@ static func create_many(ids: Array) -> Array[CardData]:
 
 static func build_pool() -> Array:
 	var pool = []
-	# Common — 18 копий
+	# Common — 21 копия
 	# Враги (chaos_*) в пул игрока не входят
 	for i in range(7): pool.append(tactical_squad())
 	for i in range(5): pool.append(assault_squad())
 	for i in range(4): pool.append(scout_squad())
 	for i in range(2): pool.append(fortress_wall())
-	# Rare — 11 копий
+	for i in range(3): pool.append(barracks())
+	# Rare — 10 копий
 	pool.append(devastator_squad())
 	pool.append(terminator_squad())
 	pool.append(apothecary_card())
@@ -312,7 +313,6 @@ static func build_pool() -> Array:
 	pool.append(land_speeder_card())
 	pool.append(bolter_turret())
 	pool.append(thunderfire_cannon())
-	pool.append(barracks())
 	pool.append(blessed_armour())
 	pool.append(battle_fury())
 	# Epic — 3 копии

@@ -30,15 +30,15 @@ func _main() -> void:
 	await process_frame
 	var bm = root.get_node("BattleManager")
 
-	# 1. Карта: Rare 7, одна в пуле; пополнение 2 → 3 → 4 по уровням
+	# 1. Карта: Common 7 (решение пользователя), 3 копии в пуле; пополнение 2 → 3 → 4 по уровням
 	var card = CardFactory.barracks()
 	var refills = []
 	for i in 3:
 		refills.append(floori(card.get_building_stats()["refill"]))
 		card.level_up_building()
 	var in_pool = CardFactory.build_pool().filter(func(c): return c.id == "barracks").size()
-	_check("карта: Rare %d Req, в пуле %d, пополнение по уровням %s" % [card.cost, in_pool, refills],
-		card.rarity == "rare" and card.cost == 7 and in_pool == 1 and refills == [2, 3, 4])
+	_check("карта: Common %d Req, в пуле %d, пополнение по уровням %s" % [card.cost, in_pool, refills],
+		card.rarity == "common" and card.cost == 7 and in_pool == 3 and refills == [2, 3, 4])
 
 	# 2. Ход Казарм: соседи по сторонам пополнены (не лечены), диагональ и дальние — нет, полный — как был
 	bm.reset_run()
