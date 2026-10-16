@@ -16,7 +16,8 @@ extends RefCounted
 const COUNT: int = 7
 const START_UNLOCKED: int = 3
 const DEFAULT: int = 2
-const STRONG = ["chaos_havoc", "chaos_raptor", "plague_marine"]
+const STRONG = ["chaos_havoc", "chaos_raptor", "plague_marine",
+	"assault_marine", "devastator"]   # Космодесант-враг (забег за Хаос)
 
 const LEVELS = [
 	{"name": "Неофит",        "enemies": 0.80, "strong_weight": 0.75, "strong_earlier": 0, "strong_share": 0.34},

@@ -121,6 +121,7 @@ func _build_field() -> void:
 	renderer = IsoGridRenderer.new()
 	renderer.setup(iso_grid)
 	grid_renderer.add_child(renderer)
+	Vfx.ground_layer = renderer   # взрыв клетки — на полу, под бойцами
 	# Здания и цитадель полупрозрачны, пока за ними стоят бойцы (только расстановка)
 	fader = OcclusionFader.new()
 	add_child(fader)
@@ -211,11 +212,13 @@ func _place_player_squads() -> void:
 # Состав врагов — данными в EnemyWaves; заполняют зону с переднего края в тыл
 func _place_enemy_squads() -> void:
 	var tiles = iso_grid.get_enemy_tiles_front_first()
-	var specs = EnemyWaves.build(battle_wave, battle_type, tiles.size(), RunManager.rng.seed, RunManager.difficulty)
+	var specs = EnemyWaves.build(battle_wave, battle_type, tiles.size(), RunManager.rng.seed, RunManager.difficulty,
+		FactionTheme.enemy_of(RunManager.player_faction))
 	enemy_elites_at_start = 0
 	for i in range(mini(specs.size(), tiles.size())):
 		var spec: Dictionary = specs[i]
 		var enemy_data = UnitFactory.create(spec["unit"])
+		enemy_data.attack_range = minf(enemy_data.attack_range, EnemyWaves.MAX_ENEMY_RANGE)
 		enemy_data.hp_multiplier = spec["mult"] * BattleManager.next_battle_enemy_hp   # событие забега
 		enemy_data.damage_multiplier = spec["mult"]
 		_spawn_squad(enemy_data, GameConstants.TEAM_ENEMY, tiles[i], spec["count"])
@@ -589,7 +592,7 @@ func _on_start_pressed() -> void:
 	_speed_applied = true
 	_apply_battle_speed()
 
-# Вспышка орбитального удара: круг, гаснет за STRIKE_FLASH_TIME
+# Вспышка орбитального удара: круг, гаснет за STRIKE_FLASH_TIME; клетка под ним взрывается (Vfx "tile_blast")
 func _spawn_strike_flash(pos: Vector2, radius: float) -> void:
 	var flash = Node2D.new()
 	flash.position = pos
@@ -598,6 +601,7 @@ func _spawn_strike_flash(pos: Vector2, radius: float) -> void:
 		flash.draw_circle(Vector2.ZERO, radius, Color(1.0, 0.75, 0.3, 0.35))
 		flash.draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(1.0, 0.85, 0.5, 0.9), 3.0, true))
 	units_container.get_parent().add_child(flash)
+	Vfx.spawn(units_container, "tile_blast", pos, radius / Projectile.EXPLOSION_VFX_RADIUS)
 	var tw = flash.create_tween()
 	tw.tween_property(flash, "modulate:a", 0.0, STRIKE_FLASH_TIME)
 	tw.tween_callback(flash.queue_free)

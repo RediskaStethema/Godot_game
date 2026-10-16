@@ -130,18 +130,20 @@ func show_synergies() -> void:
 	var lines: Array[String] = []
 	for s in SynergyManager.active_synergies:
 		lines.append("• %s — %s" % [s["name"], s["desc"]])
+	var tag := SynergyManager.faction_tag()
 	if lines.is_empty():
-		lines.append("Нет активных синергий (3+ Marine → +15% HP)")
+		var first: Dictionary = SynergyManager.SYNERGY_DEFINITIONS[tag][0]
+		lines.append("Нет активных синергий (%d+ %s → %s)" % [first["threshold"], tag.capitalize(), first["desc"]])
 	var chapter = Chapters.get_chapter(RunManager.player_chapter)
 	if not chapter.is_empty():
-		lines.append("• Орден %s — %s" % [chapter["name"], chapter["desc"]])
+		lines.append("• %s %s — %s" % ["Метка" if chapter["faction"] == "chaos" else "Орден", chapter["name"], chapter["desc"]])
 	var rows = SynergyManager.count_position_bonuses(
 		SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
 	for pos in [SynergyManager.FRONT, SynergyManager.BACK]:
 		var p: Dictionary = SynergyManager.POSITION_BONUSES[pos]
 		lines.append("• %s (%d отр.) — %s" % [p["name"], rows[pos], p["desc"]])
-	var marines = SynergyManager.tag_counts.get(SynergyManager.INCOME_TAG, 0)
-	lines.append("Marine: %d · доход синергии +%d Req" % [marines, SynergyManager.income_bonus])
+	lines.append("%s: %d · доход синергии +%d Req" % [tag.capitalize(), SynergyManager.tag_counts.get(tag, 0),
+		SynergyManager.income_bonus])
 	_synergy_label.text = "\n".join(lines)
 
 # Орудия игрока: опрос раз в кадр — только надпись, на бой не влияет

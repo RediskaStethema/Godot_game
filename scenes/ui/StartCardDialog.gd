@@ -9,14 +9,15 @@ signal chosen(card_id: String)
 
 var _chosen: bool = false
 
-func setup() -> void:
+# faction — раса забега: показываем её карту той же роли (CardFactory.equivalent)
+func setup(faction: String = "space_marines") -> void:
 	close_on_cancel = true
 	build_frame(520.0)
 	add_title("СТАРТОВАЯ КАРТА")
 	add_title("Ляжет в руку в начале забега", "DimLabel")
 	var focus: Button = null
 	for id in MetaProgress.available_start_cards():
-		var card := CardFactory.create(id)
+		var card := CardFactory.equivalent(id, faction)
 		var b := add_button("%s · %s" % [card.title, card.description], choose.bind(id),
 			"PrimaryButton" if id == MetaProgress.selected_start_card else "")
 		b.name = "Start_" + id

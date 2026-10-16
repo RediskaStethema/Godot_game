@@ -30,6 +30,17 @@ func _make_sheet() -> void:
 	tile.fill(Color(0.3, 0.6, 0.3))
 	tile.save_png(ProjectSettings.globalize_path(TILE_PATH))
 
+# Все пути "texture" в теме (вложенные плиты, кадры, группы местности)
+func _collect_textures(value, out: Array) -> void:
+	if value is Dictionary:
+		if value.has("texture"):
+			out.append(value["texture"])
+		for v in value.values():
+			_collect_textures(v, out)
+	elif value is Array:
+		for v in value:
+			_collect_textures(v, out)
+
 func _main() -> void:
 	await process_frame
 	_make_sheet()
@@ -46,7 +57,7 @@ func _main() -> void:
 	saved.erase("player_faction")
 	rm.load_state(saved)
 	_check("раса в сохранении; без поля — десант", faction_loaded == "chaos" and rm.player_faction == "space_marines")
-	rm.player_faction = "chaos"   # темы нет — берётся тема по умолчанию
+	rm.player_faction = "tyranids"   # темы нет — берётся тема по умолчанию
 
 	# 2. Бой: поле и цитадель из темы (неизвестная раса → тема по умолчанию, цитадель — спрайт)
 	bm.reset_run()
@@ -77,6 +88,22 @@ func _main() -> void:
 	battle.renderer.refresh_floor()
 	await _frames(2)
 	_check("пол из картинок-ромбов перерисован", true)
+
+	# 3б. Тема Хаоса: все плиты на месте, поле (анимированное) рисуется, взрыв клетки — на полу
+	var chaos: Dictionary = load("res://scripts/data/FactionTheme.gd").THEMES["chaos"]
+	var paths: Array = []
+	_collect_textures(chaos, paths)
+	var unique: Array = []
+	for p in paths:
+		if not unique.has(p):
+			unique.append(p)
+	var missing = unique.filter(func(p): return not ResourceLoader.exists(p))
+	battle.renderer.theme = chaos
+	battle.renderer.refresh_floor()
+	await _frames(2)
+	var blast = load("res://scripts/battle/Vfx.gd").spawn(battle.units_container, "tile_blast", Vector2.ZERO)
+	_check("Хаос: %d плит на месте, пол анимирован, взрыв клетки — на слое пола" % unique.size(),
+		unique.size() == 49 and missing.is_empty() and battle.renderer._animated 		and blast != null and blast.get_parent() == battle.renderer)
 
 	# 4. Цитадель: лист кадров → анимации, состояния, область перекрытия
 	citadel.apply_theme({"sheet": SHEET_PATH, "frame_size": Vector2i(FRAME, FRAME),

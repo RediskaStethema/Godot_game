@@ -12,10 +12,10 @@ const SHEETS_DIR = "res://assets/Spritesheets/"
 # scale — масштаб на бойце роста 62 px, pivot — точка кадра, которая встаёт в позицию эффекта
 # (у эффектов на бойце — ноги), behind — рисовать за спрайтом бойца
 const EFFECTS = {
-	# попадание снаряда — искры по направлению полёта
+	# попадание снаряда в цитадель — искры по направлению полёта
 	"hit_spark":  {"sheet": "Sparks-Sheet.png", "size": Vector2i(96, 96), "frames": 7, "fps": 20.0,
 		"loop": false, "scale": 0.4, "pivot": Vector2(20, 62)},
-	# удар в ближнем бою
+	# удар в ближнем бою и попадание снаряда в бойца (Projectile)
 	"blood":      {"sheet": "Blood Splat.png", "size": Vector2i(96, 96), "frames": 7, "fps": 16.0,
 		"loop": false, "scale": 1.2, "pivot": Vector2(50, 46)},
 	# лужа крови под павшим
@@ -30,6 +30,12 @@ const EFFECTS = {
 	# взрыв залпа Thunderfire: огненный шар (+ "explosion" и "impact" — дым и обломки)
 	"fireball":   {"sheet": "Fire+Sparks-Sheet.png", "size": Vector2i(96, 96), "frames": 19, "fps": 22.0,
 		"loop": false, "scale": 0.9, "pivot": Vector2(52, 92)},
+	# взрыв клетки (лист assets/Chaos_assets1.png, кадры 6–12: трещины → взрыв → выжженная земля) —
+	# попадание орбитального удара и Thunderfire; плита земли: на слое пола, бойцы поверх (ground),
+	# последний кадр гаснет за fade с. Верхняя грань плиты в кадре — 232 px, центр (127, 150):
+	# масштаб 60 / 232 — ширина грани = поперечник взрыва радиуса Projectile.EXPLOSION_VFX_RADIUS
+	"tile_blast": {"sheet": "Chaos Tile Blast-Sheet.png", "size": Vector2i(256, 235), "frames": 7,
+		"fps": 12.0, "loop": false, "scale": 0.26, "pivot": Vector2(127, 150), "ground": true, "fade": 0.5},
 	# вспышка выстрела орудия — поджиг ракеты (первые кадры листа ракеты)
 	"muzzle_flash": {"sheet": "Rocket Fire 2-Sheet.png", "size": Vector2i(150, 150), "frames": 5,
 		"fps": 20.0, "loop": false, "scale": 1.0, "pivot": Vector2(68, 78)},
@@ -66,6 +72,8 @@ const Z_INDEX_WORLD: int = 10   # разовые эффекты в мире — 
 const FLAT_Y: float = 0.5       # эффект «на земле» сплющен под изометрию
 
 static var _frames_cache: Dictionary = {}   # вид → SpriteFrames
+# Слой земли (пол поля, BattleScene._build_field): эффекты с "ground" — под бойцами, поверх плит
+static var ground_layer: Node2D = null
 
 # Разовый эффект в мировой точке. size — множитель масштаба, angle — поворот (радианы)
 static func spawn(parent: Node, kind: String, at: Vector2, size: float = 1.0, angle: float = 0.0) -> Vfx:
@@ -73,6 +81,9 @@ static func spawn(parent: Node, kind: String, at: Vector2, size: float = 1.0, an
 		return null
 	var v := _make(kind, size)
 	v.z_index = Z_INDEX_WORLD
+	if EFFECTS[kind].get("ground", false) and is_instance_valid(ground_layer):
+		parent = ground_layer
+		v.z_index = 0
 	v.rotation = angle
 	parent.add_child(v)
 	v.global_position = at
@@ -97,7 +108,12 @@ static func _make(kind: String, size: float) -> Vfx:
 	var s: float = e["scale"] * size
 	v.scale = Vector2(s, s * (FLAT_Y if e.get("flat", false) else 1.0))
 	v.modulate = e.get("modulate", Color.WHITE)
-	if not e["loop"]:
+	if not e["loop"] and e.has("fade"):
+		v.animation_finished.connect(func():
+			var tw := v.create_tween()
+			tw.tween_property(v, "modulate:a", 0.0, e["fade"])
+			tw.tween_callback(v.queue_free))
+	elif not e["loop"]:
 		v.animation_finished.connect(v.queue_free)
 	v.play("play")
 	return v

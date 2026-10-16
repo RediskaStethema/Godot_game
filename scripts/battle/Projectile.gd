@@ -184,7 +184,9 @@ func _impact() -> void:
 		AudioManager.play("hit")
 		BattleManager.credit_damage(source, clampf(damage - s.shield, 0.0, s.current_hp))
 		s.take_damage(damage)
-		Vfx.spawn(get_parent(), "hit_spark", _aim_point, Soldier.EFFECT_SCALE, rotation)
+		# Попадание в бойца — брызги крови, как от удара вплотную (решение пользователя 17.10.2026:
+		# не искры); искры — только по камню цитадели
+		Vfx.spawn(get_parent(), "blood", _aim_point, Soldier.EFFECT_SCALE)
 		if stun > 0.0:
 			s.apply_stun(stun)
 		if knockback > 0.0:

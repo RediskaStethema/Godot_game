@@ -153,11 +153,12 @@ func _main() -> void:
 	var marine = reg.get_alive_soldiers_of_team(0)[0]
 	var foe = reg.get_alive_soldiers_of_team(1)[0]
 	var mat = marine.sprite.material
-	var red_ok: bool = mat is ShaderMaterial and is_equal_approx(mat.get_shader_parameter("target_hue"), 0.0)
+	var ba_hue: float = load("res://scripts/data/Chapters.gd").get_chapter("blood_angels")["armor"]["hue"]
+	var red_ok: bool = mat is ShaderMaterial and is_equal_approx(mat.get_shader_parameter("target_hue"), ba_hue)
 	marine.take_damage(1.0)
 	var flash_mat = marine.sprite.material
 	var flashing: bool = flash_mat is ShaderMaterial and flash_mat.get_shader_parameter("flash") > 0.0 \
-		and is_equal_approx(flash_mat.get_shader_parameter("target_hue"), 0.0)
+		and is_equal_approx(flash_mat.get_shader_parameter("target_hue"), ba_hue)
 	var t0 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t0 < 300:
 		await process_frame

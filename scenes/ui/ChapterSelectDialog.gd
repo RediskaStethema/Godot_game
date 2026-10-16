@@ -1,7 +1,7 @@
 class_name ChapterSelectDialog
 extends ModalOverlay
 
-# Выбор ордена нового забега (Chapters.CHAPTERS) — после выбора расы Космодесанта.
+# Выбор ордена (Космодесант) или бога-покровителя (Хаос) нового забега (Chapters) — после выбора расы.
 # chosen(chapter) — по выбору; «Отмена» закрывает окно без старта забега.
 
 const CARD_SIZE = Vector2(150, 150)
@@ -11,17 +11,18 @@ signal chosen(chapter: String)
 
 var _chosen: bool = false   # двойной клик в одном кадре не запустит забег дважды
 
-func setup() -> void:
+func setup(faction: String = Chapters.FACTION) -> void:
 	close_on_cancel = true
 	build_frame(860.0)
-	add_title("ВЫБОР ОРДЕНА")
-	add_title("Орден даёт бонус на весь забег", "DimLabel")
+	var text: Array = Chapters.SELECT_TEXT.get(faction, Chapters.SELECT_TEXT[Chapters.FACTION])
+	add_title(text[0])
+	add_title(text[1], "DimLabel")
 	var row = HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 10)
 	content.add_child(row)
 	var first: Control = null
-	for c in Chapters.CHAPTERS:
+	for c in Chapters.for_faction(faction):
 		var card = _make_card(c)
 		row.add_child(card)
 		if first == null and not card.disabled:

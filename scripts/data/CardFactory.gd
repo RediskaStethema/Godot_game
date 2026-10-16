@@ -373,21 +373,121 @@ static func orbital_strike() -> CardData:
 	return c
 
 # -------------------------------------------------------
+# ХАОС ИГРОКА (решение пользователя 16.10.2026: 8 отрядов + общие карты под названиями Хаоса)
+# -------------------------------------------------------
+# Отряды — юниты Хаоса (UnitFactory); цены — паритет силы отряда за Req с Космодесантом.
+# Цифры — на одобрение
+static func _chaos_squad(id: String, title: String, desc: String, cost: int, rarity: String,
+		unit: String, count: int) -> CardData:
+	var c = CardData.new()
+	c.id = id
+	c.title = title
+	c.description = desc
+	c.faction = "chaos"
+	c.cost = cost
+	c.rarity = rarity
+	c.card_type = "squad"
+	c.unit_factory_id = unit
+	c.unit_count = count
+	return c
+
+static func chaos_marines() -> CardData:
+	return _chaos_squad("chaos_marines", "Chaos Marines", "Предатели с болтерами: бьют сильнее Tactical, но ближе",
+		5, "common", "chaos_marine", 9)
+
+static func cultists() -> CardData:
+	return _chaos_squad("cultists", "Cultists", "Дешёвая толпа фанатиков со стабберами", 3, "common", "chaos_cultist", 12)
+
+static func raptors() -> CardData:
+	return _chaos_squad("raptors", "Raptors", "Прыжковые ранцы: быстро летят к стрелкам врага", 5, "common", "chaos_raptor", 6)
+
+static func havocs() -> CardData:
+	return _chaos_squad("havocs", "Havocs", "Тяжёлые огнемёты: бьют самых опасных, поджигают", 7, "rare", "chaos_havoc", 6)
+
+static func plague_marines() -> CardData:
+	return _chaos_squad("plague_marines", "Plague Marines", "Живучие носители чумы: удар отравляет", 7, "rare", "plague_marine", 6)
+
+static func chaos_champions() -> CardData:
+	return _chaos_squad("chaos_champions", "Chaos Champions", "Пара избранных бойцов ближнего боя", 7, "rare", "chaos_champion", 2)
+
+static func hellbrute_card() -> CardData:
+	return _chaos_squad("hellbrute", "Hellbrute", "Безумная машина: удар отбрасывает врага", 14, "epic", "hellbrute", 2)
+
+static func chaos_lord_card() -> CardData:
+	return _chaos_squad("chaos_lord", "Chaos Lord", "Командир: +15% урона всей армии", 16, "epic", "chaos_lord_player", 2)
+
+# Общие карты (здания, улучшения, события) — механика Космодесанта, свои id и названия:
+# id Космодесанта → [id, название, описание]. Улучшения — на свои отряды (тег chaos)
+const CHAOS_RESKINS = {
+	"bolter_turret": ["heretic_autocannon", "Heretic Autocannon", "Турель: стреляет в ближайшего врага на всём поле. Стоит между раундами."],
+	"thunderfire_cannon": ["hellfire_mortar", "Hellfire Mortar", "Орудие: в бою кликните по полю — залп по площади. Перезарядка 4 с."],
+	"barracks": ["cult_shrine", "Cult Shrine", "После победы возвращают павших (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Не лечат."],
+	"fortress_wall": ["spiked_barricade", "Spiked Barricade", "Щит цитадели +200 в каждом бою. Замедляет врагов рядом на 40%."],
+	"plasma_generatorium": ["dark_altar", "Dark Altar", "+2 Req после каждого боя. Стоит между раундами."],
+	"apothecarion": ["warp_rift", "Warp Rift", "Павший рядом боец встаёт с 30% HP (шанс 15%, раз за бой)."],
+	"blessed_armour": ["daemonic_armour", "Daemonic Armour", "Отряд Хаоса: +25% HP"],
+	"battle_fury": ["blood_rage", "Blood Rage", "Отряд Хаоса: +20% урона"],
+	"iron_halo": ["warp_ward", "Warp Ward", "Отряд Хаоса: щит 30% HP каждому бойцу в начале боя"],
+	"combat_stimms": ["combat_drugs", "Combat Drugs", "Отряд Хаоса: +20% скорости бега и атаки"],
+	"chapter_banner": ["icon_of_chaos", "Icon of Chaos", "Икона отряду: союзники рядом +15% урона (не суммируется с аурами)"],
+	"emergency_reinforcements": ["cult_uprising", "Cult Uprising", "Случайный Common отряд на пустую клетку"],
+	"orbital_strike": ["warp_strike", "Warp Strike", "В начале боя: 160 урона всем врагам в радиусе 130 — по самой плотной группе"],
+}
+# Отряд Космодесанта → отряд Хаоса той же роли (стартовая карта мета-прогрессии в забеге за Хаос)
+const CHAOS_SQUAD_EQUIVALENTS = {
+	"tactical_squad": "chaos_marines", "assault_squad": "raptors", "scout_squad": "cultists",
+	"devastator_squad": "havocs", "terminator_squad": "plague_marines", "apothecary": "chaos_champions",
+	"librarian": "chaos_champions", "chaplain": "chaos_champions", "land_speeder": "raptors",
+	"dreadnought": "hellbrute", "chapter_master": "chaos_lord",
+}
+
+static func _chaos_version(card: CardData) -> CardData:
+	var r: Array = CHAOS_RESKINS[card.id]
+	card.id = r[0]
+	card.title = r[1]
+	card.description = r[2]
+	card.faction = "chaos"
+	if card.affects_tag == "marine":
+		card.affects_tag = "chaos"
+	return card
+
+# id карты Космодесанта, от которой сделана карта Хаоса (мета-прогрессия открывает обе); своя — как есть
+static func base_id(id: String) -> String:
+	for sm_id in CHAOS_RESKINS:
+		if CHAOS_RESKINS[sm_id][0] == id:
+			return sm_id
+	return id
+
+# Карта расы faction вместо карты Космодесанта id (стартовая карта); нет пары — сама карта
+static func equivalent(id: String, faction: String) -> CardData:
+	if faction == "chaos":
+		if CHAOS_RESKINS.has(id):
+			id = CHAOS_RESKINS[id][0]
+		else:
+			id = CHAOS_SQUAD_EQUIVALENTS.get(id, id)
+	return create(id)
+
+# -------------------------------------------------------
 # ПУЛ КАРТ ДЛЯ МАГАЗИНА
 # -------------------------------------------------------
 # ShopManager будет брать карты отсюда.
 # Карты с большим весом появляются чаще.
 
+# Расы с картами игрока (build_pool)
+const FACTIONS = ["space_marines", "chaos"]
+
 # Веса по TDD ~60/30/10: common 26, rare 15, epic 4 — из 45 копий.
-# Новая карта по id (сохранения). Все карты игрока есть в пуле магазина.
+# Новая карта по id (сохранения). Все карты игрока есть в пуле магазина своей расы; id у рас
+# разные — карта находится при любой текущей расе (сохранение грузит руку раньше расы)
 static func create(id: String) -> CardData:
-	for card in build_pool():
-		if card.id == id:
-			return card
+	for faction in FACTIONS:
+		for card in build_pool(faction):
+			if card.id == id:
+				return card
 	push_warning("CardFactory: неизвестная карта '%s'" % id)
 	return null
 
-# Случайная карта отряда нужной редкости из пула (веса копий) — Emergency Reinforcements
+# Случайная карта отряда нужной редкости из пула расы забега (веса копий) — Emergency Reinforcements
 static func random_squad_card(rarity: String, rng: RandomNumberGenerator) -> CardData:
 	var squads = build_pool().filter(func(c): return c.card_type == "squad" and c.rarity == rarity)
 	return squads[rng.randi_range(0, squads.size() - 1)]
@@ -407,7 +507,19 @@ static func create_many(ids: Array) -> Array[CardData]:
 			cards.append(c)
 	return cards
 
-static func build_pool() -> Array:
+# Раса забега (RunManager.player_faction). Через дерево, не по имени автолоада: CardFactory берут
+# тестовые скрипты, а они компилируются раньше автолоадов
+static func run_faction() -> String:
+	var tree := Engine.get_main_loop() as SceneTree
+	var rm: Node = tree.root.get_node_or_null("RunManager") if tree else null
+	return rm.player_faction if rm else "space_marines"
+
+# Пул магазина расы faction ("" — раса забега RunManager.player_faction)
+static func build_pool(faction: String = "") -> Array:
+	if faction == "":
+		faction = run_faction()
+	if faction == "chaos":
+		return _chaos_pool()
 	var pool = []
 	# Common — 27 копий: доли ~60/30/10 держатся — на 6 новых Rare базовых отрядов по +1 (на одобрение цифр)
 	# Враги (chaos_*) в пул игрока не входят
@@ -438,4 +550,21 @@ static func build_pool() -> Array:
 	# Epic — 4 копии
 	for i in range(2): pool.append(dreadnought_card())
 	for i in range(2): pool.append(chapter_master_card())
+	return pool
+
+# Хаос: те же доли ~60/30/10 (27 / 16 / 4): Common — 3 отряда (как у Космодесанта), Rare — 3 отряда
+# по 2 копии вместо 6 по одной; общие карты — тем же числом копий
+static func _chaos_pool() -> Array:
+	var pool = []
+	for i in range(8): pool.append(chaos_marines())
+	for i in range(6): pool.append(cultists())
+	for i in range(5): pool.append(raptors())
+	for i in range(2): pool.append(havocs())
+	for i in range(2): pool.append(plague_marines())
+	for i in range(2): pool.append(chaos_champions())
+	for i in range(2): pool.append(hellbrute_card())
+	for i in range(2): pool.append(chaos_lord_card())
+	for card in build_pool("space_marines"):
+		if card.card_type != "squad":
+			pool.append(_chaos_version(card))
 	return pool

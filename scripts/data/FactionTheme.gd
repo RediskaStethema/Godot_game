@@ -40,12 +40,14 @@ extends RefCounted
 const DEFAULT_FACTION: String = "space_marines"
 
 # Расы в окне выбора нового забега (RaceSelectDialog), по порядку.
-# available = false — видна, но закрыта («Скоро»); открыть расу — true + тема и юниты
+# available = false — видна, но закрыта («Скоро»); открыть расу — true + тема и юниты.
+# enemy — раса волн врагов в забеге за эту расу (EnemyWaves; решение пользователя 16.10.2026:
+# Хаос воюет с Космодесантом)
 const FACTIONS = [
-	{"id": "space_marines", "name": "Космодесант", "available": true,
+	{"id": "space_marines", "name": "Космодесант", "available": true, "enemy": "chaos",
 		"desc": "Ангелы Смерти: стойкие отряды и цитадель-бастион."},
-	{"id": "chaos", "name": "Хаос", "available": false,
-		"desc": "Предатели и демонические машины."},
+	{"id": "chaos", "name": "Хаос", "available": true, "enemy": "space_marines",
+		"desc": "Предатели и демонические машины. Воюют с Космодесантом."},
 	{"id": "tyranids", "name": "Тираниды", "available": false,
 		"desc": "Рой, пожирающий миры."},
 ]
@@ -55,6 +57,10 @@ static func get_faction_info(faction: String) -> Dictionary:
 		if f["id"] == faction:
 			return f
 	return {}
+
+# Раса волн врагов в забеге за faction
+static func enemy_of(faction: String) -> String:
+	return get_faction_info(faction).get("enemy", "chaos")
 
 static func is_available(faction: String) -> bool:
 	return get_faction_info(faction).get("available", false)
@@ -141,6 +147,84 @@ const SM_FEATURES = [
 	{"tiles": SM_FOG_CRATERS, "clusters": 4, "size": [5, 9]},   # туманные местности
 ]
 
+# Поле Хаоса (решение пользователя 16.10.2026: как местность Космодесанта — грунт, стена и река статичны,
+# анимированы только детали). Основа — плиты Космодесанта, перекрашенные в красный (red_*: камень
+# приглушённо-красный, вода реки — кровь; tools/tiles_recolor_red.py), top — как у исходных плит.
+# Детали Хаоса — с листа assets/Chaos_assets2png.png: окопы — варианты без анимации, знамёна и кристаллы —
+# анимация 12 кадров; обелиски (assets/chaos_assets/obelisk1–4.png) — 3 группы, кристаллы разгораются.
+# top деталей — от нижнего угла плиты (толщина ≈ 0.18 ширины)
+const CH_TILES = "res://assets/sprites/tiles/chaos/"
+# Детали с листа Хаоса ярче и насыщеннее перекрашенного грунта — приглушены (иначе смотрятся наклейками)
+const CH_DETAIL_TINT = Color(0.7, 0.6, 0.62)
+const CH_TERRAIN = [{"texture": CH_TILES + "red_terrain.png", "top": 10}]      # красная осыпь
+const CH_DEBRIS_WALL = [{"texture": CH_TILES + "red_wall.png", "top": 67, "axis": "u"}]
+const CH_RIVER = [   # кровавый ручей: плиты русла и отражения, как у Космодесанта
+	{"texture": CH_TILES + "red_river_1.png", "top": 17, "axis": "v",
+		"mirror": {"texture": CH_TILES + "red_river_1_mirror.png", "top": 17}},
+	{"texture": CH_TILES + "red_river_2.png", "top": 22, "axis": "v",
+		"mirror": {"texture": CH_TILES + "red_river_2_mirror.png", "top": 22}},
+]
+const CH_RUINS = [{"texture": CH_TILES + "red_ruins_bunker.png", "top": 48}]
+const CH_CRATER = [{"texture": CH_TILES + "red_crater.png", "top": 20, "no_decor": true}]
+const CH_SMALL_CRATERS = [{"texture": CH_TILES + "red_terrain_craters.png", "top": 10}]
+# Осыпь с кристаллами варпа — редкие одиночные клетки, кристаллы переливаются (12 кадров листа)
+const CH_CRYSTALS = [{"fps": 1.0, "tint": CH_DETAIL_TINT, "frames": [
+	{"texture": CH_TILES + "terrain_0.png", "top": 23},
+	{"texture": CH_TILES + "terrain_1.png", "top": 25},
+	{"texture": CH_TILES + "terrain_2.png", "top": 26},
+	{"texture": CH_TILES + "terrain_3.png", "top": 27},
+	{"texture": CH_TILES + "terrain_4.png", "top": 25},
+	{"texture": CH_TILES + "terrain_5.png", "top": 23},
+	{"texture": CH_TILES + "terrain_6.png", "top": 22},
+	{"texture": CH_TILES + "terrain_7.png", "top": 28},
+	{"texture": CH_TILES + "terrain_8.png", "top": 23},
+	{"texture": CH_TILES + "terrain_9.png", "top": 24},
+	{"texture": CH_TILES + "terrain_10.png", "top": 24},
+	{"texture": CH_TILES + "terrain_11.png", "top": 20},
+]}]
+# Обломки и знамя Хаоса — только на стороне игрока; знамя колышется (12 кадров листа)
+const CH_FLAG = [{"fps": 1.0, "flag": true, "tint": CH_DETAIL_TINT, "frames": [
+	{"texture": CH_TILES + "flag_0.png", "top": 35},
+	{"texture": CH_TILES + "flag_1.png", "top": 38},
+	{"texture": CH_TILES + "flag_2.png", "top": 38},
+	{"texture": CH_TILES + "flag_3.png", "top": 34},
+	{"texture": CH_TILES + "flag_4.png", "top": 41},
+	{"texture": CH_TILES + "flag_5.png", "top": 39},
+	{"texture": CH_TILES + "flag_6.png", "top": 34},
+	{"texture": CH_TILES + "flag_7.png", "top": 21},
+	{"texture": CH_TILES + "flag_8.png", "top": 28},
+	{"texture": CH_TILES + "flag_9.png", "top": 26},
+	{"texture": CH_TILES + "flag_10.png", "top": 27},
+	{"texture": CH_TILES + "flag_11.png", "top": 25},
+]}]
+const CH_TRENCH = [  # окопы
+	{"texture": CH_TILES + "trench_0.png", "top": 13, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_1.png", "top": 17, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_2.png", "top": 18, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_3.png", "top": 27, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_4.png", "top": 23, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_5.png", "top": 35, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_6.png", "top": 37, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_7.png", "top": 32, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_8.png", "top": 41, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_9.png", "top": 35, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_10.png", "top": 37, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_11.png", "top": 48, "tint": CH_DETAIL_TINT},
+]
+const CH_OBELISK = [{"fps": 1.2, "no_decor": true, "tint": CH_DETAIL_TINT, "frames": [   # кристаллы разгораются
+	{"texture": CH_TILES + "obelisk_0.png", "top": 53},
+	{"texture": CH_TILES + "obelisk_1.png", "top": 53},
+	{"texture": CH_TILES + "obelisk_2.png", "top": 53},
+	{"texture": CH_TILES + "obelisk_3.png", "top": 53},
+]}]
+const CH_FEATURES = [
+	{"tiles": CH_RUINS + CH_TRENCH, "clusters": 5, "size": [2, 4]},
+	{"tiles": CH_CRATER, "scatter": 0.04},
+	{"tiles": CH_SMALL_CRATERS, "scatter": 0.06},
+	{"tiles": CH_CRYSTALS, "scatter": 0.03},
+	{"tiles": CH_OBELISK, "clusters": 3, "size": [4, 7]},
+]
+
 const THEMES = {
 	"space_marines": {
 		"floor": SM_RUINS + SM_CRATER + SM_SMALL_CRATERS,
@@ -160,6 +244,18 @@ const THEMES = {
 		"citadel": {"sheet": SM_PROPS + "gothic_09.png", "frame_size": Vector2i(264, 244),
 			"anchor": Vector2(132, 178), "scale": 0.6, "fps": 1.0, "rows": {"idle": [0, 1]},
 			"tint": GOTHIC_CITADEL_TINT},
+	},
+	# Хаос: цитадели нет — запасная из блоков, декора нет
+	"chaos": {
+		"floor": CH_RUINS + CH_CRATER + CH_SMALL_CRATERS,
+		"kingdom": CH_TERRAIN,
+		"enemy": CH_RUINS + CH_CRATER + CH_SMALL_CRATERS,
+		"ground": CH_TERRAIN,
+		"features": CH_FEATURES,
+		"flags": {"tiles": CH_FLAG, "count": 2},
+		"map_seed": 131,
+		"edge": CH_DEBRIS_WALL,
+		"river": CH_RIVER,
 	},
 }
 

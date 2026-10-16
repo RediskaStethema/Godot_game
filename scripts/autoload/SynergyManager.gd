@@ -16,6 +16,13 @@ const SYNERGY_DEFINITIONS = {
 		{"threshold": 6, "name": "For the Emperor", "bonus": {"damage_mult": 1.10},
 			"desc": "+10% урона всем Marine"},
 	],
+	# Хаос игрока (решение пользователя 16.10.2026): те же пороги, бонусы в обратном порядке
+	"chaos": [
+		{"threshold": 3, "name": "Path to Glory", "bonus": {"damage_mult": 1.10},
+			"desc": "+10% урона всем бойцам Хаоса"},
+		{"threshold": 6, "name": "Black Crusade", "bonus": {"hp_mult": 1.15},
+			"desc": "+15% HP всем бойцам Хаоса"},
+	],
 	"elite": [
 		{"threshold": 2, "name": "Veteran Command", "bonus": {"epic_discount": 1},
 			"desc": "-1 Req к следующей Epic карте"},
@@ -36,8 +43,13 @@ const POSITION_BONUSES = {
 		"desc": "+15% урона стрелкам дальнего от врага ряда"},
 }
 
-# Доход TDD: «Синергия-бонус (3+ юнита фракции) — +2 за каждые 3 юнита»
+# Доход TDD: «Синергия-бонус (3+ юнита фракции) — +2 за каждые 3 юнита»: тег расы забега
 const INCOME_TAG: String = "marine"
+const FACTION_TAGS = {"space_marines": "marine", "chaos": "chaos"}
+
+# Тег расы забега (синергия дохода, подсказки)
+func faction_tag() -> String:
+	return FACTION_TAGS.get(RunManager.player_faction, INCOME_TAG)
 const INCOME_PER_GROUP: int = 2
 const INCOME_GROUP_SIZE: int = 3
 
@@ -77,7 +89,7 @@ func calculate_synergies(soldiers: Array) -> void:
 					"threshold": level["threshold"],
 				})
 
-	income_bonus = (tag_counts.get(INCOME_TAG, 0) / INCOME_GROUP_SIZE) * INCOME_PER_GROUP
+	income_bonus = (tag_counts.get(faction_tag(), 0) / INCOME_GROUP_SIZE) * INCOME_PER_GROUP
 	emit_signal("synergies_changed", active_synergies)
 
 # Вызывается один раз при старте боя, после calculate_synergies.

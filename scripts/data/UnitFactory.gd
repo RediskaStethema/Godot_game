@@ -14,6 +14,8 @@ const SQUAD_MERGE_BONUSES = {
 		"attack_speed": 0.15,   # +15% скорострельности за уровень
 		"heal": 0.35,           # лечение: 35% максимального HP каждому бойцу
 	},
+	# Хаос игрока — пока те же цифры, что у Космодесанта (на одобрение)
+	"chaos": {"damage": 0.20, "hp": 0.20, "attack_speed": 0.15, "heal": 0.35},
 }
 const DEFAULT_FACTION: String = "space_marines"
 
@@ -41,12 +43,16 @@ const ARMOUR_SCALE: float = 1.1
 static func squad_growth_for(card: CardData) -> int:
 	if card.unit_factory_id in SPLIT_UNITS:
 		return SQUAD_GROWTH
-	if card.unit_factory_id in PAIR_UNITS:
+	if card.unit_factory_id in PAIR_UNITS or card.unit_factory_id in PAIR_GROWTH_UNITS:
 		return PAIR_GROWTH
 	return 0
 const SPLIT_UNITS = ["tactical_marine", "assault_marine", "scout_marine", "devastator", "terminator",
 	"chaos_marine", "chaos_cultist", "chaos_havoc", "chaos_raptor", "plague_marine"]
-const PAIR_UNITS = ["apothecary", "librarian", "chaplain", "land_speeder", "dreadnought", "chapter_master"]
+const PAIR_UNITS = ["apothecary", "librarian", "chaplain", "land_speeder", "dreadnought", "chapter_master",
+	"hellbrute", "chaos_lord_player"]
+# Пары без деления статов: Chaos Champion — враг-элита и так парами с полными статами (EnemyWaves),
+# у игрока та же пара растёт на PAIR_GROWTH бойца за уровень
+const PAIR_GROWTH_UNITS = ["chaos_champion"]
 const ARMOURED_UNITS = ["tactical_marine", "assault_marine", "devastator", "terminator",
 	"apothecary", "librarian", "chaplain", "land_speeder", "dreadnought", "chapter_master"]
 
@@ -76,6 +82,13 @@ static func create(factory_id: String) -> UnitData:
 		"land_speeder":    d = land_speeder()
 		"dreadnought":     d = dreadnought()
 		"chapter_master":  d = chapter_master()
+		# Хаос игрока (решение пользователя 16.10.2026): герои-пары по статам техники и командира Космодесанта
+		"hellbrute":         d = hellbrute()
+		"chaos_lord_player": d = chaos_lord_player()
+		# Космодесант-враг (забег за Хаос): элита и боссы по статам Champion / Hellbrute / Chaos Lord
+		"veteran_terminator":  d = veteran_terminator()
+		"dreadnought_boss":    d = dreadnought_boss()
+		"chapter_master_boss": d = chapter_master_boss()
 		_:
 			push_warning("UnitFactory: неизвестный id '%s', создаю Tactical Marine" % factory_id)
 			d = tactical_marine()
@@ -470,4 +483,68 @@ static func chapter_master() -> UnitData:
 	d.rarity = GameConstants.RARITY_EPIC
 	d.sprite_path = "res://assets/sprites/space_marine_chapter_master"  # лист assets/chapter_master.png (tools/sheet_to_frames.py, + поза победы)
 	d.sprite_scale = 1.3
+	return d
+
+# -------------------------------------------------------
+# ХАОС ИГРОКА (решение пользователя 16.10.2026): отряды — те же архетипы, что у врага
+# (chaos_cultist, chaos_marine, chaos_raptor, chaos_havoc, plague_marine, chaos_champion);
+# Hellbrute и Chaos Lord врага — боссы-одиночки, у игрока свои пары: статы Dreadnought и
+# Chapter Master (паритет HP×DPS за Req), вид — спрайт chaos с тинтом. Цифры — на одобрение
+# -------------------------------------------------------
+static func hellbrute() -> UnitData:
+	var d = dreadnought()
+	d.unit_name = "Hellbrute"
+	d.faction = "chaos"
+	d.tags = ["chaos", "melee", "vehicle", "elite"]
+	d.sprite_path = "res://assets/sprites/chaos"
+	d.tint = Color(1.0, 0.65, 0.35)
+	d.sprite_scale = 1.5
+	return d
+
+static func chaos_lord_player() -> UnitData:
+	var d = chapter_master()
+	d.unit_name = "Chaos Lord"
+	d.faction = "chaos"
+	d.tags = ["chaos", "melee", "elite", "commander"]
+	d.sprite_path = "res://assets/sprites/chaos"
+	d.tint = Color(0.85, 0.5, 1.0)
+	d.sprite_scale = 1.4
+	return d
+
+# -------------------------------------------------------
+# КОСМОДЕСАНТ-ВРАГ (забег за Хаос): обычные волны — отряды игрока (EnemyWaves.SM_ARCHETYPES),
+# элита и боссы — статы Chaos Champion / Hellbrute / Chaos Lord, вид Космодесанта:
+# баланс волн тот же, что у Хаоса
+# -------------------------------------------------------
+static func veteran_terminator() -> UnitData:
+	var d = chaos_champion()
+	d.unit_name = "Terminator Veteran"
+	d.faction = "space_marines"
+	d.tags = ["marine", "melee", "elite"]
+	d.sprite_path = "res://assets/sprites/space_marine_terminator"
+	d.projectile_warm = false
+	d.tint = Color.WHITE
+	d.sprite_scale = 1.5   # как Terminator игрока в броне (×ARMOUR_SCALE)
+	return d
+
+static func dreadnought_boss() -> UnitData:
+	var d = chaos_hellbrute()
+	d.unit_name = "Dreadnought"
+	d.faction = "space_marines"
+	d.tags = ["marine", "melee", "vehicle", "elite"]
+	d.sprite_path = "res://assets/sprites/space_marine_dreadnought"
+	d.projectile_warm = false
+	d.tint = Color.WHITE
+	d.sprite_scale = 1.8
+	return d
+
+static func chapter_master_boss() -> UnitData:
+	var d = chaos_lord()
+	d.unit_name = "Chapter Master"
+	d.faction = "space_marines"
+	d.tags = ["marine", "melee", "elite", "boss"]
+	d.sprite_path = "res://assets/sprites/space_marine_chapter_master"
+	d.projectile_warm = false
+	d.tint = Color.WHITE
+	d.sprite_scale = 1.8
 	return d

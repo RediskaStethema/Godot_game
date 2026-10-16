@@ -368,7 +368,7 @@ func decoration_for(c: Vector2i, rivers: Dictionary, terrain: Dictionary) -> Var
 	if TerrainTiles.hash_cell(c, 7) % 100 >= (DECOR_FLAT_CHANCE if in_strip else DECOR_CHANCE):
 		return null
 	var flag_ok := _is_player_side(c) and TerrainTiles.hash_cell(c, 41) % FLAG_DECOR_RARITY == 0
-	var options = theme["decorations"].filter(func(d):
+	var options = theme.get("decorations", []).filter(func(d):
 		return (d.get("flat", false) or not in_strip) and (flag_ok or not d.get("flag", false)))
 	if options.is_empty():
 		return null

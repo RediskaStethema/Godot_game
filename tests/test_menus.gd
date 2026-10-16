@@ -119,8 +119,8 @@ func _main() -> void:
 	var marines = race.find_child("Race_space_marines", true, false) if race else null
 	var chaos = race.find_child("Race_chaos", true, false) if race else null
 	var tyranids = race.find_child("Race_tyranids", true, false) if race else null
-	_check("подтвердили → выбор расы: десант доступен и в фокусе, Хаос и Тираниды закрыты", race != null \
-		and marines != null and not marines.disabled and chaos.disabled and tyranids.disabled \
+	_check("подтвердили → выбор расы: десант доступен и в фокусе, Хаос открыт, Тираниды закрыты", race != null \
+		and marines != null and not marines.disabled and not chaos.disabled and tyranids.disabled \
 		and root.get_viewport().gui_get_focus_owner() == marines and current_scene == menu)
 	menu._open_race_select()
 	await _frames(1)
@@ -134,7 +134,7 @@ func _main() -> void:
 	extra._unhandled_input(esc)
 	await _frames(2)
 	_check("Esc закрывает окно выбора расы без старта", not is_instance_valid(extra) and current_scene == menu)
-	race.choose("chaos")   # закрытая раса — ничего
+	race.choose("tyranids")   # закрытая раса — ничего
 	await _frames(2)
 	_check("закрытую расу не выбрать", current_scene == menu and is_instance_valid(race))
 	race.choose("space_marines")

@@ -166,7 +166,7 @@ func _open_race_select() -> void:
 	dialog.setup()
 	dialog.chosen.connect(_on_race_chosen)
 
-# Раса с орденами (Космодесант) — следом выбор ордена, затем сложности; «Отмена» в любом
+# Раса с орденами / богами (Космодесант, Хаос) — следом их выбор, затем сложности; «Отмена» в любом
 # окне — забег не начат
 func _on_race_chosen(faction: String) -> void:
 	if not Chapters.has_chapters(faction):
@@ -174,7 +174,7 @@ func _on_race_chosen(faction: String) -> void:
 		return
 	var dialog = ChapterSelectDialog.new()
 	add_child(dialog)
-	dialog.setup()
+	dialog.setup(faction)
 	dialog.chosen.connect(func(chapter): _open_difficulty_select(faction, chapter))
 
 func _open_difficulty_select(faction: String, chapter: String) -> void:
@@ -190,14 +190,14 @@ func _open_start_card_select(faction: String, chapter: String, level: int) -> vo
 		return
 	var dialog = StartCardDialog.new()
 	add_child(dialog)
-	dialog.setup()
+	dialog.setup(faction)
 	dialog.chosen.connect(func(card_id):
 		MetaProgress.select_start_card(card_id)
 		_start_new_run(faction, chapter, level))
 
 func _start_new_run(faction: String, chapter: String, level: int) -> void:
+	RunManager.player_faction = faction   # раньше сброса: стартовая карта — карта этой расы
 	BattleManager.reset_run()   # + MetaProgress.apply_run_start: «Резервы», стартовая карта
-	RunManager.player_faction = faction
 	RunManager.player_chapter = chapter
 	RunManager.difficulty = level
 	SaveManager.delete_save()
