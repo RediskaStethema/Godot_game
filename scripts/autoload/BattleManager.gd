@@ -420,7 +420,11 @@ func prepare_citadel_shield() -> void:
 
 # Волна, в которой можно расширять королевство
 func can_expand_kingdom() -> bool:
-	return EconomyManager.round_number % EXPANSION_EVERY == 0
+	return is_expansion_wave(EconomyManager.round_number)
+
+# Волна с этапом расширения (3, 6, 9, 12, 15) — на её расстановке продаются клетки
+func is_expansion_wave(wave: int) -> bool:
+	return wave % EXPANSION_EVERY == 0
 
 func get_tile_cost() -> int:
 	return TILE_BASE_COST + tiles_bought * TILE_COST_STEP

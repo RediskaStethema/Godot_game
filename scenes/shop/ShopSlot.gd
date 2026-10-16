@@ -7,7 +7,9 @@ extends PanelContainer
 
 const CARD_SIZE = Vector2(220, 270)
 const PORTRAIT_HEIGHT = 70.0
-const OWNED_NOTE_TOP = 22.0   # сноска «на поле» — поверх портрета, под строкой редкости
+# Сноски «на поле» и синергий — над кнопкой «Купить», не на портрете (решение пользователя)
+const NOTE_GAP = 4.0
+const NOTE_SIDE = 8.0
 
 var slot_index: int = 0
 var card_data: CardData = null
@@ -17,6 +19,8 @@ var owned_note: PanelContainer = null   # сноска «на поле: ур. N�
 var synergy_note: PanelContainer = null # под ней — синергии с этой картой (ShopManager.get_synergy_note)
 var _synergy_label: Label
 var _owned_label: Label = null
+var _notes: VBoxContainer
+var _notes_layer: Control
 
 signal purchase_requested(slot_index: int)
 
@@ -58,17 +62,29 @@ func show_owned_note() -> void:
 	var syn := ShopManager.get_synergy_note(card_data)
 	_synergy_label.text = syn
 	synergy_note.visible = syn != ""
+	_place_notes()
+	_place_notes.call_deferred()   # показ в первый кадр слота — раскладка ещё не построена
+
+# Низ сносок — над кнопкой «Купить» (растут вверх, на описание карты)
+func _place_notes() -> void:
+	_notes.offset_bottom = buy_button.global_position.y - _notes_layer.global_position.y - _notes_layer.size.y - NOTE_GAP
+	_notes.offset_top = _notes.offset_bottom
 
 func _build_owned_note() -> void:
 	var layer := Control.new()   # слой поверх содержимого карты, клики не ловит
 	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(layer)
+	_notes_layer = layer
 	var notes := VBoxContainer.new()   # «на поле» и синергии — друг под другом
 	notes.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	notes.add_theme_constant_override("separation", 2)
+	notes.alignment = BoxContainer.ALIGNMENT_END
 	layer.add_child(notes)
-	notes.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	notes.offset_top = OWNED_NOTE_TOP
+	notes.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	notes.offset_left = NOTE_SIDE
+	notes.offset_right = -NOTE_SIDE
+	notes.grow_vertical = Control.GROW_DIRECTION_BEGIN   # растёт вверх от кнопки
+	_notes = notes
 	owned_note = UITheme.make_panel("HudPanel", true)
 	owned_note.add_theme_stylebox_override("panel", UITheme.panel_style(UITheme.BG_DEEP, UITheme.GOLD, 1, 4, 4))
 	owned_note.hide()
