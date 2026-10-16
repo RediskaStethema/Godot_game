@@ -221,4 +221,24 @@ func _main() -> void:
 	_check("сноска синергии: «%s» / «%s» / здание — нет" % [note_tac, note_two],
 		"Marine 1 → 4" in note_tac and "откроет «Astartes Brotherhood»" in note_tac \
 		and "Marine 1 → 2" in note_two and "ещё 1" in note_two and note_building == "")
+	# Сноски на карте магазина — над кнопкой «Купить», ниже портрета
+	var slot = null
+	for n in current_scene.find_children("*", "", true, false):
+		if n.has_method("show_owned_note") and n.card_data and n.card_data.card_type == "squad":
+			slot = n
+			break
+	if slot == null:   # в наборе нет отряда — подставим карту отряда в первый слот
+		for n in current_scene.find_children("*", "", true, false):
+			if n.has_method("show_owned_note"):
+				slot = n
+				break
+		slot.card_data = CardFactory.tactical_squad()
+	slot.show_owned_note()
+	await _frames(2)
+	slot.show_owned_note()   # раскладка устоялась
+	var notes_rect: Rect2 = slot._notes.get_global_rect()
+	var portrait_bottom: float = slot.card_title.global_position.y
+	_check("сноски карты — над кнопкой «Купить» (низ %.0f ≤ %.0f), не на портрете (верх %.0f ≥ %.0f)" % [
+		notes_rect.end.y, slot.buy_button.global_position.y, notes_rect.position.y, portrait_bottom],
+		slot.synergy_note.visible and notes_rect.end.y <= slot.buy_button.global_position.y + 0.5 and notes_rect.position.y >= portrait_bottom - 0.5)
 	quit()

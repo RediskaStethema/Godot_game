@@ -1,8 +1,9 @@
 extends SceneTree
 
-# Объявление этапа расширения: на расстановке волны, где можно покупать клетки (3, 6, 9…), —
-# баннер «Пришло время расширяться» с ценой клетки; на других волнах его нет; «В БОЙ» его убирает,
-# клик по баннеру закрывает. Сохранение выключено — забег игрока не трогает.
+# Объявление этапа расширения (решение пользователя): экран «Пришло время расширяться» — в конце
+# боя перед волной, на расстановке которой продаются клетки (после боёв 2, 5, 8…), до магазина;
+# дальше — по кнопке «В МАГАЗИН». После других боёв его нет. На расстановке волны расширения
+# баннера нет — подсказка в шапке с ценой клетки. Сохранение выключено — забег игрока не трогает.
 #   godot --headless --path . -s tests/test_expansion_banner.gd
 
 func _initialize() -> void:
@@ -32,6 +33,14 @@ func _open_battle(wave: int):
 	await _frames(3)
 	return current_scene
 
+# Конец боя волны wave: шаг завершён, доход выдан (round_number — уже следующей волны), затем
+# то же, что делает сцена через 2 с после итога
+func _finish_battle(battle, wave: int) -> void:
+	root.get_node("RunManager").complete_current_node(true)
+	root.get_node("EconomyManager").round_number = wave + 1
+	battle._go_to_next_step()
+	await _frames(3)
+
 func _banner_text(banner) -> String:
 	var text = ""
 	for l in banner.find_children("*", "Label", true, false):
@@ -42,35 +51,36 @@ func _main() -> void:
 	await process_frame
 	var bm = root.get_node("BattleManager")
 
-	# 1. Волна 1 — расширения нет, баннера нет
+	# 1. После боя волны 1 (следующая — 2) — экрана нет, сразу дальше
 	var battle = await _open_battle(1)
-	_check("волна 1: баннера расширения нет", not is_instance_valid(battle.expansion_banner))
+	await _finish_battle(battle, 1)
+	_check("после волны 1: экрана расширения нет, сразу дальше (%s)" % current_scene.name,
+		current_scene != battle)
 
-	# 2. Волна 3 — баннер с заголовком и ценой клетки
-	battle = await _open_battle(3)
+	# 2. После боя волны 2 (следующая — 3, расширение) — экран с ценой, переход ждёт кнопку
+	battle = await _open_battle(2)
+	await _finish_battle(battle, 2)
 	var banner = battle.expansion_banner
 	var text = _banner_text(banner) if is_instance_valid(banner) else ""
-	_check("волна 3: баннер «Пришло время расширяться», цена %d Req" % bm.get_tile_cost(),
-		bm.can_expand_kingdom() and text.contains("РАСШИРЯТЬСЯ") and text.contains("%d Req" % bm.get_tile_cost()))
+	_check("после волны 2: экран «Пришло время расширяться», цена %d Req, ещё в бою" % bm.get_tile_cost(),
+		current_scene == battle and text.contains("РАСШИРЯТЬСЯ") and text.contains("%d Req" % bm.get_tile_cost()))
 
-	# 3. «В БОЙ» — баннер убран
-	battle._on_start_pressed()
-	await _frames(2)
-	_check("«В БОЙ» убирает баннер", not is_instance_valid(banner))
+	# 3. «В МАГАЗИН» — дальше по цепочке (магазин волны 3)
+	banner.button.pressed.emit()
+	await _frames(3)
+	_check("«В МАГАЗИН» — магазин (%s)" % current_scene.name, current_scene.name == "ShopScene")
+
+	# После волны 8 следующим идёт событие — на кнопке «ДАЛЕЕ», а не «В МАГАЗИН»
+	battle = await _open_battle(8)
+	await _finish_battle(battle, 8)
+	_check("после волны 8 (дальше событие): кнопка «%s»" % battle.expansion_banner.button.text,
+		battle.expansion_banner.button.text == "ДАЛЕЕ")
 	bm.stop_battle()
 
-	# 4. Клик по баннеру — закрыть
-	battle = await _open_battle(6)
-	banner = battle.expansion_banner
-	var had_banner = is_instance_valid(banner)
-	var closed = [false]
-	if had_banner:
-		banner.closed.connect(func(): closed[0] = true)
-		var click = InputEventMouseButton.new()
-		click.button_index = MOUSE_BUTTON_LEFT
-		click.pressed = true
-		banner._on_panel_input(click)
-	await _frames(2)
-	_check("волна 6: баннер есть, клик по нему — закрыт", had_banner and closed[0] and not is_instance_valid(banner))
-	bm.stop_battle()
+	# 4. Расстановка волны 3: баннера нет, подсказка с ценой клетки в шапке
+	battle = await _open_battle(3)
+	var hint: String = battle.hud._message.text
+	_check("расстановка волны 3: баннера нет, подсказка «%s»" % hint,
+		bm.can_expand_kingdom() and not is_instance_valid(battle.expansion_banner) \
+		and hint.contains("%d Req" % bm.get_tile_cost()))
 	quit()

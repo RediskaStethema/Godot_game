@@ -21,7 +21,7 @@ var camera: BattleCamera = null
 var bench: Node = null
 var hud: BattleHud = null
 var inspector: SquadInspector = null
-var expansion_banner: ExpansionBanner = null   # объявление этапа расширения (на расстановке)
+var expansion_banner: ExpansionBanner = null   # объявление этапа расширения (после боя, до магазина)
 var merge_menu: MergeMenu = null   # выбор «улучшить / вылечить» отряд его картой
 var pause_menu: PauseMenu = null
 var fader: OcclusionFader = null   # прозрачность построек — только на расстановке
@@ -137,9 +137,10 @@ func _populate_field() -> void:
 	_place_player_squads()
 	_update_synergy_preview()
 	_update_expansion()
+	# Этап расширения объявлен экраном ещё до магазина (решение пользователя) — здесь подсказка в шапке
 	if BattleManager.can_expand_kingdom() and not iso_grid.get_expansion_tiles().is_empty():
-		_show_message("Расширение: кликните по зелёной клетке")
-		_announce_expansion()
+		_show_message("Этап расширения: клетки рядом с королевством — от %d Req, клик по зелёной клетке"
+			% BattleManager.get_tile_cost())
 	elif BattleManager.next_battle_note != "":
 		_show_message(BattleManager.next_battle_note)
 
@@ -280,11 +281,20 @@ func _update_building_hover(screen_pos: Vector2) -> void:
 		effect = Building.get_effect_tiles(found.building_type, found.tile)
 	renderer.set_effect_tiles(effect)
 
-# Этап расширения объявляется баннером по центру (решение пользователя), подсказка в шапке остаётся
+# Этап расширения объявляется экраном в конце боя перед волной расширения — до магазина
+# (решение пользователя: успеть отложить Req на клетки). Дальше — по кнопке «В магазин»
 func _announce_expansion() -> void:
 	expansion_banner = ExpansionBanner.new()
 	$UI.add_child(expansion_banner)
-	expansion_banner.setup(BattleManager.get_tile_cost())
+	# Дальше — магазин, а после волн 4 / 8 / 12 / 14 сначала событие
+	var next_node: RunMapNode = RunManager.map.get_node_by_id(RunManager.get_next_id())
+	var to_shop := next_node == null or next_node.type != RunMapNode.EVENT
+	expansion_banner.setup(BattleManager.get_tile_cost(), "В МАГАЗИН" if to_shop else "ДАЛЕЕ")
+	expansion_banner.closed.connect(RunManager.advance)
+
+# Следующая волна — с расширением, и есть что купить (рамка королевства не заполнена)
+func _expansion_ahead() -> bool:
+	return BattleManager.is_expansion_wave(EconomyManager.round_number) and not iso_grid.get_expansion_tiles().is_empty()
 
 func _update_expansion() -> void:
 	var tiles: Array[Vector2i] = []
@@ -506,8 +516,6 @@ func get_same_card_tiles(card: CardData) -> Array[Vector2i]:
 
 func _on_start_pressed() -> void:
 	is_placement_phase = false
-	if is_instance_valid(expansion_banner):
-		expansion_banner.close()
 	_on_bench_card_hovered(null)
 	renderer.set_grid_overlay(false)   # в бою — только поле, здания, цитадель и бойцы
 	fader.enabled = false
@@ -623,7 +631,10 @@ func _end_finale_slowmo() -> void:
 		_finale_base_scale = -1.0
 
 func _go_to_next_step() -> void:
-	RunManager.advance()
+	if _expansion_ahead():   # round_number уже следующей волны (give_round_income)
+		_announce_expansion()
+	else:
+		RunManager.advance()
 
 # Доход и армия по итогу боя; возвращает текст для шапки
 func _resolve_battle(winner_team: int) -> String:
