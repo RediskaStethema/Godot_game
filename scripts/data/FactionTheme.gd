@@ -186,20 +186,18 @@ const CH_DEBRIS_WALL = [{"texture": CH_TILES + "red_wall.png", "top": 67, "axis"
 const CH_RUINS = [{"texture": CH_TILES + "red_ruins_bunker.png", "top": 48}]
 const CH_CRATER = [{"texture": CH_TILES + "red_crater.png", "top": 20, "no_decor": true}]
 const CH_SMALL_CRATERS = [{"texture": CH_TILES + "red_terrain_craters.png", "top": 10}]
-# Осыпь с кристаллами варпа — редкие одиночные клетки, кристаллы переливаются (12 кадров листа)
-const CH_CRYSTALS = [{"fps": 1.0, "frames": [
-	{"texture": CH_TILES + "terrain_0.png", "top": 23},
-	{"texture": CH_TILES + "terrain_1.png", "top": 25},
-	{"texture": CH_TILES + "terrain_2.png", "top": 26},
-	{"texture": CH_TILES + "terrain_3.png", "top": 27},
-	{"texture": CH_TILES + "terrain_4.png", "top": 25},
-	{"texture": CH_TILES + "terrain_5.png", "top": 23},
-	{"texture": CH_TILES + "terrain_6.png", "top": 22},
-	{"texture": CH_TILES + "terrain_7.png", "top": 28},
-	{"texture": CH_TILES + "terrain_8.png", "top": 23},
-	{"texture": CH_TILES + "terrain_9.png", "top": 24},
-	{"texture": CH_TILES + "terrain_10.png", "top": 24},
-	{"texture": CH_TILES + "terrain_11.png", "top": 20},
+# Осыпь с кристаллами варпа — редкие одиночные клетки. Кристаллы — лист terrain_sheet_assets.png (решение пользователя 17.10.2026, вместо прежних 12 кадров):
+# 5 кадров, свечение разгорается; tools/tile_frames_from_sheet.py (одно окно по плите — top общий),
+# палитра — tools/palette_match.py --group. Кадры 0→4→1 по кругу: разгорается и гаснет без скачка
+const CH_CRYSTALS = [{"fps": 1.5, "frames": [
+	{"texture": CH_TILES + "terrain_0.png", "top": 214},
+	{"texture": CH_TILES + "terrain_1.png", "top": 214},
+	{"texture": CH_TILES + "terrain_2.png", "top": 214},
+	{"texture": CH_TILES + "terrain_3.png", "top": 214},
+	{"texture": CH_TILES + "terrain_4.png", "top": 214},
+	{"texture": CH_TILES + "terrain_3.png", "top": 214},
+	{"texture": CH_TILES + "terrain_2.png", "top": 214},
+	{"texture": CH_TILES + "terrain_1.png", "top": 214},
 ]}]
 # Обломки и знамя Хаоса — только на стороне игрока; знамя колышется (12 кадров листа)
 const CH_FLAG = [{"fps": 1.0, "flag": true, "frames": [

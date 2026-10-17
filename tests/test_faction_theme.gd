@@ -126,7 +126,7 @@ func _main() -> void:
 	var no_blast_vfx = not load("res://scripts/battle/Vfx.gd").EFFECTS.has("tile_blast")
 	var chaos_citadel: Dictionary = chaos.get("citadel", {})
 	_check("Хаос: %d плит на месте, цитадель — крепость из листа, пол анимирован, извержение — 7 кадров плиты, взрыва клетки при ударе нет, реки нет" % unique.size(),
-		unique.size() == 78 and ResourceLoader.exists(chaos_citadel.get("sheet", "")) and missing.is_empty() and battle.renderer._animated \
+		unique.size() == 71 and ResourceLoader.exists(chaos_citadel.get("sheet", "")) and missing.is_empty() and battle.renderer._animated \
 		and not chaos.has("river") and battle.renderer._layout["rivers"].is_empty() \
 		and blast_tiles.size() == 7 and no_blast_vfx)
 
