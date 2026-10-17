@@ -18,7 +18,10 @@ const FACTION: String = "space_marines"   # раса с цветом брони 
 const CHAPTERS = [
 	{"id": "ultramarines", "name": "Ultramarines", "faction": "space_marines",
 		"desc": "+10% дальности атаки всем",
-		"bonus": {"attack_range_mult": 1.10}, "tag": ""},
+		"bonus": {"attack_range_mult": 1.10}, "tag": "",
+		# Броня орденов темнее (решение пользователя 17.10.2026: были слишком яркими; Blood Angels — как были):
+		# Ultramarines — синий листа (тон 0.638), но темнее
+		"armor": {"hue": 0.638, "sat": 0.95, "val": 0.6}},
 	{"id": "blood_angels", "name": "Blood Angels", "faction": "space_marines",
 		"desc": "+15% урона бойцам ближнего боя",
 		"bonus": {"damage_mult": 1.15}, "tag": "melee",
@@ -26,15 +29,15 @@ const CHAPTERS = [
 	{"id": "imperial_fists", "name": "Imperial Fists", "faction": "space_marines",
 		"desc": "Здания: +50% щита стен, +20% урона",
 		"building": {"shield": 1.5, "damage": 1.2},
-		"armor": {"hue": 0.13, "sat": 1.0, "val": 1.5}},
+		"armor": {"hue": 0.12, "sat": 1.0, "val": 0.85}},   # золото: темнее — уходит в оливковый
 	{"id": "space_wolves", "name": "Space Wolves", "faction": "space_marines",
 		"desc": "+15% скорости бега и атаки всем",
 		"bonus": {"move_speed_mult": 1.15, "attack_speed_mult": 1.15}, "tag": "",
-		"armor": {"hue": 0.58, "sat": 0.35, "val": 1.3}},
+		"armor": {"hue": 0.58, "sat": 0.35, "val": 0.75}},
 	{"id": "salamanders", "name": "Salamanders", "faction": "space_marines",
 		"desc": "Атаки поджигают цель (2 ур/с, 2 с)",
 		"on_hit_status": "burning", "on_hit_status_power": 2.0, "on_hit_status_duration": 2.0,
-		"armor": {"hue": 0.36, "sat": 0.9, "val": 1.0}},
+		"armor": {"hue": 0.36, "sat": 0.85, "val": 0.6}},
 	# Боги Хаоса — метка на всю армию
 	{"id": "khorne", "name": "Khorne", "faction": "chaos",
 		"desc": "Метка Кровавого бога: +20% урона бойцам ближнего боя",

@@ -7,7 +7,7 @@ extends SceneTree
 #    без листа — блоки, как раньше;
 # 2) Казармы вернули бойцов — анимация refill;
 # 3) Apothecary с рядом heal — лечит → heal, некого лечить → стойка;
-# 4) броня в цвет ордена: свои — шейдер с тоном ордена, враги и Ultramarines — как нарисовано,
+# 4) броня в цвет ордена: свои — шейдер с тоном ордена (Ultramarines — синий листа, темнее), враги — как нарисовано,
 #    вспышка попадания не снимает перекраску;
 # 5) звук: шины, событие без файла — тихо, с потоком — играет, предел частоты, выстрел снаряда и
 #    музыка магазина вызывают свои события.
@@ -166,7 +166,11 @@ func _main() -> void:
 		red_ok and foe.sprite.material == null and flashing and marine.sprite.material == mat)
 	rm.player_chapter = "ultramarines"
 	await _battle([_squad_unit("tactical_marine", 3)] as Array[UnitData])
-	_check("Ultramarines — синие как нарисовано (без шейдера)", reg.get_alive_soldiers_of_team(0)[0].sprite.material == null)
+	var um_mat = reg.get_alive_soldiers_of_team(0)[0].sprite.material
+	var um: Dictionary = load("res://scripts/data/Chapters.gd").get_chapter("ultramarines")["armor"]
+	_check("Ultramarines — синий листа, но темнее (шейдер: тон %.3f, яркость ×%.2f)" % [um["hue"], um["val"]],
+		um_mat is ShaderMaterial and is_equal_approx(um_mat.get_shader_parameter("target_hue"), um["hue"])
+		and um_mat.get_shader_parameter("val_mult") < 1.0)
 	rm.player_chapter = ""
 
 	# 5. Звук
