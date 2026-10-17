@@ -101,8 +101,14 @@ func _main() -> void:
 		and sal["assault_marine"]["status"] == StatusEffects.BURNING and _near(t["damage"], tb["damage"]))
 	var a = sal["assault_marine"]["node"]
 	var enemy = root.get_node("SoldierRegistry").get_alive_soldiers_of_team(1)[0]
+	enemy.global_position = a.global_position + Vector2(30, 0)
 	a.target = enemy
 	a._do_attack()
+	# У Assault удар — на кадре замаха (hit_frame листа): тики до него
+	var frames: SpriteFrames = a.sprite.sprite_frames
+	var hit_time: float = maxf(frames.get_meta("hit_frame", 0), 0) / frames.get_animation_speed("attack")
+	for i in ceili(hit_time / GameConstants.FIXED_TICK) + 1:
+		a._tick_melee_hit(GameConstants.FIXED_TICK)
 	_check("Salamanders: удар бойца ближнего боя поджёг цель", enemy.get_status_stacks(StatusEffects.BURNING) == 1)
 	await _finish()
 	quit()

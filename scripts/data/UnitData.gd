@@ -48,6 +48,20 @@ extends Resource
 @export var aura_tag: String = ""
 # Командир: +урон всем союзникам на старте боя (Chapter Master). Не суммируется.
 @export var commander_damage_bonus: float = 0.0
+# Прыжок (Assault Marine): раз за бой боец прыгает на ближайшего вражеского стрелка ближе jump_range;
+# при приземлении — удар по всем врагам в jump_radius (урон удара × jump_damage_mult) и оглушение
+@export var jump_range: float = 0.0          # 0 — не прыгает
+@export var jump_damage_mult: float = 0.0
+@export var jump_radius: float = 0.0
+@export var jump_stun: float = 0.0
+# Окапывание (Devastator): стоит на месте — урон растёт до +entrench_bonus за entrench_time сек;
+# сдвинулся (бег, отброс) — с нуля
+@export var entrench_time: float = 0.0       # 0 — не окапывается
+@export var entrench_bonus: float = 0.0
+# Deep Strike (Terminator): через deep_strike_delay сек боя отряд телепортируется к ближайшему врагу
+@export var deep_strike_delay: float = 0.0   # 0 — нет
+# Стрельба на ходу (Land Speeder): в ATTACK не стоит — кружит вокруг цели, держит дистанцию
+@export var mobile_fire: bool = false
 
 # --- Визуал ---
 # Пока у новых юнитов нет своих спрайтов — различаем их тинтом и размером

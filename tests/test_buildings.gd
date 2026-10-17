@@ -88,7 +88,8 @@ func _main() -> void:
 	_check("генератор: +2 / +3 / +5 Req по уровням", inc1 == 2 and inc2 == 3 and inc3 == 5 \
 		and eco.requisition == req0 + 10)
 
-	# Apothecarion: павший рядом боец встаёт с 30% HP, второй раз — нет
+	# Apothecarion: павший боец отряда на соседней клетке (крест) встаёт с 30% HP, второй раз — нет;
+	# отряд по диагонали — не встаёт
 	bm.reset_run()
 	for n in rm.map.nodes:
 		if n.is_battle() and n.wave == 1:
@@ -102,16 +103,24 @@ func _main() -> void:
 	var u = UnitFactory.create("tactical_marine")
 	u.squad_size = 3
 	u.saved_hp = [1.0, 1.0, 1.0] as Array[float]
-	bm.player_units = [u] as Array[UnitData]
+	var diag = UnitFactory.create("tactical_marine")
+	diag.squad_size = 3
+	diag.saved_hp = [1.0, 1.0, 1.0] as Array[float]
+	bm.player_units = [u, diag] as Array[UnitData]
 	bm.player_placements[u] = Vector2i(0, 0)
+	bm.player_placements[diag] = Vector2i(0, 1)   # по диагонали от (1, 0)
 	change_scene_to_file("res://scenes/battle/BattleScene.tscn")
 	await _frames(3)
-	var s = root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0)[0]
+	var alive = root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0)
+	var s = alive.filter(func(x): return x.get("parent_squad").tile == Vector2i(0, 0))[0]
+	var sd = alive.filter(func(x): return x.get("parent_squad").tile == Vector2i(0, 1))[0]
+	sd.take_damage(sd.max_hp * 5.0)
+	var diag_dead = sd.current_hp <= 0.0
 	s.take_damage(s.max_hp * 5.0)
 	var revived = s.current_hp > 0.0 and is_equal_approx(s.current_hp, s.max_hp * 0.3)
 	s.take_damage(s.max_hp * 5.0)
-	_check("апотекарион: встал с 30% HP, второй раз — пал", revived \
-		and not root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0).has(s))
+	_check("апотекарион: сосед по стороне встал с 30% HP, второй раз — пал; по диагонали — не встал", revived \
+		and not root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0).has(s) and diag_dead)
 	var lvl = CardFactory.apothecarion()
 	lvl.level_up_building()
 	lvl.level_up_building()

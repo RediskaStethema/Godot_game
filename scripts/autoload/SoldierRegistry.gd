@@ -51,6 +51,10 @@ func get_all_alive_soldiers() -> Array[Soldier]:
 func mark_dirty() -> void:
 	_dirty = true
 
+# Боец сдвинулся за тик дальше GRID_SLACK (Deep Strike Терминаторов) — сетку поиска собрать заново
+func invalidate_grid() -> void:
+	_grid_by_team.clear()
+
 # Живые бойцы команды с аурой урона (Chaplain, знамя) — аура считается на каждом ударе
 func get_aura_sources(team_id: int) -> Array:
 	_rebuild_if_dirty()

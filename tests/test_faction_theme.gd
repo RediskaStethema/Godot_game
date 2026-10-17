@@ -76,9 +76,30 @@ func _main() -> void:
 	_check("тема по умолчанию: плитки и декор есть, цитадель — спрайт темы (готика)", theme.has("floor") \
 		and not theme["floor"].is_empty() and not theme["decorations"].is_empty() and citadel.has_sprite())
 	var cit_theme: Dictionary = theme.get("citadel", {})
-	var props_tinted = theme["decorations"].all(func(d): return d.has("tint"))
+	# готика — с тоном; анимированный декор (костёр) — без: холодный огонь выглядел бы мёртвым
+	var props_tinted = theme["decorations"].filter(func(d): return not d.has("frames")).all(func(d): return d.has("tint"))
 	_check("готика темнее, ближе к грунту: декор с тоном, цитадель — тон темы",
 		props_tinted and cit_theme.has("tint") and citadel._sprite.modulate == cit_theme["tint"])
+	var marks: Dictionary = battle.renderer._layout.get("landmarks", {})
+	var fires = marks.keys().filter(func(c): return marks[c] == theme["landmarks"]["campfire"])
+	var flags = marks.keys().filter(func(c): return marks[c] in theme["landmarks"]["banners"])
+	var war = marks.keys().filter(func(c): return marks[c] in theme["landmarks"]["war_banners"])
+	var war_ok: bool = war.size() == theme["landmarks"]["war_banner_count"]
+	for c in war:   # большие знамёна — на стороне игрока, вне боевой полосы, порознь с другими ориентирами
+		if not battle.renderer._is_player_side(c) or battle.renderer._is_battle_strip(c):
+			war_ok = false
+		for o in marks.keys():
+			if o != c and maxi(absi(o.x - c.x), absi(o.y - c.y)) < battle.renderer.WAR_BANNER_GAP:
+				war_ok = false
+	var rivers: Dictionary = battle.renderer._layout.get("rivers", {})
+	var river_row: int = rivers.keys()[0].y if not rivers.is_empty() else 0
+	var near_base = fires.filter(func(c): return maxi(absi(c.x - battle.iso_grid.citadel_tile.x),
+		absi(c.y - battle.iso_grid.citadel_tile.y)) == battle.renderer.CITADEL_CLEAR + 1)
+	var beyond_river = fires.filter(func(c): return c.y == (river_row - 1 if river_row < 0 else river_row + 1))
+	var flag_by_fire = near_base.size() == 1 and flags.any(func(c): return maxi(absi(c.x - near_base[0].x), absi(c.y - near_base[0].y)) == 1)
+	_check("ориентиры: 2 костра (у базы, за рекой), 3 знамени (одно у костра), %d больших знамён — порознь на стороне игрока, пол анимирован" % war.size(),
+		fires.size() == 2 and near_base.size() == 1 and beyond_river.size() == 1 and flags.size() == 3
+		and flag_by_fire and war_ok and battle.renderer._animated)
 	citadel.apply_theme({})
 	await _frames(1)
 	_check("пустая тема цитадели — башня из блоков", not citadel.has_sprite())
@@ -89,7 +110,7 @@ func _main() -> void:
 	await _frames(2)
 	_check("пол из картинок-ромбов перерисован", true)
 
-	# 3б. Тема Хаоса: все плиты на месте, поле (анимированное) рисуется, взрыв клетки — на полу
+	# 3б. Тема Хаоса: все плиты на месте, поле (анимированное) рисуется; извержение — плита темы, не эффект удара
 	var chaos: Dictionary = load("res://scripts/data/FactionTheme.gd").THEMES["chaos"]
 	var paths: Array = []
 	_collect_textures(chaos, paths)
@@ -101,9 +122,13 @@ func _main() -> void:
 	battle.renderer.theme = chaos
 	battle.renderer.refresh_floor()
 	await _frames(2)
-	var blast = load("res://scripts/battle/Vfx.gd").spawn(battle.units_container, "tile_blast", Vector2.ZERO)
-	_check("Хаос: %d плит на месте, пол анимирован, взрыв клетки — на слое пола" % unique.size(),
-		unique.size() == 49 and missing.is_empty() and battle.renderer._animated 		and blast != null and blast.get_parent() == battle.renderer)
+	var blast_tiles = unique.filter(func(p): return "blast_" in p)
+	var no_blast_vfx = not load("res://scripts/battle/Vfx.gd").EFFECTS.has("tile_blast")
+	var chaos_citadel: Dictionary = chaos.get("citadel", {})
+	_check("Хаос: %d плит на месте, цитадель — крепость из листа, пол анимирован, извержение — 7 кадров плиты, взрыва клетки при ударе нет, реки нет" % unique.size(),
+		unique.size() == 78 and ResourceLoader.exists(chaos_citadel.get("sheet", "")) and missing.is_empty() and battle.renderer._animated \
+		and not chaos.has("river") and battle.renderer._layout["rivers"].is_empty() \
+		and blast_tiles.size() == 7 and no_blast_vfx)
 
 	# 4. Цитадель: лист кадров → анимации, состояния, область перекрытия
 	citadel.apply_theme({"sheet": SHEET_PATH, "frame_size": Vector2i(FRAME, FRAME),

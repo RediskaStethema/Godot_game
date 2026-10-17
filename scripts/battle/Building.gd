@@ -11,7 +11,7 @@ extends Node2D
 #   wall  — стена: щит цитадели на каждый бой + замедляет врагов рядом
 #           (статус slowed без стаков, держится WALL_SLOW_LINGER после выхода из радиуса)
 #   generator   — Plasma Generatorium: +Req после каждого боя (EconomyManager.collect_building_income)
-#   apothecarion — Apothecarion: павший рядом боец игрока может встать (revive_chance_at)
+#   apothecarion — Apothecarion: павший боец отряда на клетке его зоны (крест) может встать (revive_at)
 
 const BLOCK_SCALE: float = 0.5
 # Блоки по building_type: [Tiles/Slice N, i, j, ярус]; (i, j) — подклетка 2×2,
@@ -33,7 +33,7 @@ const ARTILLERY_LEVELS: int = 2
 const ARTILLERY_BARREL_LENGTH: float = 40.0
 const ARTILLERY_PROJECTILE: String = "rocket"
 const ARTILLERY_ARC: float = 90.0          # px — высота дуги полёта ракеты (только вид)
-const ARTILLERY_IMPACT_VFX = ["tile_blast", "explosion", "fireball", "impact"]   # клетка взрывается на полу, огонь поверх дыма
+const ARTILLERY_IMPACT_VFX = ["explosion", "fireball", "impact"]   # огонь поверх дыма
 const RECOIL_DISTANCE: float = 12.0        # px — откат ствола при залпе
 const RECOIL_TIME: float = 0.35
 const EXPLOSION_SHAKE: float = 6.0         # px — тряска камеры от взрыва залпа
@@ -200,14 +200,22 @@ func _block_top(i: float, j: float, level: int) -> Vector2:
 # -------------------------------------------------------
 # ПОДСКАЗКА И ЗОНА ДЕЙСТВИЯ (наведение на здание, перетаскивание карты — BattleScene)
 # -------------------------------------------------------
-# Клетки, на которые действует здание этого типа, стоящее на клетке at (без проверки, открыта ли
-# клетка): Казармы — соседние по сторонам; у стены зона — круг замедления (рисуется в _draw),
-# турель бьёт всё поле, орудие — куда кликнули: клеток нет
+# Зона действия на клетках — только у зданий, которые действуют на своих (правило пользователя 17.10.2026):
+# соседние клетки крестом, линией по горизонтали (вдоль ряда, ±x) или по вертикали (±y). Здания против
+# врагов (стена — круг замедления, турель, орудие) и генератор (доход) зоны на клетках не имеют.
+# Клетки — без проверки, открыта ли клетка (рисуются только открытые)
+const AREA_CROSS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+const AREA_HORIZONTAL: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0)]
+const AREA_VERTICAL: Array[Vector2i] = [Vector2i(0, 1), Vector2i(0, -1)]
+const EFFECT_AREAS = {
+	"barracks": AREA_CROSS,       # пополняет отряды на соседних клетках
+	"apothecarion": AREA_CROSS,   # павший боец отряда на соседней клетке может встать
+}
+
 static func get_effect_tiles(type: String, at: Vector2i) -> Array[Vector2i]:
 	var tiles: Array[Vector2i] = []
-	if type == "barracks":
-		for n in BattleManager.NEIGHBOUR_TILES:
-			tiles.append(at + n)
+	for d in EFFECT_AREAS.get(type, []):
+		tiles.append(at + d)
 	return tiles
 
 # Подсказка: название и уровень, что делает (с текущими цифрами), можно ли улучшить
@@ -226,6 +234,9 @@ func describe() -> String:
 		"barracks":
 			lines.append("После каждой победы возвращают %d павших бойцов отрядам на соседних клетках (подсвечены). Не лечат" \
 				% floori(stats.get("refill", 0.0)))
+		"apothecarion":
+			lines.append("Павший боец отряда на соседней клетке (подсвечены) встаёт с %d%% HP: шанс %d%%, раз за бой" \
+				% [roundi(stats.get("revive_hp", 0.0) * 100.0), roundi(stats.get("revive_chance", 0.0) * 100.0)])
 		_:
 			lines.append(card.description)
 	lines.append("Такая же карта — уровень +1" if card.can_level_up_building() else "Максимальный уровень")
@@ -361,13 +372,12 @@ func _tick_slow_aura() -> void:
 
 # Шанс поднять павшего бойца игрока в точке: самый сильный Apothecarion рядом.
 # Возвращает {"chance", "hp"} (доля HP после подъёма); нет — chance 0
-static func revive_at(point: Vector2) -> Dictionary:
+static func revive_at(tile: Vector2i) -> Dictionary:
 	var best = {"chance": 0.0, "hp": 0.0}
 	for b in BattleManager.buildings:
 		if not is_instance_valid(b):
 			continue
-		var r = b.stats.get("revive_radius", 0.0)
 		var c = b.stats.get("revive_chance", 0.0)
-		if r > 0.0 and c > best["chance"] and point.distance_to(b.global_position) <= r:
+		if c > best["chance"] and tile in get_effect_tiles(b.building_type, b.tile):
 			best = {"chance": c, "hp": b.stats.get("revive_hp", 0.3)}
 	return best

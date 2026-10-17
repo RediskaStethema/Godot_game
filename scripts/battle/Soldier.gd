@@ -54,6 +54,16 @@ const GOLDEN_RATIO_FRAC: float = 0.618034
 # Удар ближнего боя проходит на кадре hit_frame анимации атаки (метаданные frames.tres), если цель
 # ещё рядом: дальность × это
 const MELEE_HIT_REACH: float = 1.5
+# Прыжок (UnitData.jump_range): скорость полёта не больше SoldierRegistry.GRID_SLACK за тик —
+# поиск ближайшего по сетке остаётся точным; дуга (JUMP_HEIGHT × sprite_scale) — только вид
+const JUMP_SPEED: float = 450.0
+const JUMP_MIN_TIME: float = 0.3
+const JUMP_HEIGHT: float = 30.0
+# Стрельба на ходу (UnitData.mobile_fire): скорость кружения — доля бега, дистанция — доля дальности
+const MOBILE_FIRE_SPEED: float = 0.6
+const MOBILE_FIRE_DISTANCE: float = 0.8
+# Окопавшийся (UnitData.entrench_time) — бруствер перед бойцом
+const SANDBAG_COLOR = Color(0.62, 0.52, 0.36, 0.9)
 
 # -------------------------------------------------------
 # ДАННЫЕ
@@ -88,6 +98,19 @@ var knockback_velocity: Vector2 = Vector2.ZERO
 # Статус-эффекты (StatusEffects): имя → {stacks, power, time, duration, dot_timer, spread_timer}
 var status_effects: Dictionary = {}
 var battle_cry_used: bool = false
+# Прыжок (Assault): раз за бой; в полёте FSM стоит, контроль не действует
+var jump_used: bool = false
+var _leap_time: float = 0.0       # осталось лететь (0 — не в прыжке)
+var _leap_duration: float = 0.0
+var _leap_from: Vector2 = Vector2.ZERO
+var _leap_to: Vector2 = Vector2.ZERO
+var _leap_target: Soldier = null
+var _leap_t: float = 1.0          # доля пути после последнего тика (дуга в _process); 1 — на земле
+var _leap_prev: float = 1.0       # … и до него
+# Окапывание (Devastator): сколько стоит на месте; _moved — сдвинулся в этом тике
+var _still_time: float = 0.0
+var _moved: bool = false
+var _orbit_sign: float = 1.0      # стрельба на ходу: в какую сторону кружит (по номеру в отряде)
 # Эффект при попадании от ордена (Salamanders) — если у юнита своего нет; ставит
 # SynergyManager.apply_chapter_bonus в начале боя
 var extra_on_hit_status: String = ""
@@ -140,6 +163,12 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 	status_effects.clear()
 	battle_cry_used = false
 	has_revived = false
+	jump_used = false
+	_leap_time = 0.0
+	_leap_t = 1.0
+	_leap_prev = 1.0
+	_still_time = 0.0
+	_orbit_sign = 1.0 if attack_stagger < 0.5 else -1.0
 
 	_load_animations()
 	_apply_chapter_colors()
@@ -223,7 +252,10 @@ func _process(_delta: float) -> void:
 	if not _drawn_between:
 		_tick_to = global_position
 		_drawn_between = true
-	global_position = _tick_from.lerp(_tick_to, BattleManager.get_tick_alpha())
+	var alpha := BattleManager.get_tick_alpha()
+	global_position = _tick_from.lerp(_tick_to, alpha)
+	if _leap_prev < 1.0:   # дуга прыжка: спрайт над тенью
+		sprite.position.y = -sin(PI * lerpf(_leap_prev, _leap_t, alpha)) * JUMP_HEIGHT * data.sprite_scale
 
 # Начало тика боя: узел — обратно в логическую позицию, от неё отсчитывается следующий шаг
 func restore_tick_position() -> void:
@@ -249,13 +281,14 @@ func walk_anim_scale(speed: float) -> float:
 
 # Выстрел / удар отыгран — стойка до следующего (последний кадр атаки — со вспышкой ствола)
 func _on_animation_finished() -> void:
-	if sprite.animation in ["attack", "battle_cry"] and current_state != State.DEAD:
+	if sprite.animation in ["attack", "battle_cry", "landing"] and current_state != State.DEAD:
 		sprite.play("idle")
 
 # Бой окончен (BattleManager): выжившие опускают оружие — стойка, а не стрельба.
 # won — сторона бойца победила: поза победы (анимация victory листа, решение пользователя —
 # Дредноут поднимает кулак), держится на последнем кадре
 func stand_down(won: bool = false) -> void:
+	_end_leap_view()
 	transition_to(State.IDLE)
 	if current_state != State.IDLE:
 		return
@@ -294,10 +327,20 @@ func tick(delta: float) -> void:
 		_tick_status_effects(delta)
 	if current_state == State.DEAD:
 		return
+	_leap_prev = _leap_t
+	if _leap_prev >= 1.0 and sprite.position.y != 0.0:
+		sprite.position.y = 0.0   # дуга прыжка дорисована
+	if _leap_time > 0.0:
+		_tick_leap(delta)
+		return
 	if current_heal_per_second > 0.0:
 		_tick_support(delta)
 	if _hit_timer > 0.0:
 		_tick_melee_hit(delta)
+	if data.jump_range > 0.0 and not jump_used and (current_state == State.MOVE or current_state == State.CHASE):
+		if _try_jump():
+			return
+	_moved = false
 	match current_state:
 		State.IDLE:       _state_idle()
 		State.MOVE:       _state_move(delta)
@@ -308,6 +351,121 @@ func tick(delta: float) -> void:
 		State.KNOCKBACK:  _state_knockback(delta)
 		State.RETREATING: _state_retreating(delta)
 		State.DEAD:       pass
+	if data.entrench_time > 0.0:
+		_tick_entrench(delta)
+
+# -------------------------------------------------------
+# СПОСОБНОСТИ ОТРЯДОВ (данными в UnitData; решение пользователя 17.10.2026)
+# -------------------------------------------------------
+# Прыжок (Assault): враг-стрелок ближе jump_range, но не вплотную — прыжок к нему (раз за бой)
+func _try_jump() -> bool:
+	var prey := SoldierRegistry.find_nearest(1 - team, global_position, data.jump_range, true)
+	if prey == null or global_position.distance_to(prey.global_position) <= current_attack_range * 2.0:
+		return false
+	jump_used = true
+	_leap_target = prey
+	_leap_from = global_position
+	# Приземление — перед целью со стороны прыжка, бойцы отряда — своим строем, не в одну точку
+	var back := (global_position - prey.global_position).normalized()
+	_leap_to = prey.global_position + back * current_attack_range * 0.5 + formation_offset * 0.5
+	_leap_duration = maxf(_leap_from.distance_to(_leap_to) / JUMP_SPEED, JUMP_MIN_TIME)
+	_leap_time = _leap_duration
+	_leap_t = 0.0
+	_leap_prev = 0.0
+	_face(prey.global_position - global_position)
+	_play_animation("jump" if sprite.sprite_frames.has_animation("jump") else "idle")   # полёт на ранце (Assault)
+	return true
+
+func _tick_leap(delta: float) -> void:
+	_leap_time -= delta
+	if _leap_time <= TIMER_EPSILON:
+		_leap_time = 0.0
+	_leap_t = 1.0 - _leap_time / _leap_duration
+	global_position = _leap_from.lerp(_leap_to, _leap_t)
+	if _leap_time <= 0.0:
+		_land_jump()
+
+func is_leaping() -> bool:
+	return _leap_time > 0.0
+
+# Приземление: удар по всем врагам в jump_radius (урон удара × jump_damage_mult) и оглушение; дальше —
+# бой с тем, на кого прыгал
+func _land_jump() -> void:
+	var dmg := _roll_damage() * data.jump_damage_mult
+	var r2 := data.jump_radius * data.jump_radius
+	for e in SoldierRegistry.get_alive_soldiers_of_team(1 - team).duplicate():
+		if global_position.distance_squared_to(e.global_position) > r2:
+			continue
+		BattleManager.credit_damage(parent_squad, clampf(dmg - e.shield, 0.0, e.current_hp))
+		e.take_damage(dmg)
+		if data.jump_stun > 0.0:
+			e.apply_stun(data.jump_stun)
+	Vfx.spawn(_world_parent(), "ground_slam", global_position, data.sprite_scale * EFFECT_SCALE)
+	AudioManager.play("jump_land")
+	target = _leap_target if is_instance_valid(_leap_target) and _leap_target.current_state != State.DEAD \
+		else _find_target()
+	_leap_target = null
+	if target and global_position.distance_to(target.global_position) <= current_attack_range:
+		transition_to(State.ATTACK)
+	elif target:
+		transition_to(State.CHASE)
+	# Приземление листа (Assault: пыль из-под ног) — до первого удара, потом стойка
+	if current_state == State.ATTACK and sprite.sprite_frames.has_animation("landing"):
+		sprite.play("landing")
+	elif current_state != State.ATTACK:   # переход в то же состояние анимацию не меняет — снимаем jump
+		_play_animation("walk" if current_state in [State.MOVE, State.CHASE] else "idle")
+
+# Прыжок прерван итогом боя или гибелью — спрайт обратно на землю
+func _end_leap_view() -> void:
+	_leap_time = 0.0
+	_leap_t = 1.0
+	_leap_prev = 1.0
+	_leap_target = null
+	sprite.position.y = 0.0
+
+# Окапывание (Devastator): стоял весь тик — копит, сдвинулся (бег, кружение, отброс) — с нуля
+func _tick_entrench(delta: float) -> void:
+	var was := is_entrenched()
+	if _moved or current_state == State.KNOCKBACK:
+		_still_time = 0.0
+	else:
+		_still_time = minf(_still_time + delta, data.entrench_time)
+	if is_entrenched() != was:
+		queue_redraw()
+
+func is_entrenched() -> bool:
+	return data.entrench_time > 0.0 and _still_time >= data.entrench_time - TIMER_EPSILON
+
+# Прибавка урона окапывания: растёт от 0 до entrench_bonus за entrench_time
+func get_entrench_bonus() -> float:
+	if data.entrench_time <= 0.0:
+		return 0.0
+	return data.entrench_bonus * clampf(_still_time / data.entrench_time, 0.0, 1.0)
+
+# Стрельба на ходу (Land Speeder): кружит вокруг цели, держась на MOBILE_FIRE_DISTANCE дальности
+func _strafe_around(center: Vector2, delta: float) -> void:
+	var to_me := global_position - center
+	var dist := to_me.length()
+	if dist < 0.01:
+		return
+	var radial := to_me / dist
+	var tangent := Vector2(-radial.y, radial.x) * _orbit_sign
+	var want := current_attack_range * MOBILE_FIRE_DISTANCE
+	var dir := (tangent + radial * clampf((want - dist) / want * 3.0, -1.0, 1.0)).normalized()
+	var speed := current_move_speed * get_move_speed_mult() * MOBILE_FIRE_SPEED
+	global_position += dir * speed * delta
+	_moved = true
+	if sprite.animation != "attack":   # выстрел доигрывается, между выстрелами — ход
+		_play_animation("walk")
+		sprite.speed_scale = walk_anim_scale(speed)
+	_face(center - global_position)
+
+# Телепорт (Deep Strike, Squad): сразу в точку — без плавного перелёта через поле
+func teleport_to(point: Vector2) -> void:
+	global_position = point
+	_tick_from = point
+	_tick_to = point
+	_drawn_between = false
 
 # -------------------------------------------------------
 # СОСТОЯНИЯ
@@ -409,6 +567,8 @@ func _state_attack(delta: float) -> void:
 			transition_to(State.CASTING)   # замах/каст перед ударом
 		else:
 			_do_attack()
+	if data.mobile_fire and current_state == State.ATTACK and _has_valid_target():
+		_strafe_around(target.global_position, delta)
 
 # Каст: удар срабатывает через cast_time. Цель умерла — каст сорван.
 func _state_casting(delta: float) -> void:
@@ -525,6 +685,8 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, SHADOW_FLATTEN))
 	draw_circle(Vector2.ZERO, r, SHADOW_COLOR)
 	draw_arc(Vector2.ZERO, r, 0.0, TAU, 20, ring, RING_WIDTH)
+	if is_entrenched():   # окопался (Devastator) — бруствер дугой перед ногами
+		draw_arc(Vector2.ZERO, r * 1.4, 0.15 * PI, 0.85 * PI, 10, SANDBAG_COLOR, RING_WIDTH * 2.0)
 	draw_set_transform(Vector2.ZERO)
 	# Статус-эффекты — точки над головой, по точке на стак
 	var stacks := 0
@@ -544,6 +706,7 @@ func _move_towards(point: Vector2, delta: float) -> void:
 	var direction = (point - global_position).normalized()
 	var speed = current_move_speed * get_move_speed_mult()   # замедление (стены игрока)
 	global_position += direction * speed * delta
+	_moved = true
 	_face(direction)
 	_play_animation("walk")
 	sprite.speed_scale = walk_anim_scale(speed)
@@ -567,18 +730,18 @@ func _resume_after_control() -> void:
 # КОНТРОЛЬ (стан, отбрасывание) — вызывают способности/здания
 # -------------------------------------------------------
 func apply_stun(duration: float) -> void:
-	if current_state == State.DEAD:
+	if current_state == State.DEAD or _leap_time > 0.0:   # в прыжке контроль не действует
 		return
 	# Повторный стан не перезаписывает previous_state, только продлевает таймер
 	stun_timer = max(stun_timer, duration)
 	transition_to(State.STUNNED)
 
 func apply_knockback(direction: Vector2, force: float) -> void:
-	if current_state == State.DEAD or current_state == State.STUNNED:
+	if current_state == State.DEAD or current_state == State.STUNNED or _leap_time > 0.0:
 		return
 	knockback_velocity = direction.normalized() * force
 	transition_to(State.KNOCKBACK)
-	Vfx.spawn(_world_parent(), "impact", global_position, data.sprite_scale * EFFECT_SCALE)
+	Vfx.spawn(_world_parent(), "ground_slam", global_position, data.sprite_scale * EFFECT_SCALE)
 
 # -------------------------------------------------------
 # АТАКА И УРОН
@@ -634,8 +797,9 @@ func _land_melee_hit(victim: Soldier) -> void:
 	AudioManager.play("melee_hit")
 	BattleManager.credit_damage(parent_squad, clampf(dmg - victim.shield, 0.0, victim.current_hp))
 	victim.take_damage(dmg)
-	Vfx.spawn(_world_parent(), "blood",
-		victim.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * victim.data.sprite_scale), EFFECT_SCALE)
+	var body := victim.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * victim.data.sprite_scale)
+	Vfx.spawn(_world_parent(), "blood", body, EFFECT_SCALE)
+	Vfx.spawn(_world_parent(), "slash", body, EFFECT_SCALE, (victim.global_position - global_position).angle())
 	_apply_on_hit_effects()
 	if is_instance_valid(prev_target):
 		target = prev_target
@@ -660,7 +824,7 @@ func _shoot_projectile(to: Node2D, aim_offset: Vector2) -> Projectile:
 
 # Урон одного удара: аура союзников + разброс damage_variance
 func _roll_damage() -> float:
-	var damage = current_damage * (1.0 + get_aura_damage_bonus()) * get_damage_mult()
+	var damage = current_damage * (1.0 + get_aura_damage_bonus()) * get_damage_mult() * (1.0 + get_entrench_bonus())
 	var variance = damage * data.damage_variance
 	return randf_range(damage - variance, damage + variance)
 
@@ -721,7 +885,7 @@ func take_damage(amount: float, flash: bool = true) -> void:
 			return
 		_die()
 		return
-	if not has_retreated and current_hp / max_hp < data.retreat_hp_threshold \
+	if not has_retreated and current_hp / max_hp < data.retreat_hp_threshold and _leap_time <= 0.0 \
 			and current_state not in [State.IDLE, State.STUNNED, State.KNOCKBACK]:
 		has_retreated = true
 		retreat_timer = data.retreat_duration
@@ -775,19 +939,23 @@ func _flash_hit() -> void:
 func _try_revive() -> bool:
 	if team != GameConstants.TEAM_PLAYER or has_revived:
 		return false
-	var r = Building.revive_at(global_position)
+	if not is_instance_valid(parent_squad):
+		return false
+	var r = Building.revive_at(parent_squad.tile)   # клетка отряда — в зоне Apothecarion (крест)
 	if r["chance"] <= 0.0 or randf() >= r["chance"]:
 		return false
 	has_revived = true
 	current_hp = max_hp * r["hp"]
 	if BattleManager.is_battle_running():
 		_float_text("Встал!", FLOAT_HEAL)   # иначе подъём на поле незаметен
+		Vfx.spawn(_world_parent(), "poof", global_position, data.sprite_scale * EFFECT_SCALE)
 		AudioManager.play("revive")
 	return true
 
 func _die() -> void:
 	if current_state == State.DEAD:
 		return
+	_end_leap_view()
 	transition_to(State.DEAD)
 	AudioManager.play("death_vehicle" if "vehicle" in data.tags else "death")
 	status_effects.clear()

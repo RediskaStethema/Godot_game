@@ -157,13 +157,20 @@ func _main() -> void:
 	dread3._do_attack()   # второй замах сразу — первый удар проходит сейчас
 	_check("быстрый повторный замах: прошлый удар засчитан, а не потерян", e4.current_hp < hp4)
 
-	# Без метки hit_frame (Assault — спрайт из GIF) — удар сразу, как раньше
+	# Assault — свой лист с hit_frame (assets/Assault_marine_assets.png): удар цепным мечом на кадре замаха
 	var assault = _of(0, "assault_marine")[0]
+	var a_frames: SpriteFrames = assault.sprite.sprite_frames
+	var a_hit: float = a_frames.get_meta("hit_frame", -1) / a_frames.get_animation_speed("attack")
 	var e3 = enemies[3]
+	e3.global_position = assault.global_position + Vector2(30, 0)
 	var hp3: float = e3.current_hp
 	assault.target = e3
 	assault._do_attack()
-	_check("без hit_frame — урон сразу", e3.current_hp < hp3)
+	var a_before = e3.current_hp == hp3
+	_ticks(assault, a_hit)
+	_check("Assault: урон на кадре удара (%.2f с), не сразу; есть jump / landing / victory" % a_hit,
+		a_hit > TICK and a_before and e3.current_hp < hp3
+		and a_frames.has_animation("jump") and a_frames.has_animation("landing") and a_frames.has_animation("victory"))
 
 	# Каст — часть перезарядки: Библиарий колдует раз в 1 / attack_speed, а не каст + перезарядка
 	# (раньше вход в ATTACK после каста сбрасывал перезарядку на короткий сдвиг первого удара)

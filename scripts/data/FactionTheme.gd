@@ -102,6 +102,8 @@ const SM_FLAG = [{"texture": SM_TILES + "flag.png", "top": 120, "flag": true}]  
 const SM_PROPS = "res://assets/sprites/props/space_marines/"
 const GOTHIC_SCALE: float = 0.35        # руины: площадка плазы (gothic_13) ≈ клетка
 const GOTHIC_DECOR_SCALE: float = 0.22  # мелкий декор
+const WAR_BANNER_SCALE: float = 0.26    # знамёна UI_assets.png (ориентиры): ≈ 2 роста бойца
+const ANIM_DECOR_SCALE: float = 1.0     # пиксельные знамёна и костёр (32–48 px) — в рост бойца
 # Готика светлее и теплее грунта (средний цвет 44,40,34 против 19,27,37) — темнее и холоднее, но не
 # до цвета грунта, чтобы читалась (решение пользователя: ближе к грунту); цитадель — чуть светлее
 const GOTHIC_TINT = Color(0.62, 0.70, 0.85)
@@ -140,6 +142,26 @@ const SM_GOTHIC_DECOR = [
 	{"texture": SM_PROPS + "gothic_28.png", "base": Vector2(50, 76), "scale": GOTHIC_DECOR_SCALE, "tint": GOTHIC_TINT},   # dome
 	{"texture": SM_PROPS + "gothic_29.png", "base": Vector2(118, 57), "scale": GOTHIC_DECOR_SCALE, "tint": GOTHIC_TINT},   # parapet
 ]
+# Ориентиры поля (решение пользователя 17.10.2026, пока на карте Космодесанта) — анимированные объекты на
+# своих клетках, не случайным декором (IsoGridRenderer._landmark_cells): 2 костра — у базы и за рекой,
+# 3 знамени — одно у костра у базы и random_banners в случайных местах на стороне игрока вне боевой полосы.
+# "war_banners" + "war_banner_count" — большие знамёна (UI_assets.png) на стороне игрока вне боевой полосы,
+# не ближе WAR_BANNER_GAP клеток к другим ориентирам; все ключи необязательны (у Хаоса — только знамёна).
+# Листы кадров в ряд (TerrainTiles.draw_prop): знамёна — GIF assets/flag/flag1–3.gif, костёр — campfire-Sheet.png
+const SM_CAMPFIRE = {"texture": SM_PROPS + "campfire.png", "frames": 6, "fps": 10.0, "base": Vector2(17, 42),
+	"scale": ANIM_DECOR_SCALE}
+const SM_BANNERS = [
+	{"texture": SM_PROPS + "banner_1.png", "frames": 7, "fps": 10.0, "base": Vector2(4.5, 34), "scale": ANIM_DECOR_SCALE},
+	{"texture": SM_PROPS + "banner_2.png", "frames": 4, "fps": 10.0, "base": Vector2(5, 32), "scale": ANIM_DECOR_SCALE},
+	{"texture": SM_PROPS + "banner_3.png", "frames": 4, "fps": 10.0, "base": Vector2(6.5, 42), "scale": ANIM_DECOR_SCALE},
+]
+# Знамёна листа UI_assets.png в палитре расы (tools/banners_from_sheet.py; решение пользователя 17.10.2026):
+# синее с аквилой, белое с аквилой, чёрное с черепом — ориентиры "war_banners" на стороне игрока
+const SM_WAR_BANNERS = [
+	{"texture": SM_PROPS + "war_banner_1.png", "base": Vector2(41, 236), "scale": WAR_BANNER_SCALE, "tint": GOTHIC_TINT},
+	{"texture": SM_PROPS + "war_banner_2.png", "base": Vector2(40, 240), "scale": WAR_BANNER_SCALE, "tint": GOTHIC_TINT},
+	{"texture": SM_PROPS + "war_banner_3.png", "base": Vector2(41, 246), "scale": WAR_BANNER_SCALE, "tint": GOTHIC_TINT},
+]
 const SM_FEATURES = [
 	{"tiles": SM_RUINS + SM_GOTHIC_RUINS, "clusters": 5, "size": [2, 4]},
 	{"tiles": SM_CRATER, "scatter": 0.04},
@@ -154,21 +176,18 @@ const SM_FEATURES = [
 # анимация 12 кадров; обелиски (assets/chaos_assets/obelisk1–4.png) — 3 группы, кристаллы разгораются.
 # top деталей — от нижнего угла плиты (толщина ≈ 0.18 ширины)
 const CH_TILES = "res://assets/sprites/tiles/chaos/"
-# Детали с листа Хаоса ярче и насыщеннее перекрашенного грунта — приглушены (иначе смотрятся наклейками)
-const CH_DETAIL_TINT = Color(0.7, 0.6, 0.62)
+const CH_PROPS = "res://assets/sprites/props/chaos/"
+# Палитра (решение пользователя 17.10.2026: ассеты Хаоса — к одной палитре): детали с листа Хаоса (кристаллы,
+# окопы, знамёна, обелиски), цитадель и объекты крепости приведены к тону и яркости красного грунта
+# tools/palette_match.py (кадры одной анимации — с --group); оригиналы — листы в assets/
 const CH_TERRAIN = [{"texture": CH_TILES + "red_terrain.png", "top": 10}]      # красная осыпь
 const CH_DEBRIS_WALL = [{"texture": CH_TILES + "red_wall.png", "top": 67, "axis": "u"}]
-const CH_RIVER = [   # кровавый ручей: плиты русла и отражения, как у Космодесанта
-	{"texture": CH_TILES + "red_river_1.png", "top": 17, "axis": "v",
-		"mirror": {"texture": CH_TILES + "red_river_1_mirror.png", "top": 17}},
-	{"texture": CH_TILES + "red_river_2.png", "top": 22, "axis": "v",
-		"mirror": {"texture": CH_TILES + "red_river_2_mirror.png", "top": 22}},
-]
+# Реки на поле Хаоса нет (решение пользователя 17.10.2026; плиты red_river_* остались в папке темы)
 const CH_RUINS = [{"texture": CH_TILES + "red_ruins_bunker.png", "top": 48}]
 const CH_CRATER = [{"texture": CH_TILES + "red_crater.png", "top": 20, "no_decor": true}]
 const CH_SMALL_CRATERS = [{"texture": CH_TILES + "red_terrain_craters.png", "top": 10}]
 # Осыпь с кристаллами варпа — редкие одиночные клетки, кристаллы переливаются (12 кадров листа)
-const CH_CRYSTALS = [{"fps": 1.0, "tint": CH_DETAIL_TINT, "frames": [
+const CH_CRYSTALS = [{"fps": 1.0, "frames": [
 	{"texture": CH_TILES + "terrain_0.png", "top": 23},
 	{"texture": CH_TILES + "terrain_1.png", "top": 25},
 	{"texture": CH_TILES + "terrain_2.png", "top": 26},
@@ -183,7 +202,7 @@ const CH_CRYSTALS = [{"fps": 1.0, "tint": CH_DETAIL_TINT, "frames": [
 	{"texture": CH_TILES + "terrain_11.png", "top": 20},
 ]}]
 # Обломки и знамя Хаоса — только на стороне игрока; знамя колышется (12 кадров листа)
-const CH_FLAG = [{"fps": 1.0, "flag": true, "tint": CH_DETAIL_TINT, "frames": [
+const CH_FLAG = [{"fps": 1.0, "flag": true, "frames": [
 	{"texture": CH_TILES + "flag_0.png", "top": 35},
 	{"texture": CH_TILES + "flag_1.png", "top": 38},
 	{"texture": CH_TILES + "flag_2.png", "top": 38},
@@ -198,31 +217,82 @@ const CH_FLAG = [{"fps": 1.0, "flag": true, "tint": CH_DETAIL_TINT, "frames": [
 	{"texture": CH_TILES + "flag_11.png", "top": 25},
 ]}]
 const CH_TRENCH = [  # окопы
-	{"texture": CH_TILES + "trench_0.png", "top": 13, "tint": CH_DETAIL_TINT},
-	{"texture": CH_TILES + "trench_1.png", "top": 17, "tint": CH_DETAIL_TINT},
-	{"texture": CH_TILES + "trench_2.png", "top": 18, "tint": CH_DETAIL_TINT},
-	{"texture": CH_TILES + "trench_3.png", "top": 27, "tint": CH_DETAIL_TINT},
-	{"texture": CH_TILES + "trench_4.png", "top": 23, "tint": CH_DETAIL_TINT},
-	{"texture": CH_TILES + "trench_5.png", "top": 35, "tint": CH_DETAIL_TINT},
-	{"texture": CH_TILES + "trench_6.png", "top": 37, "tint": CH_DETAIL_TINT},
-	{"texture": CH_TILES + "trench_7.png", "top": 32, "tint": CH_DETAIL_TINT},
-	{"texture": CH_TILES + "trench_8.png", "top": 41, "tint": CH_DETAIL_TINT},
-	{"texture": CH_TILES + "trench_9.png", "top": 35, "tint": CH_DETAIL_TINT},
-	{"texture": CH_TILES + "trench_10.png", "top": 37, "tint": CH_DETAIL_TINT},
-	{"texture": CH_TILES + "trench_11.png", "top": 48, "tint": CH_DETAIL_TINT},
+	{"texture": CH_TILES + "trench_0.png", "top": 13},
+	{"texture": CH_TILES + "trench_1.png", "top": 17},
+	{"texture": CH_TILES + "trench_2.png", "top": 18},
+	{"texture": CH_TILES + "trench_3.png", "top": 27},
+	{"texture": CH_TILES + "trench_4.png", "top": 23},
+	{"texture": CH_TILES + "trench_5.png", "top": 35},
+	{"texture": CH_TILES + "trench_6.png", "top": 37},
+	{"texture": CH_TILES + "trench_7.png", "top": 32},
+	{"texture": CH_TILES + "trench_8.png", "top": 41},
+	{"texture": CH_TILES + "trench_9.png", "top": 35},
+	{"texture": CH_TILES + "trench_10.png", "top": 37},
+	{"texture": CH_TILES + "trench_11.png", "top": 48},
 ]
-const CH_OBELISK = [{"fps": 1.2, "no_decor": true, "tint": CH_DETAIL_TINT, "frames": [   # кристаллы разгораются
+const CH_OBELISK = [{"fps": 1.2, "no_decor": true, "frames": [   # кристаллы разгораются
 	{"texture": CH_TILES + "obelisk_0.png", "top": 53},
 	{"texture": CH_TILES + "obelisk_1.png", "top": 53},
 	{"texture": CH_TILES + "obelisk_2.png", "top": 53},
 	{"texture": CH_TILES + "obelisk_3.png", "top": 53},
 ]}]
+# Извержение (решение пользователя 17.10.2026: была вспышка при ударах игрока — стала обычной анимированной
+# клеткой): лист assets/Spritesheets/Chaos Tile Blast-Sheet.png, 7 кадров по кругу — трещины → выброс камней →
+# выжженная земля; кадр — ширина грани 232 по центру 127, палитра — tools/palette_match.py --group
+const CH_BLAST = [{"fps": 2.0, "no_decor": true, "frames": [
+	{"texture": CH_TILES + "blast_0.png", "top": 92},
+	{"texture": CH_TILES + "blast_1.png", "top": 92},
+	{"texture": CH_TILES + "blast_2.png", "top": 92},
+	{"texture": CH_TILES + "blast_3.png", "top": 92},
+	{"texture": CH_TILES + "blast_4.png", "top": 92},
+	{"texture": CH_TILES + "blast_5.png", "top": 92},
+	{"texture": CH_TILES + "blast_6.png", "top": 92},
+]}]
+# Руины и декор Хаоса — объекты листа assets/Изометрический набор демонической крепости.png (белый фон вырезан,
+# нарезка tools/props_from_sheet.py, номер объекта — в имени; base — с нарезки), как готика у Космодесанта:
+# руины — объект на плите красной осыпи ("tall" — выше бойца, только вне боевой полосы), декор — мелкие
+const CH_PROPS_SCALE: float = 0.36    # руины: площадка (12) ≈ клетка
+const CH_DECOR_SCALE: float = 0.22    # мелкий декор
+const CH_CHAOS_RUINS = [
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "tall": true, "prop": {"texture": CH_PROPS + "chaos_03.png", "base": Vector2(108, 136), "scale": CH_PROPS_SCALE}},   # ruined_towers
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "tall": true, "prop": {"texture": CH_PROPS + "chaos_07.png", "base": Vector2(117, 166), "scale": CH_PROPS_SCALE}},   # skull_wall
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "prop": {"texture": CH_PROPS + "chaos_04.png", "base": Vector2(128, 117), "scale": CH_PROPS_SCALE}},   # broken_wall
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "prop": {"texture": CH_PROPS + "chaos_12.png", "base": Vector2(188, 102), "scale": CH_PROPS_SCALE}},   # star_plaza
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "prop": {"texture": CH_PROPS + "chaos_13.png", "base": Vector2(185, 102), "scale": CH_PROPS_SCALE}},   # warp_crack_plaza
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "prop": {"texture": CH_PROPS + "chaos_14.png", "base": Vector2(166, 101), "scale": CH_PROPS_SCALE}},   # grate_plaza
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "prop": {"texture": CH_PROPS + "chaos_15.png", "base": Vector2(192, 128), "scale": CH_PROPS_SCALE}},   # broken_stairs
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "prop": {"texture": CH_PROPS + "chaos_17.png", "base": Vector2(100, 87), "scale": CH_PROPS_SCALE}},   # skull_pile
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "prop": {"texture": CH_PROPS + "chaos_20.png", "base": Vector2(133, 74), "scale": CH_PROPS_SCALE}},   # rubble
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "prop": {"texture": CH_PROPS + "chaos_21.png", "base": Vector2(136, 98), "scale": CH_PROPS_SCALE}},   # wrecked_gun
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "flag": true, "prop": {"texture": CH_PROPS + "chaos_22.png", "base": Vector2(138, 104), "scale": CH_PROPS_SCALE}},   # fallen_banner
+	{"texture": CH_TILES + "red_terrain.png", "top": 10, "prop": {"texture": CH_PROPS + "chaos_30.png", "base": Vector2(112, 71), "scale": CH_PROPS_SCALE}},   # spiked_wall
+]
+const CH_DECOR = [
+	{"texture": CH_PROPS + "chaos_05.png", "base": Vector2(62, 253), "scale": CH_DECOR_SCALE},   # star_obelisk
+	{"texture": CH_PROPS + "chaos_16.png", "base": Vector2(91, 240), "scale": CH_DECOR_SCALE},   # horned_shrine
+	{"texture": CH_PROPS + "chaos_18.png", "base": Vector2(46, 134), "scale": CH_DECOR_SCALE, "flag": true},   # banner
+	{"texture": CH_PROPS + "chaos_19.png", "base": Vector2(95, 150), "scale": CH_DECOR_SCALE},   # skull_altar
+	{"texture": CH_PROPS + "chaos_23.png", "base": Vector2(57, 86), "scale": CH_DECOR_SCALE},   # chest
+	{"texture": CH_PROPS + "chaos_24.png", "base": Vector2(58, 88), "scale": CH_DECOR_SCALE},   # chest_2
+	{"texture": CH_PROPS + "chaos_25.png", "base": Vector2(48, 110), "scale": CH_DECOR_SCALE},   # barrel
+	{"texture": CH_PROPS + "chaos_26.png", "base": Vector2(93, 106), "scale": CH_DECOR_SCALE},   # warp_shrine
+	{"texture": CH_PROPS + "chaos_27.png", "base": Vector2(44, 130), "scale": CH_DECOR_SCALE},   # brazier
+	{"texture": CH_PROPS + "chaos_28.png", "base": Vector2(68, 96), "scale": CH_DECOR_SCALE},   # big_chest
+	{"texture": CH_PROPS + "chaos_29.png", "base": Vector2(56, 111), "scale": CH_DECOR_SCALE},   # dome
+]
+# Знамёна UI_assets.png в тоне красного грунта: красно-чёрное с черепом, со скелетом, чёрное с черепом
+const CH_WAR_BANNERS = [
+	{"texture": CH_PROPS + "war_banner_1.png", "base": Vector2(40, 237), "scale": WAR_BANNER_SCALE},
+	{"texture": CH_PROPS + "war_banner_2.png", "base": Vector2(39, 255), "scale": WAR_BANNER_SCALE},
+	{"texture": CH_PROPS + "war_banner_3.png", "base": Vector2(41, 246), "scale": WAR_BANNER_SCALE},
+]
 const CH_FEATURES = [
-	{"tiles": CH_RUINS + CH_TRENCH, "clusters": 5, "size": [2, 4]},
+	{"tiles": CH_CHAOS_RUINS + CH_TRENCH, "clusters": 5, "size": [2, 4]},
 	{"tiles": CH_CRATER, "scatter": 0.04},
 	{"tiles": CH_SMALL_CRATERS, "scatter": 0.06},
 	{"tiles": CH_CRYSTALS, "scatter": 0.03},
 	{"tiles": CH_OBELISK, "clusters": 3, "size": [4, 7]},
+	{"tiles": CH_BLAST, "scatter": 0.03},   # последней — раскладка остальных деталей карты не меняется
 ]
 
 const THEMES = {
@@ -240,12 +310,13 @@ const THEMES = {
 		"edge": SM_DEBRIS_WALL,
 		"river": SM_RIVER,
 		"decorations": SM_GOTHIC_DECOR,
+		"landmarks": {"campfire": SM_CAMPFIRE, "banners": SM_BANNERS, "random_banners": 2,
+			"war_banners": SM_WAR_BANNERS, "war_banner_count": 3},
 		# Крепость из листа готики — лист из одного кадра (стрельба / попадание / падение — без анимации)
 		"citadel": {"sheet": SM_PROPS + "gothic_09.png", "frame_size": Vector2i(264, 244),
 			"anchor": Vector2(132, 178), "scale": 0.6, "fps": 1.0, "rows": {"idle": [0, 1]},
 			"tint": GOTHIC_CITADEL_TINT},
 	},
-	# Хаос: цитадели нет — запасная из блоков, декора нет
 	"chaos": {
 		"floor": CH_RUINS + CH_CRATER + CH_SMALL_CRATERS,
 		"kingdom": CH_TERRAIN,
@@ -255,7 +326,13 @@ const THEMES = {
 		"flags": {"tiles": CH_FLAG, "count": 2},
 		"map_seed": 131,
 		"edge": CH_DEBRIS_WALL,
-		"river": CH_RIVER,
+		"decorations": CH_DECOR,
+		"landmarks": {"war_banners": CH_WAR_BANNERS, "war_banner_count": 4},   # костров и знамён-GIF нет
+		# Крепость с черепом — лист assets/Изометрический набор демонической крепости.png (решение
+		# пользователя 17.10.2026; белый фон вырезан заливкой от краёв, нарезка tools/props_from_sheet.py,
+		# объект 00); лист из одного кадра, размер на поле — как у цитадели Космодесанта
+		"citadel": {"sheet": CH_PROPS + "fortress.png", "frame_size": Vector2i(272, 266),
+			"anchor": Vector2(136, 198), "scale": 0.58, "fps": 1.0, "rows": {"idle": [0, 1]}},
 	},
 }
 

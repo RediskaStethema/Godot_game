@@ -40,6 +40,16 @@ const NODE_NAMES = {
 const HUD_HEIGHT: float = 60.0
 const BENCH_HEIGHT: float = 176.0
 
+# Текстуры интерфейса — лист UI_assets.png (корень), нарезка tools/ui_from_sheet.py. Поля 9-slice:
+# (лево, верх, право, низ) — края, которые не тянутся, и отступы содержимого
+const UI_ART_DIR = "res://assets/ui/"
+const BUTTON_TEXTURE_MARGIN = Vector4(16, 14, 16, 14)
+const BUTTON_CONTENT_MARGIN = Vector4(18, 8, 18, 8)
+const WINDOW_FRAME_MARGIN = Vector4(48, 44, 48, 44)
+const WINDOW_CONTENT_MARGIN = Vector4(26, 30, 26, 24)
+const WINDOW_EAGLE = "res://assets/ui/frame_eagle.png"
+const DIVIDER_SKULL = "res://assets/ui/divider_skull.png"
+
 static var _theme: Theme = null
 
 # -------------------------------------------------------
@@ -84,7 +94,13 @@ static func _build() -> Theme:
 	_button_styles(t, "Button", Color(BG_DEEP, 0.92), GOLD_DIM, 16, sans, 0.0)
 	t.set_type_variation("PrimaryButton", "Button")
 	_button_styles(t, "PrimaryButton", Color("2b1d0d"), GOLD, 19, sans, 0.25)
+	_primary_button_textures(t)
 	_menu_button_styles(t)
+
+	# --- Окна (ModalOverlay): рамка листа UI_assets.png, аквила сверху — WINDOW_EAGLE ---
+	t.set_type_variation("WindowPanel", "PanelContainer")
+	var frame := texture_style("frame", WINDOW_FRAME_MARGIN, WINDOW_CONTENT_MARGIN)
+	t.set_stylebox("panel", "WindowPanel", frame if frame else panel_style(PANEL, GOLD_DIM, 2, 10, 10))
 
 	# --- Прочие контролы окон (настройки) ---
 	t.set_color("font_color", "CheckButton", TEXT)
@@ -133,6 +149,18 @@ static func _menu_button_styles(t: Theme) -> void:
 	t.set_stylebox("focus", type, hover)
 	t.set_stylebox("pressed", type, menu_button_style(Color("3b270f"), MENU_AMBER_DIM, 0.2))
 	t.set_stylebox("disabled", type, menu_button_style(Color(MENU_BG, 0.6), Color("262b33"), 0.0))
+	# Кнопки листа UI_assets.png (сталь / янтарь / нажата) — поверх плоских, если файлы на месте
+	var normal_tex := texture_style("button_normal", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	var hover_tex := texture_style("button_hover", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	var pressed_tex := texture_style("button_pressed", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	if normal_tex and hover_tex and pressed_tex:
+		t.set_stylebox("normal", type, normal_tex)
+		t.set_stylebox("hover", type, hover_tex)
+		t.set_stylebox("focus", type, hover_tex)
+		t.set_stylebox("pressed", type, pressed_tex)
+		var disabled := normal_tex.duplicate() as StyleBoxTexture
+		disabled.modulate_color = Color(0.55, 0.55, 0.6, 0.8)
+		t.set_stylebox("disabled", type, disabled)
 	t.set_font("font", type, ui_font())
 	t.set_font_size("font_size", type, 18)
 	t.set_color("font_color", type, MENU_TEXT)
@@ -148,6 +176,19 @@ static func _menu_button_styles(t: Theme) -> void:
 	t.set_color("icon_hover_pressed_color", type, MENU_AMBER)
 	t.set_constant("icon_max_width", type, 30)
 	t.set_constant("h_separation", type, 16)
+
+# Главная кнопка (PrimaryButton) — янтарная кнопка листа: обычная — «hover» листа, наведение — она же
+# светлее, нажата — «pressed»; фокус — без рамки, как у плоской
+static func _primary_button_textures(t: Theme) -> void:
+	var amber := texture_style("button_hover", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	var pressed := texture_style("button_pressed", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	if amber == null or pressed == null:
+		return
+	t.set_stylebox("normal", "PrimaryButton", amber)
+	var bright := amber.duplicate() as StyleBoxTexture
+	bright.modulate_color = Color(1.25, 1.2, 1.1)
+	t.set_stylebox("hover", "PrimaryButton", bright)
+	t.set_stylebox("pressed", "PrimaryButton", pressed)
 
 static func _label_variation(t: Theme, name: String, font: Font, size: int, color: Color, outline: int) -> void:
 	t.set_type_variation(name, "Label")
@@ -191,6 +232,24 @@ static func panel_style(bg: Color, border: Color, border_w: int, radius: int, ma
 	s.corner_detail = 1
 	s.set_content_margin_all(margin)
 	s.anti_aliasing = true
+	return s
+
+# Текстура интерфейса assets/ui/<name>.png как 9-slice (края — texture_margin, середина тянется);
+# файла нет — null (тема остаётся плоской)
+static func texture_style(name: String, texture_margin: Vector4, content_margin: Vector4) -> StyleBoxTexture:
+	var path := UI_ART_DIR + name + ".png"
+	if not ResourceLoader.exists(path):
+		return null
+	var s = StyleBoxTexture.new()
+	s.texture = load(path)
+	s.texture_margin_left = texture_margin.x
+	s.texture_margin_top = texture_margin.y
+	s.texture_margin_right = texture_margin.z
+	s.texture_margin_bottom = texture_margin.w
+	s.content_margin_left = content_margin.x
+	s.content_margin_top = content_margin.y
+	s.content_margin_right = content_margin.z
+	s.content_margin_bottom = content_margin.w
 	return s
 
 static func _add_glow(s: StyleBoxFlat, glow: float) -> void:

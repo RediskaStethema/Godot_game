@@ -96,6 +96,8 @@ func _get_formation_offsets(count: int) -> Array[Vector2]:
 # ГЛАВНЫЙ ТИК
 # -------------------------------------------------------
 func tick(delta: float) -> void:
+	if data.deep_strike_delay > 0.0 and not deep_struck and current_state == State.MARCHING:
+		_tick_deep_strike(delta)
 	match current_state:
 		State.IDLE:     pass
 		State.MARCHING: _tick_marching(delta)
@@ -131,6 +133,44 @@ func start_march() -> void:
 	for soldier in soldiers:
 		soldier.transition_to(Soldier.State.MOVE)
 
+# -------------------------------------------------------
+# DEEP STRIKE (Terminator, UnitData.deep_strike_delay; решение пользователя 17.10.2026)
+# -------------------------------------------------------
+# Через deep_strike_delay сек марша отряд телепортируется строем к ближайшему врагу —
+# на дальность удара + DEEP_STRIKE_GAP перед ним, со своей стороны. Раз за бой
+const DEEP_STRIKE_GAP: float = 30.0
+const DEEP_STRIKE_MIN_DIST: float = 150.0   # враг уже ближе — телепорт не нужен
+var deep_struck: bool = false
+var _deep_strike_timer: float = 0.0
+
+func _tick_deep_strike(delta: float) -> void:
+	_deep_strike_timer += delta
+	if _deep_strike_timer < data.deep_strike_delay - Soldier.TIMER_EPSILON:
+		return
+	var alive := soldiers.filter(func(s): return s.current_state != Soldier.State.DEAD)
+	if alive.is_empty():
+		deep_struck = true
+		return
+	var center := Vector2.ZERO
+	for s in alive:
+		center += s.global_position
+	center /= alive.size()
+	var foe := SoldierRegistry.find_nearest(1 - team, center)
+	if foe == null:
+		return   # врагов ещё нет — ждём
+	deep_struck = true
+	var back := (center - foe.global_position).normalized()
+	var anchor := foe.global_position + back * (data.attack_range + DEEP_STRIKE_GAP)
+	if center.distance_to(anchor) < DEEP_STRIKE_MIN_DIST:
+		return
+	for s in alive:
+		var size: float = s.data.sprite_scale * Soldier.EFFECT_SCALE
+		Vfx.spawn(get_parent(), "poof", s.global_position, size)
+		s.teleport_to(anchor + s.formation_offset)
+		Vfx.spawn(get_parent(), "poof", s.global_position, size)
+	SoldierRegistry.invalidate_grid()   # сдвиг больше GRID_SLACK за тик
+	AudioManager.play("deep_strike")
+
 # Карта-улучшение брошена на этот отряд: множители в data (живут между
 # раундами), живым бойцам пересчитываем статы сразу
 func apply_upgrade(card: CardData) -> bool:
@@ -149,6 +189,7 @@ func merge_upgrade() -> bool:
 	data.apply_merge_upgrade()
 	for soldier in soldiers:
 		soldier.refresh_stats_from_data()
+		Vfx.attach(soldier, "level_up", soldier.data.sprite_scale * Soldier.EFFECT_SCALE)
 	# Уровень пехоты добавляет бойцов (UnitData.squad_growth) — новички с полным HP
 	for i in range(data.squad_growth):
 		_add_soldier(Vector2.ZERO, 1.0)

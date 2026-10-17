@@ -36,6 +36,7 @@ const ATTACK_RANGE: float = 320.0   # пиксели от центра цита�
 const SPLASH_RADIUS: float = 80.0   # радиус взрыва вокруг цели
 const SHOT_SHOW_TIME: float = 0.2   # сколько секунд виден взрыв
 const SHOT_PROJECTILE: String = "bolt"   # снаряд орудия (Projectile.EFFECTS), взрыв — при попадании
+const SHOT_IMPACT_VFX = ["citadel_blast"]   # взрыв снаряда (Vfx, пак Pixel)
 const SHOT_COLOR = Color(1.0, 0.85, 0.45)
 
 var attack_timer: float = 0.0
@@ -214,6 +215,7 @@ func _fire_at(point: Vector2, target: Soldier = null) -> void:
 	shot.splash_radius = SPLASH_RADIUS
 	shot.splash_team = GameConstants.TEAM_ENEMY
 	shot.on_impact = _show_explosion
+	shot.impact_vfx = SHOT_IMPACT_VFX
 	play_state("attack")
 
 func _show_explosion(point: Vector2) -> void:

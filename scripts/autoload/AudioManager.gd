@@ -37,6 +37,8 @@ const EVENTS = {
 	"burning":      {"volume": -14.0, "max_per_sec": 4,  "pitch": 0.1},
 	"poison":       {"volume": -14.0, "max_per_sec": 4,  "pitch": 0.1},
 	"battle_cry":   {"volume": -6.0,  "max_per_sec": 2,  "pitch": 0.03},
+	"jump_land":    {"volume": -8.0,  "max_per_sec": 6,  "pitch": 0.08},   # приземление Assault
+	"deep_strike":  {"volume": -4.0,  "max_per_sec": 2,  "pitch": 0.03},   # телепорт Терминаторов
 	"revive":       {"volume": -8.0,  "max_per_sec": 3,  "pitch": 0.05},
 	"orbital_strike": {"volume": -2.0, "max_per_sec": 2, "pitch": 0.0},
 	# Интерфейс

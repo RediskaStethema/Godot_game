@@ -8,49 +8,32 @@ extends AnimatedSprite2D
 #   attach(боец, вид)          — на бойце: ставится к ногам, двигается вместе с ним
 
 const SHEETS_DIR = "res://assets/Spritesheets/"
+const PIXEL_DIR = "res://assets/effects/Pixel/PNG_native/"   # пак Pixel: sheet — полный путь
 # sheet — файл листа, size — кадр, frames — кадров (пустые хвосты листа не берём), fps, loop,
 # scale — масштаб на бойце роста 62 px, pivot — точка кадра, которая встаёт в позицию эффекта
 # (у эффектов на бойце — ноги), behind — рисовать за спрайтом бойца
 const EFFECTS = {
-	# попадание снаряда в цитадель — искры по направлению полёта
-	"hit_spark":  {"sheet": "Sparks-Sheet.png", "size": Vector2i(96, 96), "frames": 7, "fps": 20.0,
-		"loop": false, "scale": 0.4, "pivot": Vector2(20, 62)},
 	# удар в ближнем бою и попадание снаряда в бойца (Projectile)
 	"blood":      {"sheet": "Blood Splat.png", "size": Vector2i(96, 96), "frames": 7, "fps": 16.0,
 		"loop": false, "scale": 1.2, "pivot": Vector2(50, 46)},
 	# лужа крови под павшим
 	"splatter":   {"sheet": "Splatter-Sheet.png", "size": Vector2i(150, 150), "frames": 30, "fps": 30.0,
 		"loop": false, "scale": 0.45, "pivot": Vector2(85, 140), "behind": true},
-	# отбрасывание (удар Dreadnought)
+	# обломки взрыва залпа Thunderfire
 	"impact":     {"sheet": "Spark1-Sheet.png", "size": Vector2i(150, 150), "frames": 30, "fps": 33.0,
 		"loop": false, "scale": 0.4, "pivot": Vector2(72, 140)},
-	# взрыв (цитадель, Thunderfire Cannon) — масштаб по радиусу взрыва
+	# дым взрыва Thunderfire Cannon — масштаб по радиусу взрыва
 	"explosion":  {"sheet": "Smoke-Sheet.png", "size": Vector2i(80, 80), "frames": 19, "fps": 18.0,
 		"loop": false, "scale": 1.0, "pivot": Vector2(38, 78)},
 	# взрыв залпа Thunderfire: огненный шар (+ "explosion" и "impact" — дым и обломки)
 	"fireball":   {"sheet": "Fire+Sparks-Sheet.png", "size": Vector2i(96, 96), "frames": 19, "fps": 22.0,
 		"loop": false, "scale": 0.9, "pivot": Vector2(52, 92)},
-	# взрыв клетки (лист assets/Chaos_assets1.png, кадры 6–12: трещины → взрыв → выжженная земля) —
-	# попадание орбитального удара и Thunderfire; плита земли: на слое пола, бойцы поверх (ground),
-	# последний кадр гаснет за fade с. Верхняя грань плиты в кадре — 232 px, центр (127, 150):
-	# масштаб 60 / 232 — ширина грани = поперечник взрыва радиуса Projectile.EXPLOSION_VFX_RADIUS
-	"tile_blast": {"sheet": "Chaos Tile Blast-Sheet.png", "size": Vector2i(256, 235), "frames": 7,
-		"fps": 12.0, "loop": false, "scale": 0.26, "pivot": Vector2(127, 150), "ground": true, "fade": 0.5},
 	# вспышка выстрела орудия — поджиг ракеты (первые кадры листа ракеты)
 	"muzzle_flash": {"sheet": "Rocket Fire 2-Sheet.png", "size": Vector2i(150, 150), "frames": 5,
 		"fps": 20.0, "loop": false, "scale": 1.0, "pivot": Vector2(68, 78)},
 	# дым из ствола орудия
 	"muzzle_smoke": {"sheet": "Smoke2-Sheet.png", "size": Vector2i(150, 150), "frames": 40, "fps": 40.0,
 		"loop": false, "scale": 0.5, "pivot": Vector2(80, 148)},
-	# лечение (Apothecary, лечение картой)
-	"heal":       {"sheet": "Regen.png", "size": Vector2i(96, 96), "frames": 8, "fps": 10.0,
-		"loop": false, "scale": 0.6, "pivot": Vector2(46, 96)},
-	# оглушение (попадание Librarian)
-	"stun":       {"sheet": "Eletric A-Sheet.png", "size": Vector2i(96, 96), "frames": 9, "fps": 12.0,
-		"loop": true, "scale": 0.65, "pivot": Vector2(51, 91)},
-	# каст (Librarian)
-	"cast":       {"sheet": "Eletric Aura.png", "size": Vector2i(96, 96), "frames": 7, "fps": 12.0,
-		"loop": true, "scale": 0.7, "pivot": Vector2(50, 89)},
 	# поджог при попадании (Havoc, Salamanders) — язык пламени по направлению удара
 	"flame_burst": {"sheet": "Flamethrower-Sheet.png", "size": Vector2i(96, 48), "frames": 10, "fps": 24.0,
 		"loop": false, "scale": 0.9, "pivot": Vector2(30, 24)},
@@ -58,22 +41,55 @@ const EFFECTS = {
 	"river_splash": {"sheet": "Water Vortex Splash-Sheet.png", "size": Vector2i(150, 150), "frames": 30,
 		"fps": 20.0, "loop": false, "scale": 0.5, "pivot": Vector2(75, 75), "flat": true,
 		"modulate": Color(0.55, 1.0, 0.35, 0.85)},
-	# статусы — StatusEffects.VFX
-	"burning":    {"sheet": "Fire+Sparks-Sheet.png", "size": Vector2i(96, 96), "frames": 19, "fps": 14.0,
-		"loop": true, "scale": 0.3, "pivot": Vector2(52, 96)},   # пламя ниже бойца — не закрывает его
-	"poisoned":   {"sheet": "Poison Cloud-Sheet.png", "size": Vector2i(144, 144), "frames": 19, "fps": 14.0,
-		"loop": true, "scale": 0.38, "pivot": Vector2(80, 144)},
-	"empowered":  {"sheet": "Holy Light Aura.png", "size": Vector2i(96, 96), "frames": 7, "fps": 8.0,
-		"loop": true, "scale": 0.8, "pivot": Vector2(48, 62), "behind": true},
-	"slowed":     {"sheet": "Gravity-Sheet.png", "size": Vector2i(96, 80), "frames": 20, "fps": 14.0,
-		"loop": true, "scale": 0.45, "pivot": Vector2(48, 42), "behind": true, "flat": true},
+	# --- Пак Pixel (assets/effects/Pixel, листы PNG_native: кадры 32×32 в ряд; решение пользователя 17.10.2026) ---
+	# масштаб — на бойце роста 62 px (как у остальных); pivot за пределами кадра — эффект над головой
+	# попадание снаряда в цитадель
+	"hit_spark":  {"sheet": PIXEL_DIR + "combat/hit_side.png", "size": Vector2i(32, 32), "frames": 8, "fps": 12.0,
+		"loop": false, "scale": 1.2, "pivot": Vector2(16, 16)},
+	# росчерк удара в ближнем бою (поверх крови), по направлению удара
+	"slash":      {"sheet": PIXEL_DIR + "combat/slash.png", "size": Vector2i(32, 32), "frames": 8, "fps": 16.0,
+		"loop": false, "scale": 1.2, "pivot": Vector2(16, 16)},
+	# отбрасывание (удар Dreadnought / Hellbrute) — удар о землю у ног
+	"ground_slam": {"sheet": PIXEL_DIR + "combat/ground_slam_side.png", "size": Vector2i(32, 32), "frames": 12,
+		"fps": 16.0, "loop": false, "scale": 1.6, "pivot": Vector2(16, 27)},
+	# взрыв снаряда цитадели — масштаб по радиусу взрыва (как "explosion")
+	"citadel_blast": {"sheet": PIXEL_DIR + "combat/explosion_side.png", "size": Vector2i(32, 32), "frames": 12,
+		"fps": 16.0, "loop": false, "scale": 0.9, "pivot": Vector2(16, 27)},
+	# попадание Librarian (оглушает) — молния в цель
+	"lightning":  {"sheet": PIXEL_DIR + "magic/lightning_side.png", "size": Vector2i(32, 32), "frames": 12,
+		"fps": 16.0, "loop": false, "scale": 1.4, "pivot": Vector2(16, 17)},
+	# каст Librarian — вспышка вокруг бойца
+	"cast":       {"sheet": PIXEL_DIR + "magic/magic_burst.png", "size": Vector2i(32, 32), "frames": 8, "fps": 12.0,
+		"loop": true, "scale": 1.6, "pivot": Vector2(16, 35)},
+	# лечение (Apothecary, лечение картой)
+	"heal":       {"sheet": PIXEL_DIR + "magic/heal_side.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
+		"loop": false, "scale": 1.4, "pivot": Vector2(16, 37)},
+	# щит Iron Halo на бойце в начале боя; щит цитадели от стен — большой
+	"shield":     {"sheet": PIXEL_DIR + "magic/shield.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
+		"loop": false, "scale": 1.5, "pivot": Vector2(16, 37)},
+	"citadel_shield": {"sheet": PIXEL_DIR + "magic/shield.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
+		"loop": false, "scale": 5.0, "pivot": Vector2(16, 28)},
+	# сигналы игроку: улучшение отряда, боец встал (Apothecarion)
+	"level_up":   {"sheet": PIXEL_DIR + "pickup_ui/level_up.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
+		"loop": false, "scale": 1.2, "pivot": Vector2(16, 74)},
+	"poof":       {"sheet": PIXEL_DIR + "movement/poof_side.png", "size": Vector2i(32, 32), "frames": 8, "fps": 12.0,
+		"loop": false, "scale": 1.5, "pivot": Vector2(16, 37)},
+	# статусы над головой — StatusEffects.VFX; оглушение (STUNNED) — звёздочки
+	"burning":    {"sheet": PIXEL_DIR + "status/burn.png", "size": Vector2i(32, 32), "frames": 8, "fps": 12.0,
+		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
+	"poisoned":   {"sheet": PIXEL_DIR + "status/poison.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
+		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
+	"empowered":  {"sheet": PIXEL_DIR + "status/buff.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
+		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
+	"slowed":     {"sheet": PIXEL_DIR + "status/debuff.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
+		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
+	"stun":       {"sheet": PIXEL_DIR + "status/stun.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
+		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
 }
 const Z_INDEX_WORLD: int = 10   # разовые эффекты в мире — поверх бойцов и построек, как снаряды
 const FLAT_Y: float = 0.5       # эффект «на земле» сплющен под изометрию
 
 static var _frames_cache: Dictionary = {}   # вид → SpriteFrames
-# Слой земли (пол поля, BattleScene._build_field): эффекты с "ground" — под бойцами, поверх плит
-static var ground_layer: Node2D = null
 
 # Разовый эффект в мировой точке. size — множитель масштаба, angle — поворот (радианы)
 static func spawn(parent: Node, kind: String, at: Vector2, size: float = 1.0, angle: float = 0.0) -> Vfx:
@@ -81,9 +97,6 @@ static func spawn(parent: Node, kind: String, at: Vector2, size: float = 1.0, an
 		return null
 	var v := _make(kind, size)
 	v.z_index = Z_INDEX_WORLD
-	if EFFECTS[kind].get("ground", false) and is_instance_valid(ground_layer):
-		parent = ground_layer
-		v.z_index = 0
 	v.rotation = angle
 	parent.add_child(v)
 	v.global_position = at
@@ -108,12 +121,7 @@ static func _make(kind: String, size: float) -> Vfx:
 	var s: float = e["scale"] * size
 	v.scale = Vector2(s, s * (FLAT_Y if e.get("flat", false) else 1.0))
 	v.modulate = e.get("modulate", Color.WHITE)
-	if not e["loop"] and e.has("fade"):
-		v.animation_finished.connect(func():
-			var tw := v.create_tween()
-			tw.tween_property(v, "modulate:a", 0.0, e["fade"])
-			tw.tween_callback(v.queue_free))
-	elif not e["loop"]:
+	if not e["loop"]:
 		v.animation_finished.connect(v.queue_free)
 	v.play("play")
 	return v
@@ -127,7 +135,8 @@ static func _get_frames(kind: String) -> SpriteFrames:
 	if _frames_cache.has(kind):
 		return _frames_cache[kind]
 	var e: Dictionary = EFFECTS[kind]
-	var sheet: Texture2D = load(SHEETS_DIR + e["sheet"])
+	var path: String = e["sheet"]
+	var sheet: Texture2D = load(path if path.begins_with("res://") else SHEETS_DIR + path)
 	var size: Vector2i = e["size"]
 	var cols: int = sheet.get_width() / size.x
 	var frames := SpriteFrames.new()

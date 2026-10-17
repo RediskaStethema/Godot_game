@@ -137,6 +137,9 @@ func _theme_has_frames() -> bool:
 		lists.append(f["tiles"])
 	if theme.has("flags"):
 		lists.append(theme["flags"]["tiles"])
+	lists.append(theme.get("decorations", []))
+	var lm: Dictionary = theme.get("landmarks", {})   # анимированные ориентиры: костры, знамёна
+	lists.append(lm.get("banners", []) + ([lm["campfire"]] if lm.has("campfire") else []))
 	for tiles in lists:
 		for entry in tiles:
 			if entry is Dictionary and entry.has("frames"):
@@ -324,7 +327,9 @@ func _draw_floor() -> void:
 	if _layout.is_empty():
 		var floor_cells = _floor_cells()
 		var river_cells = _river_cells()
-		_layout = {"cells": floor_cells, "rivers": river_cells, "terrain": _terrain_cells(floor_cells, river_cells)}
+		var terrain_cells = _terrain_cells(floor_cells, river_cells)
+		_layout = {"cells": floor_cells, "rivers": river_cells, "terrain": terrain_cells,
+			"landmarks": _landmark_cells(floor_cells, river_cells, terrain_cells)}
 	var cells: Array[Vector2i] = _layout["cells"]
 	var rivers: Dictionary = _layout["rivers"]
 	var terrain: Dictionary = _layout["terrain"]
@@ -346,13 +351,80 @@ func _draw_floor() -> void:
 			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["floor"], c), top, FLOOR_TINT, false, _cell_time(c))
 		_draw_cell_decoration(c, top, rivers, terrain)
 
+# Ориентиры темы ("landmarks": {"campfire", "banners", "random_banners", "war_banners", "war_banner_count"},
+# все ключи необязательны): клетка → объект.
+# Костёр у базы — ближайшая к цитадели свободная клетка за её кольцом (из равных — перед крепостью); костёр за рекой — на дальнем от
+# боевой полосы берегу, ближе к середине русла; знамя — рядом с костром у базы, ещё random_banners — в
+# случайных свободных клетках на стороне игрока вне боевой полосы. Карта одна — от seed карты
+const WAR_BANNER_GAP: int = 3   # большие знамёна — не ближе (клеток по Чебышёву) к другим ориентирам
+
+func _landmark_cells(cells: Array[Vector2i], rivers: Dictionary, terrain: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	if not theme.has("landmarks"):
+		return out
+	var lm: Dictionary = theme["landmarks"]
+	var all: Dictionary = {}
+	for c in cells:
+		all[c] = true
+	var free = func(c: Vector2i) -> bool:
+		return all.has(c) and not out.has(c) and not grid.is_in_bounds(c) and not _near_citadel(c) \
+			and not rivers.has(c) and not _is_floor_edge(c) and not _is_enemy_cell(c) \
+			and not (terrain.has(c) and terrain[c][0] is Dictionary and (terrain[c][0].has("prop") \
+				or terrain[c][0].get("no_decor", false) or terrain[c][0].get("flag", false)))
+	# Костёр у базы
+	var base_fire := Vector2i(-999, -999)
+	var by_dist = cells.filter(free)
+	by_dist.sort_custom(func(a, b): return _cheb(a - grid.citadel_tile) < _cheb(b - grid.citadel_tile) \
+		or (_cheb(a - grid.citadel_tile) == _cheb(b - grid.citadel_tile) and (a.x + a.y > b.x + b.y 			or (a.x + a.y == b.x + b.y and a < b))))   # из равных — ближе к зрителю: не за крепостью и её HP
+	if not by_dist.is_empty() and lm.has("campfire"):
+		base_fire = by_dist[0]
+		out[base_fire] = lm["campfire"]
+	# Костёр за рекой: ряд по ту сторону русла от боевой полосы, ближе к середине
+	if not rivers.is_empty() and lm.has("campfire"):
+		var row: int = rivers.keys()[0].y
+		var far: int = row - 1 if row < 0 else row + 1
+		var us: Array = rivers.keys().map(func(c): return c.x)
+		var mid: int = (us.min() + us.max()) / 2
+		var shore = cells.filter(func(c): return c.y == far and free.call(c))
+		shore.sort_custom(func(a, b): return absi(a.x - mid) < absi(b.x - mid))
+		if not shore.is_empty():
+			out[shore[0]] = lm["campfire"]
+	var banners: Array = lm.get("banners", [])
+	# Знамя у костра у базы
+	if out.has(base_fire) and not banners.is_empty():
+		for d in [Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1)]:
+			if free.call(base_fire + d):
+				out[base_fire + d] = banners[0]
+				break
+	# Знамёна в случайных местах
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([map_seed(), "banners"])
+	var spots = cells.filter(func(c): return _is_player_side(c) and not _is_battle_strip(c) and free.call(c))
+	for i in mini(lm.get("random_banners", 0) if not banners.is_empty() else 0, spots.size()):
+		out[spots.pop_at(rng.randi() % spots.size())] = banners[(i + 1) % banners.size()]
+	# Большие знамёна (UI_assets.png) — порознь: не ближе WAR_BANNER_GAP к другим ориентирам
+	var war: Array = lm.get("war_banners", [])
+	rng.seed = hash([map_seed(), "war_banners"])
+	for i in lm.get("war_banner_count", 0) if not war.is_empty() else 0:
+		var apart = spots.filter(func(c): return free.call(c) and out.keys().all(func(o): return _cheb(o - c) >= WAR_BANNER_GAP))
+		if apart.is_empty():
+			break
+		out[apart[rng.randi() % apart.size()]] = war[i % war.size()]
+	return out
+
+func _cheb(d: Vector2i) -> int:
+	return maxi(absi(d.x), absi(d.y))
+
 # Декор — на своей клетке сразу после её плиты (передние клетки перекрывают задний декор)
 func _draw_cell_decoration(c: Vector2i, top: Vector2, rivers: Dictionary, terrain: Dictionary) -> void:
+	if _layout.get("landmarks", {}).has(c):
+		TerrainTiles.draw_prop(_floor, _layout["landmarks"][c], top, FLOOR_TINT, false, _cell_time(c))
+		return
 	var deco = decoration_for(c, rivers, terrain)
 	if deco == null:
 		return
 	var jitter = Vector2((TerrainTiles.hash_cell(c, 21) % 41) - 20, (TerrainTiles.hash_cell(c, 29) % 17) - 8)
-	TerrainTiles.draw_prop(_floor, deco, top + jitter, FLOOR_TINT, TerrainTiles.hash_cell(c, 37) % 2 == 1)
+	TerrainTiles.draw_prop(_floor, deco, top + jitter, FLOOR_TINT, TerrainTiles.hash_cell(c, 37) % 2 == 1, _cell_time(c))
 
 # Декор клетки (объект темы {"texture", "base", "scale", "flat", "flag"}) или null. Нет декора:
 # королевство, цитадель и клетки вокруг, реки, край поля, руины, туман и большие кратеры ("no_decor").

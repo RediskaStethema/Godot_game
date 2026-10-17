@@ -23,12 +23,21 @@ func build_frame(width: float) -> void:
 	var center = CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
-	var panel = UITheme.make_panel("")
+	var panel = UITheme.make_panel("WindowPanel")
 	panel.custom_minimum_size = Vector2(width, 0)
 	center.add_child(panel)
+	_add_frame_eagle(panel)
 	content = VBoxContainer.new()
 	content.add_theme_constant_override("separation", 12)
 	panel.add_child(content)
+
+# Аквила рамки — по центру верхней кромки окна (9-slice её бы растянул — рисуется отдельно)
+func _add_frame_eagle(panel: PanelContainer) -> void:
+	if not ResourceLoader.exists(UITheme.WINDOW_EAGLE):
+		return
+	var eagle: Texture2D = load(UITheme.WINDOW_EAGLE)
+	panel.draw.connect(func():
+		panel.draw_texture(eagle, Vector2(round((panel.size.x - eagle.get_width()) / 2.0), 0.0)))
 
 func add_title(text: String, variation: String = "TitleLabel") -> Label:
 	var l = UITheme.make_label(text, variation)

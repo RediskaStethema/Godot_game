@@ -189,6 +189,7 @@ func _impact() -> void:
 		Vfx.spawn(get_parent(), "blood", _aim_point, Soldier.EFFECT_SCALE)
 		if stun > 0.0:
 			s.apply_stun(stun)
+			Vfx.spawn(get_parent(), "lightning", _aim_point, Soldier.EFFECT_SCALE)
 		if knockback > 0.0:
 			s.apply_knockback(s.global_position - _origin, knockback)
 		if status != "":

@@ -170,6 +170,18 @@ func _update_info() -> void:
 	var pos = anchor + Vector2(24, -_info_panel.size.y / 2.0)
 	_info_panel.position = pos.clamp(Vector2(0, UITheme.HUD_HEIGHT), get_viewport_rect().size - _info_panel.size)
 
+# Способность отряда из данных UnitData ("" — нет)
+static func ability_text(d: UnitData) -> String:
+	if d.jump_range > 0.0:
+		return "прыжок на стрелка (раз за бой), удар ×%.1f и оглушение %.1f с" % [d.jump_damage_mult, d.jump_stun]
+	if d.entrench_time > 0.0:
+		return "окапывание: стоя на месте, до +%d%% урона за %d с" % [roundi(d.entrench_bonus * 100.0), roundi(d.entrench_time)]
+	if d.deep_strike_delay > 0.0:
+		return "Deep Strike: через %d с боя — к ближайшему врагу" % roundi(d.deep_strike_delay)
+	if d.mobile_fire:
+		return "стрельба на ходу"
+	return ""
+
 # Текст справки: уровень, бойцы, HP, бонусы множителей UnitData, улучшения, синергии
 static func describe(squad: Squad) -> String:
 	var d = squad.data
@@ -194,6 +206,9 @@ static func describe(squad: Squad) -> String:
 	if d.banner_aura_bonus > 0.0:
 		bonuses.append("знамя: +%d%% урона рядом" % roundi(d.banner_aura_bonus * 100.0))
 	lines.append("Бонусы: " + (", ".join(bonuses) if not bonuses.is_empty() else "нет"))
+	var ability := ability_text(d)
+	if ability != "":
+		lines.append("Способность: " + ability)
 	if not d.applied_upgrades.is_empty():
 		lines.append("Улучшения: " + ", ".join(d.applied_upgrades))
 	var syn = SynergyManager.get_soldier_synergy_names(d.tags)

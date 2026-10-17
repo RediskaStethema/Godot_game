@@ -121,7 +121,6 @@ func _build_field() -> void:
 	renderer = IsoGridRenderer.new()
 	renderer.setup(iso_grid)
 	grid_renderer.add_child(renderer)
-	Vfx.ground_layer = renderer   # взрыв клетки — на полу, под бойцами
 	# Здания и цитадель полупрозрачны, пока за ними стоят бойцы (только расстановка)
 	fader = OcclusionFader.new()
 	add_child(fader)
@@ -585,6 +584,7 @@ func _on_start_pressed() -> void:
 	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER):
 		player_squads_at_start.append({"data": squad.data, "tile": squad.tile})
 	BattleManager.prepare_citadel_shield()
+	_show_shields(my_soldiers)
 	BattleManager.start_battle()
 	for hit in BattleManager.fire_armed_events():
 		_spawn_strike_flash(hit["pos"], hit["radius"])
@@ -592,7 +592,15 @@ func _on_start_pressed() -> void:
 	_speed_applied = true
 	_apply_battle_speed()
 
-# Вспышка орбитального удара: круг, гаснет за STRIKE_FLASH_TIME; клетка под ним взрывается (Vfx "tile_blast")
+# Щиты в начале боя (только вид): Iron Halo на бойцах, щит стен на цитадели
+func _show_shields(soldiers: Array) -> void:
+	for s in soldiers:
+		if s.shield > 0.0:
+			Vfx.attach(s, "shield", s.data.sprite_scale * Soldier.EFFECT_SCALE)
+	if BattleManager.citadel_shield > 0.0 and is_instance_valid(BattleManager.citadel):
+		Vfx.attach(BattleManager.citadel, "citadel_shield")
+
+# Вспышка орбитального удара: круг, гаснет за STRIKE_FLASH_TIME
 func _spawn_strike_flash(pos: Vector2, radius: float) -> void:
 	var flash = Node2D.new()
 	flash.position = pos
@@ -601,7 +609,6 @@ func _spawn_strike_flash(pos: Vector2, radius: float) -> void:
 		flash.draw_circle(Vector2.ZERO, radius, Color(1.0, 0.75, 0.3, 0.35))
 		flash.draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(1.0, 0.85, 0.5, 0.9), 3.0, true))
 	units_container.get_parent().add_child(flash)
-	Vfx.spawn(units_container, "tile_blast", pos, radius / Projectile.EXPLOSION_VFX_RADIUS)
 	var tw = flash.create_tween()
 	tw.tween_property(flash, "modulate:a", 0.0, STRIKE_FLASH_TIME)
 	tw.tween_callback(flash.queue_free)

@@ -25,7 +25,7 @@ static func assault_squad() -> CardData:
 	var c = CardData.new()
 	c.id = "assault_squad"
 	c.title = "Assault Squad"
-	c.description = "Быстрые бойцы ближнего боя"
+	c.description = "Ближний бой. Раз за бой прыгают на вражеских стрелков: удар при приземлении и оглушение"
 	c.faction = "space_marines"
 	c.cost = 5
 	c.rarity = "common"
@@ -51,7 +51,7 @@ static func devastator_squad() -> CardData:
 	var c = CardData.new()
 	c.id = "devastator_squad"
 	c.title = "Devastator Squad"
-	c.description = "Тяжёлое оружие: огромная дальность, бьют самых опасных"
+	c.description = "Тяжёлое оружие, бьют самых опасных. Стоят на месте — окапываются: до +30% урона за 2 с"
 	c.faction = "space_marines"
 	c.cost = 7
 	c.rarity = "rare"
@@ -64,7 +64,7 @@ static func terminator_squad() -> CardData:
 	var c = CardData.new()
 	c.id = "terminator_squad"
 	c.title = "Terminator"
-	c.description = "Элитный ветеран в тактической броне дредноута"
+	c.description = "Элита ближнего боя. Deep Strike: через 1 с боя телепортируются к ближайшему врагу"
 	c.faction = "space_marines"
 	c.cost = 10
 	c.rarity = "rare"
@@ -116,7 +116,7 @@ static func land_speeder_card() -> CardData:
 	var c = CardData.new()
 	c.id = "land_speeder"
 	c.title = "Land Speeder"
-	c.description = "Быстрая техника: налетает на дальний тыл врага"
+	c.description = "Быстрая техника: бьёт дальний тыл врага, стреляет на ходу, кружа вокруг цели"
 	c.faction = "space_marines"
 	c.cost = 9
 	c.rarity = "rare"
@@ -249,18 +249,19 @@ static func plasma_generatorium() -> CardData:
 	c.building_level_bonuses = {"income": 0.50}
 	return c
 
-# TDD: «Reanimation 15%». Павший рядом боец игрока встаёт с 30% HP (раз за бой)
+# TDD: «Reanimation 15%». Павший боец отряда на соседней клетке (крест, Building.EFFECT_AREAS) встаёт
+# с 30% HP (раз за бой)
 static func apothecarion() -> CardData:
 	var c = CardData.new()
 	c.id = "apothecarion"
 	c.title = "Apothecarion"
-	c.description = "Павший рядом боец встаёт с 30% HP (шанс 15%, раз за бой)."
+	c.description = "Павший боец отряда на соседней клетке по сторонам встаёт с 30% HP (шанс 15%, раз за бой)."
 	c.faction = "space_marines"
 	c.cost = 8
 	c.rarity = "rare"
 	c.card_type = "building"
 	c.building_type = "apothecarion"
-	c.building_stats = {"revive_chance": 0.15, "revive_radius": 260.0, "revive_hp": 0.3}
+	c.building_stats = {"revive_chance": 0.15, "revive_hp": 0.3}
 	# Уровень: +33% шанса (15% → 20% → 26.6%)
 	c.building_level_bonuses = {"revive_chance": 0.33}
 	return c
@@ -424,7 +425,7 @@ const CHAOS_RESKINS = {
 	"barracks": ["cult_shrine", "Cult Shrine", "После победы возвращают павших (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Не лечат."],
 	"fortress_wall": ["spiked_barricade", "Spiked Barricade", "Щит цитадели +200 в каждом бою. Замедляет врагов рядом на 40%."],
 	"plasma_generatorium": ["dark_altar", "Dark Altar", "+2 Req после каждого боя. Стоит между раундами."],
-	"apothecarion": ["warp_rift", "Warp Rift", "Павший рядом боец встаёт с 30% HP (шанс 15%, раз за бой)."],
+	"apothecarion": ["warp_rift", "Warp Rift", "Павший боец отряда на соседней клетке по сторонам встаёт с 30% HP (шанс 15%, раз за бой)."],
 	"blessed_armour": ["daemonic_armour", "Daemonic Armour", "Отряд Хаоса: +25% HP"],
 	"battle_fury": ["blood_rage", "Blood Rage", "Отряд Хаоса: +20% урона"],
 	"iron_halo": ["warp_ward", "Warp Ward", "Отряд Хаоса: щит 30% HP каждому бойцу в начале боя"],
@@ -529,14 +530,16 @@ static func build_pool(faction: String = "") -> Array:
 	for i in range(2): pool.append(fortress_wall())
 	for i in range(3): pool.append(barracks())
 	for i in range(3): pool.append(emergency_reinforcements())
-	# Rare — 16 копий (по одной; MVP: Iron Halo, Combat Stimms, Chapter Banner, Orbital Strike,
-	# здания TDD: Plasma Generatorium, Apothecarion)
-	pool.append(devastator_squad())
-	pool.append(terminator_squad())
-	pool.append(apothecary_card())
-	pool.append(librarian_card())
-	pool.append(chaplain_card())
-	pool.append(land_speeder_card())
+	# Rare — 22 копии: отряды по 2 (решение пользователя 17.10.2026 — по одной каждый отряд выпадал вдвое
+	# реже Epic, ~8% магазинов; как у Хаоса), здания и улучшения по одной (MVP: Iron Halo, Combat Stimms,
+	# Chapter Banner, Orbital Strike, здания TDD: Plasma Generatorium, Apothecarion)
+	for i in range(2):
+		pool.append(devastator_squad())
+		pool.append(terminator_squad())
+		pool.append(apothecary_card())
+		pool.append(librarian_card())
+		pool.append(chaplain_card())
+		pool.append(land_speeder_card())
 	pool.append(bolter_turret())
 	pool.append(thunderfire_cannon())
 	pool.append(blessed_armour())

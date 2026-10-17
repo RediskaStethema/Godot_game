@@ -60,6 +60,17 @@ func _main() -> void:
 	_check("зона Казарм — %d соседа по сторонам" % neighbours.size(),
 		neighbours.size() == 4 and scene.renderer.effect_tiles == neighbours)
 
+	# 1а. Зона на клетках — только у зданий для своих (правило пользователя 17.10.2026): Apothecarion — крест,
+	#     как Казармы; турель (по врагам) — без зоны, стена и генератор — тоже
+	var t_node = bm.buildings.filter(func(b): return b.building_type == "tower")[0]
+	await _move_mouse(scene.camera.world_to_screen(t_node.global_position))
+	var apo_zone = b_node.get_effect_tiles("apothecarion", Vector2i(1, 1))
+	_check("турель под курсором — зоны нет; Apothecarion — крест (%d); стена и генератор — нет" % apo_zone.size(),
+		scene.hovered_building == t_node and scene.renderer.effect_tiles.is_empty()
+		and apo_zone.size() == 4 and apo_zone.has(Vector2i(1, 2)) and not apo_zone.has(Vector2i(2, 2))
+		and b_node.get_effect_tiles("wall", Vector2i(1, 1)).is_empty()
+		and b_node.get_effect_tiles("generator", Vector2i(1, 1)).is_empty())
+
 	# 1б. Курсор на модельке Казарм над клеткой без здания — здание не выбрано: ни подсказки, ни зоны
 	var grid = scene.iso_grid
 	var rect: Rect2 = b_node.get_occlusion_rect()

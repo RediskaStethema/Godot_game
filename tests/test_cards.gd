@@ -41,17 +41,19 @@ func _main() -> void:
 	await process_frame
 	var bm = root.get_node("BattleManager")
 
-	# 1. Пул: 22 карты игрока (17 прежних + 5 MVP), ~60/30/10, новые карты есть
+	# 1. Пул: 24 разные карты, 53 копии 27 / 22 / 4 (Rare-отряды по 2 — каждый не реже копии Epic), новые карты есть
 	var pool = CardFactory.build_pool()
 	var ids = {}
 	var by_rarity = {"common": 0, "rare": 0, "epic": 0}
+	var copies = {}
 	for c in pool:
 		ids[c.id] = true
 		by_rarity[c.rarity] += 1
-	var share = func(r): return float(by_rarity[r]) / pool.size()
-	_check("пул: %d разных карт (17 прежних + 5 MVP + 2 здания TDD), доли ~60/30/10 (%d / %d / %d копий)" % [ids.size(), by_rarity["common"], by_rarity["rare"], by_rarity["epic"]], ids.size() == 24 \
-		and absf(share.call("common") - 0.6) < 0.05 and absf(share.call("rare") - 0.3) < 0.05 \
-		and absf(share.call("epic") - 0.1) < 0.03)
+		copies[c.id] = copies.get(c.id, 0) + 1
+	var rare_squads_ok = pool.filter(func(c): return c.rarity == "rare" and c.card_type == "squad") \
+		.all(func(c): return copies[c.id] == 2)
+	_check("пул: %d разных карт (17 прежних + 5 MVP + 2 здания TDD), %d / %d / %d копий, Rare-отряды по 2" % [ids.size(), by_rarity["common"], by_rarity["rare"], by_rarity["epic"]],
+		ids.size() == 24 and by_rarity == {"common": 27, "rare": 22, "epic": 4} and rare_squads_ok)
 	_check("новые карты в пуле", ["iron_halo", "combat_stimms", "chapter_banner",
 		"emergency_reinforcements", "orbital_strike"].all(func(id): return ids.has(id)))
 

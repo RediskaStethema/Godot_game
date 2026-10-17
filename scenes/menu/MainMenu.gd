@@ -3,8 +3,9 @@ extends Control
 # Главное меню — главная сцена. «Продолжить» — есть сохранение забега
 # (SaveManager), «Новый забег» — сброс и магазин 1-й волны (при сохранении —
 # с подтверждением), «Настройки» — GameSettings.
-# Вид — по концепту assets_menu.png: слева аквила, название и кнопки
-# (UITheme «MainMenuButton» с иконками), справа сцена с башней над планетой.
+# Вид — по концепту assets_menu.png, арт — лист UI_assets.png (tools/ui_from_sheet.py): слева золотая
+# аквила, название, разделитель с черепом и кнопки (UITheme «MainMenuButton» с иконками),
+# справа сцена с башней над планетой.
 # UI собирается кодом, стили — из UITheme.
 
 const BUTTON_SIZE = Vector2(320, 52)
@@ -46,7 +47,7 @@ func _build_layout() -> void:
 	var new_run = _make_button("НОВЫЙ ЗАБЕГ", "icon_eagle", _on_new_run_pressed)
 	new_run.name = "NewRunButton"
 	col.add_child(new_run)
-	var arsenal = _make_button("АРСЕНАЛ", "icon_eagle", _on_arsenal_pressed)
+	var arsenal = _make_button("АРСЕНАЛ", "icon_skull", _on_arsenal_pressed)
 	arsenal.name = "ArsenalButton"
 	col.add_child(arsenal)
 	col.add_child(_make_button("НАСТРОЙКИ", "icon_settings", _on_settings_pressed))
@@ -115,7 +116,6 @@ func _make_title_block() -> VBoxContainer:
 	eagle.custom_minimum_size = eagle.texture.get_size() * LOGO_SCALE
 	eagle.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	eagle.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	eagle.modulate = UITheme.TEXT
 	box.add_child(eagle)
 	var title = UITheme.make_label("WH40KINGS", "TitleLabel")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -125,6 +125,13 @@ func _make_title_block() -> VBoxContainer:
 	var sub = UITheme.make_label("———  УДЕРЖИТЕ ЦИТАДЕЛЬ 15 ВОЛН  ———", "DimLabel")
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(sub)
+	if ResourceLoader.exists(UITheme.DIVIDER_SKULL):   # разделитель с черепом листа UI_assets.png
+		var divider = TextureRect.new()
+		divider.texture = load(UITheme.DIVIDER_SKULL)
+		divider.custom_minimum_size = Vector2(0, divider.texture.get_height())
+		divider.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		divider.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		box.add_child(divider)
 	return box
 
 func _spacer(h: float) -> Control:

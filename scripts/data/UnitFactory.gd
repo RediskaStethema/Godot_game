@@ -140,9 +140,15 @@ static func assault_marine() -> UnitData:
 	d.attack_range = 60.0
 	d.move_speed = 120.0
 	d.priority = GameConstants.PRIORITY_NEAREST
+	# Прыжковый ранец (решение пользователя 17.10.2026): раз за бой — на вражеского стрелка, удар при
+	# приземлении по площади и оглушение. Цифры — на одобрение
+	d.jump_range = 320.0
+	d.jump_damage_mult = 1.5
+	d.jump_radius = 40.0
+	d.jump_stun = 0.5
 	d.cost = 5
 	d.rarity = GameConstants.RARITY_COMMON
-	d.sprite_path = "res://assets/sprites/space_marine"  # пока тот же спрайт
+	d.sprite_path = "res://assets/sprites/space_marine_assault"  # лист assets/Assault_marine_assets.png (tools/sheet_to_frames.py)
 	return d
 
 static func chaos_marine() -> UnitData:
@@ -325,11 +331,12 @@ static func devastator() -> UnitData:
 	d.attack_range = 320.0
 	d.move_speed = 60.0
 	d.priority = GameConstants.PRIORITY_HIGHEST_THREAT
+	# Окапывание (решение пользователя 17.10.2026): стоит на месте — урон до +30% за 2 с. Цифры — на одобрение
+	d.entrench_time = 2.0
+	d.entrench_bonus = 0.3
 	d.cost = 7
 	d.rarity = GameConstants.RARITY_RARE
-	# TODO: свой спрайт devastator
-	d.sprite_path = "res://assets/sprites/space_marine"
-	d.tint = Color(0.6, 0.75, 1.0)
+	d.sprite_path = "res://assets/sprites/space_marine_devastator"  # лист assets/Devastator_assets.png (tools/sheet_to_frames.py)
 	d.projectile = "charged"
 	return d
 
@@ -346,6 +353,8 @@ static func terminator() -> UnitData:
 	d.move_speed = 55.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.retreat_hp_threshold = 0.0   # терминаторы не отступают
+	# Deep Strike (решение пользователя 17.10.2026): через 1 с боя — телепорт к переднему отряду врага
+	d.deep_strike_delay = 1.0
 	d.cost = 10
 	d.rarity = GameConstants.RARITY_RARE
 	d.sprite_path = "res://assets/sprites/space_marine_terminator"  # лист assets/Terminator_assets.png (tools/sheet_to_frames.py)
@@ -438,6 +447,7 @@ static func land_speeder() -> UnitData:
 	d.move_speed = 160.0
 	d.priority = GameConstants.PRIORITY_FARTHEST
 	d.retreat_hp_threshold = 0.0
+	d.mobile_fire = true   # стреляет на ходу, кружит вокруг цели (решение пользователя 17.10.2026)
 	d.cost = 9
 	d.rarity = GameConstants.RARITY_RARE
 	d.sprite_path = "res://assets/sprites/space_marine_land_speeder"  # лист assets/Landspeeder_assets.png (tools/sheet_to_frames.py)
