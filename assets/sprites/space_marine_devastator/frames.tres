@@ -52,6 +52,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/space_marine_devastator/death/10.png" id="death_10"]
 
 [resource]
+metadata/muzzle_color = Color(0.258, 0.502, 1.000, 1)
 metadata/muzzle = Vector2(65, -81)
 metadata/shot_frame = 9
 animations = [{

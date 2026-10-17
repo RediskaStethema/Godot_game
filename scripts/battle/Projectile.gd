@@ -28,10 +28,25 @@ const ARC_LOOKAHEAD: float = 4.0    # px вперёд по полёту — на
 # Взрыв (Vfx "explosion") при масштабе 1 накрывает примерно такой радиус, px
 const EXPLOSION_VFX_RADIUS: float = 30.0
 # Красные заряды (Хаос): эффекты синие — меняем местами R и B, синий → оранжево-красный
-const WARM_SHADER = "shader_type canvas_item;\nvoid fragment() { COLOR = texture(TEXTURE, UV).bgra * COLOR; }"
+# Во fragment COLOR — уже цвет текстуры × modulate (документация CanvasItem shader): умножать на texture()
+# ещё раз — цвет в квадрат, темнее и зеленее
+const WARM_SHADER = "shader_type canvas_item;\nvoid fragment() { COLOR = COLOR.bgra; }"
+
+# Снаряд в цвет вспышки стрелка (UnitData-лист: metadata/muzzle_color, tools/muzzle_color.py; решение
+# пользователя 17.10.2026): яркость листа снаряда — в оттенок tint, почти белая сердцевина — белой
+const TINT_SHADER = """shader_type canvas_item;
+uniform vec3 tint;
+void fragment() {
+	vec4 c = COLOR;
+	float l = max(c.r, max(c.g, c.b));
+	float core = smoothstep(0.55, 0.95, min(c.r, min(c.g, c.b)));
+	COLOR = vec4(mix(tint * l, vec3(1.0, 1.0, 0.92), core), c.a);
+}"""
 
 static var _frames_cache: Dictionary = {}   # вид → SpriteFrames
 static var _warm_material: ShaderMaterial
+static var _tint_shader: Shader
+static var _tint_materials: Dictionary = {}   # цвет → ShaderMaterial (общие — по стрелкам одного листа)
 
 # --- Что делает попадание (заполняет стрелок) ---
 var damage: float = 0.0
@@ -60,11 +75,12 @@ var _life: float = 0.0
 var _angle_offset: float = 0.0
 
 # Выстрел из точки from в цель (Soldier / Citadel): aim — куда в цели (смещение от её ног).
+# tint (альфа > 0) — снаряд в цвет вспышки стрелка; иначе warm — синий → красный (Хаос), иначе как на листе.
 # target == null — летим в точку aim (глобальные координаты).
 # delay — сек до вылета (вспышка в анимации атаки).
 # Урон и эффекты задаются полями возвращённого снаряда.
 static func launch(parent: Node, kind: String, from: Vector2, target: Node2D, aim: Vector2,
-		delay: float = 0.0, warm: bool = false) -> Projectile:
+		delay: float = 0.0, warm: bool = false, tint: Color = Color(0, 0, 0, 0)) -> Projectile:
 	var p := Projectile.new()
 	var e: Dictionary = EFFECTS.get(kind, {})
 	if not e.is_empty():
@@ -82,7 +98,9 @@ static func launch(parent: Node, kind: String, from: Vector2, target: Node2D, ai
 	p._origin = from
 	p._pos = from
 	p._delay = delay
-	if warm:
+	if tint.a > 0.0:   # цвет вспышки стрелка — важнее тёплой перекраски
+		p.material = _get_tint_material(tint)
+	elif warm:
 		p.material = _get_warm_material()
 	parent.add_child(p)
 	p.global_position = from
@@ -122,6 +140,17 @@ static func _get_frames(kind: String) -> SpriteFrames:
 		frames.add_frame("fly", atlas)
 	_frames_cache[kind] = frames
 	return frames
+
+static func _get_tint_material(tint: Color) -> ShaderMaterial:
+	if not _tint_materials.has(tint):
+		if _tint_shader == null:
+			_tint_shader = Shader.new()
+			_tint_shader.code = TINT_SHADER
+		var m := ShaderMaterial.new()
+		m.shader = _tint_shader
+		m.set_shader_parameter("tint", Vector3(tint.r, tint.g, tint.b))
+		_tint_materials[tint] = m
+	return _tint_materials[tint]
 
 static func _get_warm_material() -> ShaderMaterial:
 	if _warm_material == null:

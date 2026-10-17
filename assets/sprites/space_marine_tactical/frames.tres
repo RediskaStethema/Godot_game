@@ -50,6 +50,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/space_marine_tactical/death/10.png" id="death_10"]
 
 [resource]
+metadata/muzzle_color = Color(1.000, 0.684, 0.119, 1)
 metadata/muzzle = Vector2(65.8, -89.6)
 metadata/shot_frame = 4
 animations = [{

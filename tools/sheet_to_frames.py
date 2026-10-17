@@ -19,6 +19,7 @@ from pathlib import Path
 from PIL import Image
 
 from gif_to_frames import IMPORT_PARAMS, FILL
+from muzzle_color import flash_color
 
 ROW_ANIMS = ["idle", "walk", "attack", "death"]
 # Необязательный пятый ряд — боевой клич (Chaplain): кадр показывается, пока он кричит (Soldier.BATTLE_CRY_TIME)
@@ -328,6 +329,9 @@ def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_o
                     my = sum(y for x, y in flash if x < mx + 3) / len([1 for x, _ in flash if x < mx + 3])
                     meta = (f"metadata/muzzle = Vector2({mx - ax:.1f}, {my - ay:.1f})\n"
                             f"metadata/shot_frame = {i}\n")
+                    color = flash_color(f, mx, my)   # снаряд в цвет вспышки (Projectile, tools/muzzle_color.py)
+                    if color:
+                        meta += "metadata/muzzle_color = Color(%.3f, %.3f, %.3f, 1)\n" % color
         tres_anims.append(
             f'{{\n"frames": [{", ".join(refs)}],\n"loop": {"true" if anim.split("_")[0] in LOOPING else "false"},\n'
             f'"name": &"{anim}",\n"speed": {attack_fps if anim.startswith("attack") and attack_fps else fps_of(anim)}\n}}')

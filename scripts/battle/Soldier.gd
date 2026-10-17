@@ -38,7 +38,7 @@ const HIT_FLASH_TIME: float = 0.1
 const HIT_FLASH_STRENGTH: float = 0.85   # доля белого поверх цвета спрайта (с тинтом)
 const HIT_FLASH_SHADER = """shader_type canvas_item;
 void fragment() {
-	vec4 c = texture(TEXTURE, UV) * COLOR;
+	vec4 c = COLOR;   // уже текстура × modulate — texture() ещё раз дал бы цвет в квадрат
 	COLOR = vec4(mix(c.rgb, vec3(1.0), %.2f), c.a);
 }"""
 # Таймеры уменьшаются на 0.1 — из-за погрешности float 1.0 - 10*0.1 != 0
@@ -212,7 +212,7 @@ vec3 hsv2rgb(vec3 c) {
 	return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
 }
 void fragment() {
-	vec4 c = texture(TEXTURE, UV) * COLOR;
+	vec4 c = COLOR;   // уже текстура × modulate — texture() ещё раз дал бы цвет в квадрат
 	vec3 hsv = rgb2hsv(c.rgb);
 	float blue = smoothstep(0.50, 0.55, hsv.x) * (1.0 - smoothstep(0.72, 0.77, hsv.x)) * smoothstep(0.2, 0.35, hsv.y);
 	vec3 armor = hsv2rgb(vec3(target_hue, clamp(hsv.y * sat_mult, 0.0, 1.0), clamp(hsv.z * val_mult, 0.0, 1.0)));
@@ -269,9 +269,10 @@ func restore_tick_position() -> void:
 	_has_tick_from = true
 
 # Темп своей скорости — только у бега; остальные анимации — как в листе
+# Новая анимация — с обычной скоростью: ускорение атаки (_attack_anim_scale) не переходит на бег и стойку;
+# темп бега ставит _move_towards / _strafe_around сразу после смены (walk_anim_scale)
 func _on_animation_changed() -> void:
-	if sprite.animation != "walk":
-		sprite.speed_scale = 1.0
+	sprite.speed_scale = 1.0
 
 # Множитель скорости анимации бега при скорости speed (px/с): цикл листа — за WALK_CYCLE_HEIGHTS ростов
 func walk_anim_scale(speed: float) -> float:
@@ -527,8 +528,7 @@ func _attack_citadel(delta: float) -> void:
 	attack_timer -= delta
 	if attack_timer <= TIMER_EPSILON:
 		attack_timer = 1.0 / (current_attack_speed * get_attack_speed_mult())
-		sprite.stop()
-		sprite.play("attack")
+		_play_attack_animation()
 		var shot := _shoot_projectile(citadel, Vector2(0.0, -40.0))
 		if shot:
 			shot.damage = _roll_damage()   # урон — при попадании
@@ -754,8 +754,7 @@ func apply_knockback(direction: Vector2, force: float) -> void:
 func _do_attack() -> void:
 	if not is_instance_valid(target):
 		return
-	sprite.stop()
-	sprite.play("attack")
+	_play_attack_animation()
 	var shot := _shoot_projectile(target, Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * target.data.sprite_scale))
 	if shot:
 		shot.damage = _roll_damage()
@@ -773,9 +772,28 @@ func _do_attack() -> void:
 		if _hit_timer > 0.0:
 			_resolve_melee_hit()
 		_hit_target = target
-		_hit_timer = maxf(frames.get_meta("hit_frame") / frames.get_animation_speed("attack"), GameConstants.FIXED_TICK)
+		_hit_timer = maxf(frames.get_meta("hit_frame") / frames.get_animation_speed("attack") / _attack_anim_scale(),
+			GameConstants.FIXED_TICK)
 		return
 	_land_melee_hit(target)
+
+# Анимация атаки длиннее перерыва между ударами (быстрая атака, баффы, Librarian — после каста
+# остаётся мало) — играется быстрее, чтобы следующий удар не обрывал замах; кадр выстрела / удара
+# сдвигается вместе с ней (_attack_anim_scale). Медленнее листа — не бывает
+const ATTACK_ANIM_FILL: float = 0.9   # анимация укладывается в эту долю перерыва
+const ATTACK_ANIM_MAX_SCALE: float = 3.0   # не быстрее: Librarian 3-го уровня — цикл короче каста, замах был бы мельканием
+func _play_attack_animation() -> void:
+	sprite.stop()
+	sprite.play("attack")   # animation_changed сбрасывает speed_scale — ставим после
+	sprite.speed_scale = _attack_anim_scale()
+
+func _attack_anim_scale() -> float:
+	var frames := sprite.sprite_frames
+	if frames == null or not frames.has_animation("attack") or frames.get_frame_count("attack") == 0:
+		return 1.0
+	var length: float = frames.get_frame_count("attack") / frames.get_animation_speed("attack")
+	var gap: float = 1.0 / maxf(current_attack_speed * get_attack_speed_mult(), 0.01) - data.cast_time
+	return clampf(length / maxf(gap * ATTACK_ANIM_FILL, GameConstants.FIXED_TICK), 1.0, ATTACK_ANIM_MAX_SCALE)
 
 func _tick_melee_hit(delta: float) -> void:
 	if _hit_timer <= 0.0:
@@ -818,10 +836,10 @@ func _shoot_projectile(to: Node2D, aim_offset: Vector2) -> Projectile:
 	if sprite.flip_h:
 		muzzle.x = -muzzle.x
 	var delay := 0.0
-	if frames.has_meta("shot_frame"):
-		delay = frames.get_meta("shot_frame") / frames.get_animation_speed("attack")
+	if frames.has_meta("shot_frame"):   # анимация атаки ускорена под частые выстрелы — кадр вспышки раньше
+		delay = frames.get_meta("shot_frame") / frames.get_animation_speed("attack") / _attack_anim_scale()
 	var shot := Projectile.launch(parent_squad.get_parent(), data.projectile, global_position + muzzle * sprite.scale,
-			to, aim_offset, delay, data.projectile_warm)
+			to, aim_offset, delay, data.projectile_warm, frames.get_meta("muzzle_color", Color(0, 0, 0, 0)))
 	shot.source = parent_squad
 	return shot
 

@@ -172,6 +172,36 @@ func _main() -> void:
 		a_hit > TICK and a_before and e3.current_hp < hp3
 		and a_frames.has_animation("jump") and a_frames.has_animation("landing") and a_frames.has_animation("victory"))
 
+	# Атака чаще, чем длится анимация (баффы, уровни): анимация ускоряется под перерыв, кадр удара — с ней
+	var fast = _of(0, "assault_marine")[1]
+	var e_fast = enemies[4]
+	e_fast.global_position = fast.global_position + Vector2(30, 0)
+	fast.current_attack_speed = 2.5   # перерыв 0.4 с, анимация листа 0.81 с
+	var a_len: float = a_frames.get_frame_count("attack") / a_frames.get_animation_speed("attack")
+	fast.target = e_fast
+	fast._do_attack()
+	var a_scale: float = fast.sprite.speed_scale
+	var a_expect: float = a_len / (0.4 * fast.ATTACK_ANIM_FILL)
+	var hit_ok = absf(fast._hit_timer - maxf(a_frames.get_meta("hit_frame") / a_frames.get_animation_speed("attack") / a_scale, TICK)) < 0.001
+	fast.current_attack_speed = 0.5   # перерыв дольше анимации — как на листе
+	fast._do_attack()
+	_check("анимация атаки под перерыв: ×%.2f при 2.5 уд/с (ожидалось ×%.2f), кадр удара сдвинут; редкие удары — ×%.1f" \
+		% [a_scale, a_expect, fast.sprite.speed_scale], absf(a_scale - a_expect) < 0.01 and hit_ok and fast.sprite.speed_scale == 1.0)
+
+	# Снаряд — в цвет вспышки модели (metadata/muzzle_color листа, tools/muzzle_color.py)
+	var tac: SpriteFrames = load("res://assets/sprites/space_marine_tactical/frames.tres")
+	var dev: SpriteFrames = load("res://assets/sprites/space_marine_devastator/frames.tres")
+	var c_orange: Color = tac.get_meta("muzzle_color", Color(0, 0, 0, 0))
+	var c_blue: Color = dev.get_meta("muzzle_color", Color(0, 0, 0, 0))
+	var P = load("res://scripts/battle/Projectile.gd")
+	var tinted = P.launch(scene, "bolt", Vector2.ZERO, null, Vector2(100, 0), 0.0, false, c_orange)
+	var shot_tint = tinted.material.get_shader_parameter("tint") if tinted.material else Vector3.ZERO
+	var untinted = P.launch(scene, "bolt", Vector2.ZERO, null, Vector2(100, 0))
+	_check("снаряд в цвет вспышки: Tactical %s (оранжевый), Devastator %s (синий), без цвета — как на листе" % [c_orange, c_blue],
+		c_orange.a > 0.0 and c_orange.r > c_orange.g and c_orange.g > c_orange.b and c_blue.b > c_blue.r
+		and shot_tint.is_equal_approx(Vector3(c_orange.r, c_orange.g, c_orange.b)) and untinted.material == null)
+	bm.clear_projectiles()
+
 	# Каст — часть перезарядки: Библиарий колдует раз в 1 / attack_speed, а не каст + перезарядка
 	# (раньше вход в ATTACK после каста сбрасывал перезарядку на короткий сдвиг первого удара)
 	scene._spawn_squad(UnitFactory.create("librarian"), GameConstants.TEAM_PLAYER, Vector2i(0, 0), 1)

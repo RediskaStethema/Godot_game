@@ -51,6 +51,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/space_marine_chaplain/battle_cry/0.png" id="battle_cry_0"]
 
 [resource]
+metadata/muzzle_color = Color(1.000, 0.713, 0.151, 1)
 metadata/muzzle = Vector2(66.4, -80.1)
 metadata/shot_frame = 4
 animations = [{
