@@ -140,6 +140,7 @@ func start_march() -> void:
 # на дальность удара + DEEP_STRIKE_GAP перед ним, со своей стороны. Раз за бой
 const DEEP_STRIKE_GAP: float = 30.0
 const DEEP_STRIKE_MIN_DIST: float = 150.0   # враг уже ближе — телепорт не нужен
+const DEEP_STRIKE_ORIGIN_POOF: float = 2.5    # облачко на месте отряда — во столько раз крупнее
 var deep_struck: bool = false
 var _deep_strike_timer: float = 0.0
 
@@ -163,9 +164,11 @@ func _tick_deep_strike(delta: float) -> void:
 	var anchor := foe.global_position + back * (data.attack_range + DEEP_STRIKE_GAP)
 	if center.distance_to(anchor) < DEEP_STRIKE_MIN_DIST:
 		return
+	# Облачко — у каждого бойца на месте высадки и одно крупное там, откуда отряд исчез
+	# (по облачку на бойца с обеих сторон — 24 эффекта в один тик, выброс тика)
+	var size: float = data.sprite_scale * Soldier.EFFECT_SCALE
+	Vfx.spawn(get_parent(), "poof", center, size * DEEP_STRIKE_ORIGIN_POOF)
 	for s in alive:
-		var size: float = s.data.sprite_scale * Soldier.EFFECT_SCALE
-		Vfx.spawn(get_parent(), "poof", s.global_position, size)
 		s.teleport_to(anchor + s.formation_offset)
 		Vfx.spawn(get_parent(), "poof", s.global_position, size)
 	SoldierRegistry.invalidate_grid()   # сдвиг больше GRID_SLACK за тик

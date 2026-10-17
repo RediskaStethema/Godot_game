@@ -86,6 +86,14 @@ const EFFECTS = {
 	"stun":       {"sheet": PIXEL_DIR + "status/stun.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
 		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
 }
+# Частые эффекты попаданий (каждый удар и снаряд) — под лимитом, как FloatingText: в сшибке сотен бойцов
+# узел на каждый удар съедал тик (test_performance). Лишние не создаются — бой от этого не меняется
+const HIT_EFFECTS = ["blood", "slash", "hit_spark"]
+const MAX_HIT_ALIVE: int = 48
+const MAX_HIT_PER_FRAME: int = 8
+static var _hits_alive: int = 0
+static var _hit_frame: int = -1
+static var _hits_this_frame: int = 0
 const Z_INDEX_WORLD: int = 10   # разовые эффекты в мире — поверх бойцов и построек, как снаряды
 const FLAT_Y: float = 0.5       # эффект «на земле» сплющен под изометрию
 
@@ -95,12 +103,31 @@ static var _frames_cache: Dictionary = {}   # вид → SpriteFrames
 static func spawn(parent: Node, kind: String, at: Vector2, size: float = 1.0, angle: float = 0.0) -> Vfx:
 	if parent == null or not EFFECTS.has(kind):
 		return null
+	var hit: bool = kind in HIT_EFFECTS
+	if hit and not _has_hit_slot():
+		return null
 	var v := _make(kind, size)
 	v.z_index = Z_INDEX_WORLD
 	v.rotation = angle
 	parent.add_child(v)
 	v.global_position = at
+	# Место — только за эффектом в дереве: освобождает его tree_exited, вне дерева он бы не пришёл
+	if hit and v.is_inside_tree():
+		_hits_alive += 1
+		_hits_this_frame += 1
+		v.tree_exited.connect(_free_hit_slot)
 	return v
+
+# Есть место под эффект попадания: живых < MAX_HIT_ALIVE и за этот кадр < MAX_HIT_PER_FRAME
+static func _has_hit_slot() -> bool:
+	var frame := Engine.get_process_frames()
+	if frame != _hit_frame:
+		_hit_frame = frame
+		_hits_this_frame = 0
+	return _hits_alive < MAX_HIT_ALIVE and _hits_this_frame < MAX_HIT_PER_FRAME
+
+static func _free_hit_slot() -> void:
+	_hits_alive = maxi(_hits_alive - 1, 0)
 
 # Эффект на бойце (или другом узле): к его ногам, двигается вместе с ним
 static func attach(owner: Node2D, kind: String, size: float = 1.0) -> Vfx:
@@ -130,6 +157,7 @@ static func _make(kind: String, size: float) -> Vfx:
 static func warm_cache() -> void:
 	for kind in EFFECTS:
 		_get_frames(kind)
+	_hits_alive = 0   # вход в бой: счёт эффектов попаданий заново (тесты гоняют бои в одном процессе)
 
 static func _get_frames(kind: String) -> SpriteFrames:
 	if _frames_cache.has(kind):

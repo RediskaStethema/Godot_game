@@ -59,6 +59,9 @@ const MELEE_HIT_REACH: float = 1.5
 const JUMP_SPEED: float = 450.0
 const JUMP_MIN_TIME: float = 0.3
 const JUMP_HEIGHT: float = 30.0
+# Отряд прыгает разом — приземления (удар по площади, оглушение) в один тик давали выброс тика
+# (test_performance). Полёт бойца длиннее на attack_stagger × JUMP_STAGGER — отряд садится волной
+const JUMP_STAGGER: float = 0.5
 # Стрельба на ходу (UnitData.mobile_fire): скорость кружения — доля бега, дистанция — доля дальности
 const MOBILE_FIRE_SPEED: float = 0.6
 const MOBILE_FIRE_DISTANCE: float = 0.8
@@ -368,7 +371,7 @@ func _try_jump() -> bool:
 	# Приземление — перед целью со стороны прыжка, бойцы отряда — своим строем, не в одну точку
 	var back := (global_position - prey.global_position).normalized()
 	_leap_to = prey.global_position + back * current_attack_range * 0.5 + formation_offset * 0.5
-	_leap_duration = maxf(_leap_from.distance_to(_leap_to) / JUMP_SPEED, JUMP_MIN_TIME)
+	_leap_duration = maxf(_leap_from.distance_to(_leap_to) / JUMP_SPEED, JUMP_MIN_TIME) * (1.0 + attack_stagger * JUMP_STAGGER)
 	_leap_time = _leap_duration
 	_leap_t = 0.0
 	_leap_prev = 0.0
