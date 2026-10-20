@@ -90,6 +90,10 @@ extends Resource
 # размер массива = сколько бойцов вернётся в следующий бой. Доля, а не абсолют,
 # чтобы баффы (синергии, улучшения) не обрезались при следующем спавне.
 @export var saved_hp: Array[float] = []
+# Тип каждого бойца по тем же индексам, что saved_hp: "" — боец этого отряда, иначе боец бога Хаоса,
+# вставший на место павшего (Святилище культа, UnitFactory.convert_fighter: "<factory_id>:<редкость>").
+# Может быть короче saved_hp — недостающие "" (кто дописывает своих бойцов, kinds не трогает)
+@export var saved_kinds: Array[String] = []
 # Множители от карт-улучшений этого отряда (и от масштабирования врагов по волнам).
 # Базовые hp/damage не трогаем. Живут вместе с отрядом между раундами.
 @export var hp_multiplier: float = 1.0
@@ -138,6 +142,10 @@ func get_blood() -> String:
 		return "purple"
 	return "red"
 
+# Тип бойца i (saved_kinds): "" — свой
+func kind_at(i: int) -> String:
+	return saved_kinds[i] if i < saved_kinds.size() else ""
+
 # Карта того же отряда: улучшить можно, пока не достигнут максимальный уровень
 func can_merge_upgrade() -> bool:
 	return squad_level < UnitFactory.MAX_SQUAD_LEVEL
@@ -162,6 +170,7 @@ func respawn_after_wipe() -> void:
 	move_speed_multiplier = 1.0
 	banner_aura_bonus = 0.0
 	applied_upgrades.clear()
+	saved_kinds.clear()   # бойцы богов не возрождаются — весь состав свой
 	squad_size -= squad_growth * squad_level
 	squad_level = 0
 	for i in range(new_level):
@@ -177,6 +186,7 @@ func save_state() -> Dictionary:
 	return {
 		"id": factory_id,
 		"saved_hp": Array(saved_hp),
+		"kinds": Array(saved_kinds),
 		"hp_mult": hp_multiplier,
 		"dmg_mult": damage_multiplier,
 		"as_mult": attack_speed_multiplier,
@@ -195,6 +205,10 @@ static func from_save_state(d: Dictionary) -> UnitData:
 	for v in d["saved_hp"]:
 		hp.append(float(v))
 	u.saved_hp = hp
+	var kinds: Array[String] = []
+	for k in d.get("kinds", []):
+		kinds.append(str(k))
+	u.saved_kinds = kinds
 	u.hp_multiplier = float(d["hp_mult"])
 	u.damage_multiplier = float(d["dmg_mult"])
 	u.attack_speed_multiplier = float(d["as_mult"])

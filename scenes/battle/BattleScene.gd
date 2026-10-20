@@ -23,7 +23,6 @@ var bench: Node = null
 var hud: BattleHud = null
 var inspector: SquadInspector = null
 var expansion_banner: ExpansionBanner = null   # объявление этапа расширения (после боя, до магазина)
-var merge_menu: MergeMenu = null   # выбор «улучшить / вылечить» отряд его картой
 var pause_menu: PauseMenu = null
 var fader: OcclusionFader = null   # прозрачность построек — только на расстановке
 var reticle: ArtilleryReticle = null   # прицел орудия игрока — в бою за курсором
@@ -221,7 +220,7 @@ func _place_player_squads() -> void:
 			if tile_index >= free_tiles.size():
 				break
 			tile = free_tiles[tile_index]
-		_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, count, unit_data.saved_hp)
+		_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, count, unit_data.saved_hp, unit_data.saved_kinds)
 
 # Состав врагов — данными в EnemyWaves; заполняют зону с переднего края в тыл
 func _place_enemy_squads() -> void:
@@ -239,11 +238,12 @@ func _place_enemy_squads() -> void:
 		if "elite" in enemy_data.tags:
 			enemy_elites_at_start += spec["count"]
 
-func _spawn_squad(unit_data: UnitData, team: int, tile: Vector2i, count: int, hp_list: Array[float] = []) -> Squad:
+func _spawn_squad(unit_data: UnitData, team: int, tile: Vector2i, count: int, hp_list: Array[float] = [],
+		kinds: Array[String] = []) -> Squad:
 	var is_enemy = team == GameConstants.TEAM_ENEMY
 	var squad = SQUAD_SCENE.instantiate()
 	units_container.add_child(squad)
-	squad.setup(unit_data, team, tile, count, hp_list)
+	squad.setup(unit_data, team, tile, count, hp_list, kinds)
 	squad.global_position = iso_grid.tile_to_screen(tile, is_enemy)
 	SquadRegistry.register(squad)
 	# Враг скрыт до начала боя — игрок расставляется вслепую
@@ -270,7 +270,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		# В конце кадра: к тому времени окно знает, над интерфейсом ли курсор (gui_get_hovered_control)
 		_update_building_hover.call_deferred(event.position)
-	if not is_placement_phase or merge_menu:
+	if not is_placement_phase:
 		return
 	if event is InputEventMouseMotion:
 		renderer.update_hover(iso_grid.screen_to_tile(_screen_to_world(event.position)))
@@ -287,7 +287,7 @@ func _update_building_hover(screen_pos: Vector2) -> void:
 	var tile = iso_grid.screen_to_tile(world)
 	var dragging: CardData = bench.dragging_card
 	var found: Building = null
-	if dragging == null and merge_menu == null and get_viewport().gui_get_hovered_control() == null:
+	if dragging == null and get_viewport().gui_get_hovered_control() == null:
 		for b in BattleManager.buildings:
 			if is_instance_valid(b) and b.tile == tile:
 				found = b
@@ -345,7 +345,6 @@ func _try_buy_tile(tile: Vector2i) -> void:
 func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
 	if not is_placement_phase:
 		return
-	_close_merge_menu()
 	var tile = iso_grid.screen_to_tile(_screen_to_world(screen_pos))
 	if not iso_grid.is_valid_tile(tile):
 		_show_message("Мимо сетки")
@@ -358,12 +357,11 @@ func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
 		AudioManager.play("place")
 		_consume_bench_card(card)
 
-# Отряд на пустую клетку; на свой отряд того же типа — меню «улучшить / вылечить»
+# Отряд на пустую клетку; на свой отряд того же типа — улучшение с лечением (_merge_squad)
 func _play_squad_card(card: CardData, tile: Vector2i) -> bool:
 	var own = _get_player_squad_at(tile)
 	if own and own.data.factory_id == card.unit_factory_id:
-		_open_merge_menu(card, own)
-		return false   # карту тратит выбор в меню
+		return _merge_squad(card, own)
 	if _is_tile_occupied(tile):
 		_show_message("Тайл занят")
 		return false
@@ -449,41 +447,23 @@ func _get_player_building_at(tile: Vector2i) -> Building:
 			return b
 	return null
 
-func _open_merge_menu(card: CardData, squad: Squad) -> void:
-	if not MergeMenu.has_options(squad):
+# Карта отряда на свой отряд того же типа (решение пользователя 21.10.2026, меню «улучшить / вылечить» убрано):
+# уровень +1 (бойцы роста — с полным HP), затем лечение — живым доля max HP, павшие возвращаются с той же долей.
+# На максимальном уровне — только лечение; отряд здоров и на максимуме — карта не тратится
+func _merge_squad(card: CardData, squad: Squad) -> bool:
+	var leveled := squad.merge_upgrade()
+	if not leveled and not squad.is_wounded():
 		_show_message("%s: максимальный уровень, отряд здоров" % squad.data.unit_name)
-		return
-	inspector.close_info()
-	inspector.enabled = false
-	merge_menu = MergeMenu.new()
-	$UI.add_child(merge_menu)
-	merge_menu.setup(card, squad)
-	merge_menu.place_near(_world_to_screen(squad.global_position))
-	merge_menu.chosen.connect(_on_merge_chosen)
-	merge_menu.closed.connect(_on_merge_menu_closed)
-
-func _on_merge_chosen(card: CardData, squad: Squad, upgrade: bool) -> void:
-	if not is_instance_valid(squad) or not bench.bench_cards.has(card):
-		return
-	if upgrade:
-		if not squad.merge_upgrade():
-			return
-		_show_message("%s улучшен до уровня %d/%d" % [squad.data.unit_name,
-			squad.data.squad_level, UnitFactory.MAX_SQUAD_LEVEL])
+		return false
+	var revived := squad.heal_by_ratio(UnitFactory.get_merge_bonuses(squad.data.faction)["heal"])
+	var extra := ", вернулось бойцов: %d" % revived if revived > 0 else ""
+	if leveled:
+		_show_message("%s улучшен до уровня %d/%d и вылечен%s" % [squad.data.unit_name,
+			squad.data.squad_level, UnitFactory.MAX_SQUAD_LEVEL, extra])
 	else:
-		var revived = squad.heal_by_ratio(UnitFactory.get_merge_bonuses(squad.data.faction)["heal"])
-		var extra = ", вернулось бойцов: %d" % revived if revived > 0 else ""
-		_show_message("%s вылечен%s" % [squad.data.unit_name, extra])
-		_update_synergy_preview()
-	_consume_bench_card(card)
-
-func _on_merge_menu_closed() -> void:
-	merge_menu = null
-	inspector.enabled = true
-
-func _close_merge_menu() -> void:
-	if merge_menu:
-		merge_menu.close()
+		_show_message("%s вылечен%s (уровень максимальный)" % [squad.data.unit_name, extra])
+	_update_synergy_preview()
+	return true
 
 func _consume_bench_card(card: CardData) -> void:
 	bench.bench_cards.erase(card)
@@ -590,7 +570,6 @@ func _on_start_pressed() -> void:
 	renderer.set_grid_overlay(false)   # в бою — только поле, здания, цитадель и бойцы
 	fader.enabled = false
 	start_button.disabled = true
-	_close_merge_menu()
 	# Армия перед боем — в забег и в сохранение. До синергий: они меняют max_hp
 	# бойцов только на этот бой и исказили бы доли HP
 	BattleManager.battle_in_progress = true

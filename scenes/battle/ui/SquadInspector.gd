@@ -13,7 +13,7 @@ const HOVER_HALF_WIDTH: float = 20.0   # полуширина бойца для 
 const REFRESH_INTERVAL: float = 0.1
 const INFO_WIDTH: float = 220.0
 
-# Выключается, пока открыто меню слияния (BattleScene)
+# Выключается в конце забега (shutdown)
 var enabled: bool = true
 # true — клик забран другим (залп орудия игрока): справку не открывать и не закрывать.
 # Справка получает клик раньше сцены, поэтому спрашивает её заранее

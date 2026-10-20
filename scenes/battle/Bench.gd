@@ -182,7 +182,7 @@ func _on_drop(screen_pos: Vector2) -> void:
 	var hand_node := _dragged_node
 	_dragged_node = null
 
-	# Сообщаем BattleScene куда бросили карту — она сыграет её сразу (или откроет меню слияния)
+	# Сообщаем BattleScene куда бросили карту — она сыграет её сразу
 	emit_signal("card_dropped_on_tile", card, screen_pos)
 	dragging_card = null
 	_set_hovered_card(null)

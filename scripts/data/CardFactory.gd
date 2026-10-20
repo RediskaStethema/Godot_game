@@ -202,15 +202,17 @@ static func barracks() -> CardData:
 	var c = CardData.new()
 	c.id = "barracks"
 	c.title = "Barracks"
-	c.description = "После победы возвращают павших (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Не лечат."
+	c.description = "После победы лечат отряды на соседних клетках по сторонам (+20 / 30 / 45% HP) и возвращают павших (2 / 3 / 4 по уровню)."
 	c.faction = "space_marines"
 	c.cost = 7
 	c.rarity = "common"   # решение пользователя 15.10.2026: Common, 3 копии в пуле — выпадает чаще; цена прежняя
 	c.card_type = "building"
 	c.building_type = "barracks"
-	c.building_stats = {"refill": 2.0}   # бойцов каждому соседнему отряду за ход
-	# Уровень: 2 → 3 → 4 бойца (2 × 1.5^(ур − 1), дробь вниз: 2, 3, 4.5 → 4)
-	c.building_level_bonuses = {"refill": 0.5}
+	# бойцов каждому соседнему отряду за ход; heal — доля max HP живым (решение пользователя 21.10.2026: лечат
+	# и воскрешают; Святилище культа Хаоса не лечит — BattleManager.refill_from_barracks)
+	c.building_stats = {"refill": 2.0, "heal": 0.2}
+	# Уровень: 2 → 3 → 4 бойца (2 × 1.5^(ур − 1), дробь вниз: 2, 3, 4.5 → 4), лечение 20 → 30 → 45%
+	c.building_level_bonuses = {"refill": 0.5, "heal": 0.5}
 	return c
 
 static func fortress_wall() -> CardData:
@@ -514,7 +516,7 @@ static func chaos_lord_card() -> CardData:
 const CHAOS_RESKINS = {
 	"bolter_turret": ["heretic_autocannon", "Heretic Autocannon", "Турель: стреляет в ближайшего врага на всём поле. Стоит между раундами."],
 	"thunderfire_cannon": ["hellfire_mortar", "Hellfire Mortar", "Орудие: в бою кликните по полю — залп по площади. Перезарядка 4 с."],
-	"barracks": ["cult_shrine", "Cult Shrine", "После победы возвращают павших (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Не лечат."],
+	"barracks": ["cult_shrine", "Cult Shrine", "После победы возвращают павших (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Отряд бога Хаоса рядом — павшие других соседей встают его бойцами (сила — по редкости отряда)."],
 	"fortress_wall": ["spiked_barricade", "Spiked Barricade", "Щит цитадели +200 в каждом бою. Замедляет врагов рядом на 40%."],
 	"plasma_generatorium": ["dark_altar", "Dark Altar", "+2 Req после каждого боя. Стоит между раундами."],
 	"apothecarion": ["warp_rift", "Warp Rift", "Павший боец отряда на соседней клетке по сторонам встаёт с 30% HP (шанс 15%, раз за бой)."],

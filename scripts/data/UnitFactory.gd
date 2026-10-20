@@ -12,10 +12,10 @@ const SQUAD_MERGE_BONUSES = {
 		"damage": 0.20,         # +20% урона за уровень
 		"hp": 0.20,             # +20% максимального HP за уровень
 		"attack_speed": 0.15,   # +15% скорострельности за уровень
-		"heal": 0.35,           # лечение: 35% максимального HP каждому бойцу
+		"heal": 0.30,           # и лечение: 30% максимального HP каждому бойцу, павшие возвращаются (решение пользователя 21.10.2026)
 	},
 	# Хаос игрока — пока те же цифры, что у Космодесанта (на одобрение)
-	"chaos": {"damage": 0.20, "hp": 0.20, "attack_speed": 0.15, "heal": 0.35},
+	"chaos": {"damage": 0.20, "hp": 0.20, "attack_speed": 0.15, "heal": 0.30},
 }
 const DEFAULT_FACTION: String = "space_marines"
 
@@ -41,6 +41,24 @@ const ARMOUR_SCALE: float = 1.1
 # Дальность ближнего боя — ноги к ногам, px (решение пользователя 21.10.2026: при 60 бойцы ростом 31 px
 # били через пустоту — «стоят слишком далеко»). Крупные модели (Champion, Дредноут, Hellbrute, Chaos Lord) — дальше
 const MELEE_RANGE: float = 30.0
+
+# Бойцы богов Хаоса в чужом отряде (Святилище культа, решение пользователя 21.10.2026): павший боец соседнего
+# отряда встаёт бойцом отряда бога, сила — по редкости отряда, в который он встал
+const CONVERT_RARITY_MULT = {"common": 0.7, "rare": 1.0, "epic": 1.3}
+static var _convert_cache: Dictionary = {}   # kind → UnitData (шаблон, общий для всех таких бойцов)
+
+static func convert_kind(god_factory_id: String, host_rarity: String) -> String:
+	return "%s:%s" % [god_factory_id, host_rarity]
+
+static func convert_fighter(kind: String) -> UnitData:
+	if not _convert_cache.has(kind):
+		var parts := kind.split(":")
+		var d := create(parts[0])
+		var k: float = CONVERT_RARITY_MULT.get(parts[1] if parts.size() > 1 else "rare", 1.0)
+		d.hp_multiplier = k
+		d.damage_multiplier = k
+		_convert_cache[kind] = d
+	return _convert_cache[kind]
 
 # Бойцов за уровень у отряда карты: пехота — SQUAD_GROWTH, пары — PAIR_GROWTH
 static func squad_growth_for(card: CardData) -> int:

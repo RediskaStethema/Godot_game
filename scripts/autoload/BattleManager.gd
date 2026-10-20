@@ -309,9 +309,14 @@ func reset_run() -> void:
 func sync_army_from_squads(squads: Array) -> void:
 	for squad in squads:
 		var hp_list: Array[float] = []
+		var kinds: Array[String] = []
 		for soldier in squad.soldiers:
 			hp_list.append(clampf(soldier.current_hp / soldier.max_hp, 0.01, 1.0))
+			kinds.append(soldier.convert_kind)
+		if not kinds.any(func(k): return k != ""):
+			kinds.clear()   # все свои — список типов не нужен
 		squad.data.saved_hp = hp_list
+		squad.data.saved_kinds = kinds
 		if not player_units.has(squad.data):
 			player_units.append(squad.data)
 		player_placements[squad.data] = squad.tile
@@ -335,9 +340,11 @@ func store_survivors(alive_squads: Array, at_start: Array) -> Array[String]:
 		revived.append(data.unit_name)
 	return revived
 
-# Ход Казарм (после выигранного боя, после store_survivors): каждому отряду на соседней с казармами
-# клетке (по сторонам) возвращается до refill павших бойцов с полным HP, не больше squad_size.
-# Живых не лечит. Возвращает, сколько бойцов вернулось
+# Ход Казарм (после выигранного боя, после store_survivors) — отрядам на соседних клетках (по сторонам):
+# Казармы Космодесанта лечат живых на heal (доля max HP) и возвращают до refill павших с полным HP (решение
+# пользователя 21.10.2026). Святилище культа Хаоса (та же карта, раса chaos) не лечит; если среди соседей есть
+# отряд бога Хаоса, павшие ДРУГИХ соседей встают бойцами этого бога (UnitData.saved_kinds, сила — по редкости
+# отряда, UnitFactory.convert_fighter), иначе — свои. Не больше squad_size. Возвращает, сколько бойцов вернулось
 const NEIGHBOUR_TILES: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
 func refill_from_barracks() -> int:
@@ -345,19 +352,42 @@ func refill_from_barracks() -> int:
 	for card in player_buildings:
 		if card.building_type != "barracks":
 			continue
-		var refill = floori(card.get_building_stats().get("refill", 0.0))
+		var stats: Dictionary = card.get_building_stats()
+		var refill = floori(stats.get("refill", 0.0))
+		var heal: float = stats.get("heal", 0.0) if card.faction != "chaos" else 0.0
+		var neighbours: Array[UnitData] = []
 		for d in player_units:
-			if not player_placements.has(d) or not NEIGHBOUR_TILES.has(player_placements[d] - player_buildings[card]):
-				continue
+			if player_placements.has(d) and NEIGHBOUR_TILES.has(player_placements[d] - player_buildings[card]):
+				neighbours.append(d)
+		var god := _god_squad_among(neighbours) if card.faction == "chaos" else null
+		for d in neighbours:
+			if heal > 0.0:
+				for i in d.saved_hp.size():
+					d.saved_hp[i] = minf(d.saved_hp[i] + heal, 1.0)
 			var added = mini(refill, d.squad_size - d.saved_hp.size())
+			var kind := ""
+			if god and d != god:
+				kind = UnitFactory.convert_kind(god.factory_id, d.rarity)
+				while d.saved_kinds.size() < d.saved_hp.size():   # свои бойцы, дописанные без типа
+					d.saved_kinds.append("")
 			for i in range(added):
 				d.saved_hp.append(1.0)
+				if kind != "":
+					d.saved_kinds.append(kind)
 			total += maxi(added, 0)
 			if added > 0:   # вид: ворота казарм на поле (анимация refill листа, если есть)
 				for b in buildings:
 					if is_instance_valid(b) and b.card == card:
 						b.play_once("refill")
 	return total
+
+# Отряд бога Хаоса (особый юнит бога — Chapters unit_card) среди отрядов или null
+func _god_squad_among(squads: Array[UnitData]) -> UnitData:
+	var gods: Array = Chapters.for_faction("chaos").map(func(c): return c.get("unit_card", ""))
+	for d in squads:
+		if d.factory_id in gods:
+			return d
+	return null
 
 # Поражение / ничья — армия потеряна
 func lose_army() -> void:

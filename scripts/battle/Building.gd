@@ -333,8 +333,13 @@ func describe() -> String:
 			lines.append("В бою — клик по полю: залп %d урона в радиусе %d px, перезарядка %.1f с" % [
 				stats.get("damage", 0.0), stats.get("splash_radius", 0.0), stats.get("cooldown", 0.0)])
 		"barracks":
-			lines.append("После каждой победы возвращают %d павших бойцов отрядам на соседних клетках (подсвечены). Не лечат" \
-				% floori(stats.get("refill", 0.0)))
+			if card.faction == "chaos":   # Святилище культа: не лечит, отряд бога рядом — павшие встают его бойцами
+				lines.append(("После каждой победы возвращают %d павших бойцов отрядам на соседних клетках (подсвечены). "
+					+ "Отряд бога Хаоса рядом — павшие других соседей встают его бойцами (сила — по редкости отряда)") \
+					% floori(stats.get("refill", 0.0)))
+			else:
+				lines.append("После каждой победы лечат отряды на соседних клетках (подсвечены) на %d%% HP и возвращают %d павших" \
+					% [roundi(stats.get("heal", 0.0) * 100.0), floori(stats.get("refill", 0.0))])
 		"apothecarion":
 			lines.append("Павший боец отряда на соседней клетке (подсвечены) встаёт с %d%% HP: шанс %d%%, раз за бой" \
 				% [roundi(stats.get("revive_hp", 0.0) * 100.0), roundi(stats.get("revive_chance", 0.0) * 100.0)])

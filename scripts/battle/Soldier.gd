@@ -148,6 +148,8 @@ signal died(soldier: Soldier)
 # ИНИЦИАЛИЗАЦИЯ
 # -------------------------------------------------------
 # start_hp_ratio — доля HP: 1.0 свежий боец, меньше — раненый выживший
+var convert_kind: String = ""   # боец бога Хаоса в чужом отряде (UnitData.saved_kinds), "" — свой
+
 func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, start_hp_ratio: float = 1.0) -> void:
 	data = unit_data
 	team = team_id

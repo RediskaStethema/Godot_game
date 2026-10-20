@@ -27,7 +27,9 @@ const SOLDIER_SCENE = preload("res://scenes/battle/Soldier.tscn")
 # ИНИЦИАЛИЗАЦИЯ
 # -------------------------------------------------------
 # hp_list — доли HP выживших бойцов (пустой = все с полным HP)
-func setup(unit_data: UnitData, team_id: int, grid_tile: Vector2i, count: int, hp_list: Array[float] = []) -> void:
+# kinds — тип каждого бойца (UnitData.saved_kinds): "" — свой, иначе боец бога Хаоса на месте павшего
+func setup(unit_data: UnitData, team_id: int, grid_tile: Vector2i, count: int, hp_list: Array[float] = [],
+		kinds: Array[String] = []) -> void:
 	data = unit_data
 	team = team_id
 	tile = grid_tile
@@ -35,25 +37,26 @@ func setup(unit_data: UnitData, team_id: int, grid_tile: Vector2i, count: int, h
 	y_sort_enabled = true
 
 	# Спавним бойцов в строю на клетке
-	_spawn_soldiers(count, hp_list)
+	_spawn_soldiers(count, hp_list, kinds)
 	# Полоска HP отряда над бойцами (у самих бойцов полосок нет)
 	var bar := SquadBar.new()
 	bar.squad = self
 	add_child(bar)
 
-func _spawn_soldiers(count: int, hp_list: Array[float]) -> void:
+func _spawn_soldiers(count: int, hp_list: Array[float], kinds: Array[String] = []) -> void:
 	# Вычисляем смещения для строя на клетке
 	# Бойцы расставляются в небольшой сетке внутри тайла
 	var offsets = _get_formation_offsets(count)
 
 	for i in range(count):
 		var hp_ratio: float = hp_list[i] if i < hp_list.size() else 1.0
-		_add_soldier(offsets[i], hp_ratio)
+		_add_soldier(offsets[i], hp_ratio, kinds[i] if i < kinds.size() else "")
 
-func _add_soldier(offset: Vector2, hp_ratio: float) -> void:
+func _add_soldier(offset: Vector2, hp_ratio: float, kind: String = "") -> void:
 	var soldier = SOLDIER_SCENE.instantiate()
 	add_child(soldier)
-	soldier.setup(data, team, self, offset, hp_ratio)
+	soldier.convert_kind = kind
+	soldier.setup(UnitFactory.convert_fighter(kind) if kind != "" else data, team, self, offset, hp_ratio)
 	soldier.position = offset
 	soldier.died.connect(_on_soldier_died)
 	soldiers.append(soldier)
