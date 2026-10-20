@@ -1,0 +1,51 @@
+[gd_resource type="SpriteFrames" load_steps=10 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/wall/idle/0.png" id="idle_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/wall/shield/0.png" id="shield_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/wall/shield/1.png" id="shield_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/wall/shield/2.png" id="shield_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/wall/shield/3.png" id="shield_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/wall/shield/4.png" id="shield_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/wall/shield/5.png" id="shield_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/wall/shield/6.png" id="shield_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/wall/shield/7.png" id="shield_7"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("idle_0")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("shield_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("shield_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("shield_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("shield_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("shield_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("shield_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("shield_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("shield_7")
+}],
+"loop": false,
+"name": &"shield",
+"speed": 10.0
+}]

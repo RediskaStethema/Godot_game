@@ -1,0 +1,71 @@
+[gd_resource type="SpriteFrames" load_steps=15 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/0.png" id="idle_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/1.png" id="idle_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/2.png" id="idle_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/3.png" id="idle_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/4.png" id="idle_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/5.png" id="idle_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/0.png" id="refill_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/1.png" id="refill_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/2.png" id="refill_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/3.png" id="refill_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/4.png" id="refill_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/5.png" id="refill_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/6.png" id="refill_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/7.png" id="refill_7"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("idle_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_5")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("refill_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_7")
+}],
+"loop": false,
+"name": &"refill",
+"speed": 10.0
+}]

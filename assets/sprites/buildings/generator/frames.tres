@@ -1,0 +1,42 @@
+[gd_resource type="SpriteFrames" load_steps=9 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle/0.png" id="idle_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle/1.png" id="idle_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle/2.png" id="idle_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle/3.png" id="idle_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle/4.png" id="idle_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle/5.png" id="idle_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle/6.png" id="idle_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle/7.png" id="idle_7"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("idle_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_7")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}]
