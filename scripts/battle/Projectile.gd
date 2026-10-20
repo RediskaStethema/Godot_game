@@ -19,6 +19,17 @@ const EFFECTS = {
 	# огненная струя Havoc: лист 96×48, 10 кадров, голова пламени справа
 	"flame":   {"sheet": "res://assets/Spritesheets/Flamethrower-Sheet.png", "size": Vector2i(96, 48),
 		"frames": 10, "fps": 18.0, "scale": 0.4, "pivot": Vector2(84, 24)},
+	# FXpack13 (решение пользователя 18.10.2026: пак — если подходит по стилю): листы tools/frames_to_strip.py,
+	# палитра — tools/vfx_grade.py. Огненный снаряд с хвостом углей — орудие цитадели
+	"fireball": {"sheet": "res://assets/effects/FXpack13/fireball_sheet.png", "size": Vector2i(64, 64),
+		"frames": 60, "fps": 30.0, "scale": 0.6, "pivot": Vector2(48, 32)},
+	# плазменный шар, перекрашен в варп — Шпиль варпа и Рубриковые десантники (Tzeentch)
+	"warp_bolt": {"sheet": "res://assets/effects/FXpack13/warp_bolt_sheet.png", "size": Vector2i(64, 64),
+		"frames": 60, "fps": 30.0, "scale": 0.45, "pivot": Vector2(50, 32)},
+	# болт Хаоса (лист пользователя assets/source_sheets/chaos_bolt_sheet.png, 19.10.2026): красное ядро в
+	# зелёных разрядах — свои цвета (own_colors: цвет вспышки стрелка не перекрашивает)
+	"chaos_bolt": {"sheet": "res://assets/effects/chaos_bolt/spritesheet.png", "size": Vector2i(214, 156),
+		"frames": 8, "fps": 14.0, "scale": 0.11, "pivot": Vector2(194, 78), "own_colors": true},
 }
 const FPS: float = 14.0             # кадры эффектов — по 70 мс
 const SCALE: float = 0.4            # листы рисованы крупно: шар charged — с голову марина (рост 31 px)
@@ -88,7 +99,7 @@ static func launch(parent: Node, kind: String, from: Vector2, target: Node2D, ai
 		if e.has("pivot"):
 			p.offset = Vector2(e["size"]) / 2.0 - e["pivot"]
 	p._angle_offset = e.get("angle", 0.0)
-	p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # пиксель-арт
+	p.texture_filter = Vfx.filter   # как у эффектов
 	p.z_index = 10   # поверх бойцов и построек
 	var s: float = e.get("scale", SCALE)
 	p.scale = Vector2(s, s)
@@ -98,7 +109,9 @@ static func launch(parent: Node, kind: String, from: Vector2, target: Node2D, ai
 	p._origin = from
 	p._pos = from
 	p._delay = delay
-	if tint.a > 0.0:   # цвет вспышки стрелка — важнее тёплой перекраски
+	if e.get("own_colors", false):   # лист в своих цветах — без перекраски
+		pass
+	elif tint.a > 0.0:   # цвет вспышки стрелка — важнее тёплой перекраски
 		p.material = _get_tint_material(tint)
 	elif warm:
 		p.material = _get_warm_material()
@@ -110,6 +123,7 @@ static func launch(parent: Node, kind: String, from: Vector2, target: Node2D, ai
 		AudioManager.play("shot_" + kind)
 	p._face(p._aim_point - from)
 	if p.sprite_frames:
+		FrameBlend.attach(p)   # кадры перетекают (только вид)
 		p.play("fly")
 	BattleManager.projectiles.append(p)
 	return p
@@ -123,7 +137,7 @@ static func _get_frames(kind: String) -> SpriteFrames:
 	if _frames_cache.has(kind):
 		return _frames_cache[kind]
 	var e: Dictionary = EFFECTS[kind]
-	var sheet: Texture2D = load(e["sheet"])
+	var sheet: Texture2D = load(Vfx.graded_path(e["sheet"]))   # ракета и огнемёт — в палитре игры
 	var count: int = e["frames"]
 	var frames := SpriteFrames.new()
 	frames.rename_animation("default", "fly")
@@ -213,9 +227,9 @@ func _impact() -> void:
 		AudioManager.play("hit")
 		BattleManager.credit_damage(source, clampf(damage - s.shield, 0.0, s.current_hp))
 		s.take_damage(damage)
-		# Попадание в бойца — брызги крови, как от удара вплотную (решение пользователя 17.10.2026:
-		# не искры); искры — только по камню цитадели
-		Vfx.spawn(get_parent(), "blood", _aim_point, Soldier.EFFECT_SCALE)
+		# Попадание в бойца — брызги крови пака NEw pack blood цвета жертвы (решение пользователя 18.10.2026;
+		# техника — масло и искра); по камню цитадели — искры
+		Vfx.spawn_blood(get_parent(), _aim_point, s.data, true, Soldier.EFFECT_SCALE)
 		if stun > 0.0:
 			s.apply_stun(stun)
 			Vfx.spawn(get_parent(), "lightning", _aim_point, Soldier.EFFECT_SCALE)

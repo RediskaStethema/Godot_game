@@ -225,13 +225,6 @@ func _check_battle_end() -> void:
 
 	print("BattleManager: бой закончен, победитель — команда ", winner_team)
 	emit_signal("battle_ended", winner_team)
-# -------------------------------------------------------
-# ПРОВЕРКА ПОБЕДЫ
-# -------------------------------------------------------
-
-
-func set_player_units(units: Array[UnitData]) -> void:
-	player_units = units
 
 # -------------------------------------------------------
 # КОРОЛЕВСТВО
@@ -269,6 +262,16 @@ func heal_citadel(amount: float) -> float:
 	citadel_hp = minf(citadel_hp + maxf(amount, 0.0), CITADEL_MAX_HP)
 	emit_signal("citadel_hp_changed", citadel_hp)
 	return citadel_hp - before
+
+# После боя: Кузня Вулкана чинит цитадель (статы по уровню и ордену); цитадель пала — не чинит
+func repair_from_forges() -> float:
+	if citadel_hp <= 0.0:
+		return 0.0
+	var amount := 0.0
+	for card in player_buildings:
+		if card.building_type == "vulkan_forge":
+			amount += Chapters.apply_building_stats(card.get_building_stats(), RunManager.player_chapter).get("repair", 0.0)
+	return heal_citadel(amount) if amount > 0.0 else 0.0
 
 # Итог боя: цитадель ранена и ниже порога — подкрепление в следующем магазине
 func _check_catch_up() -> void:

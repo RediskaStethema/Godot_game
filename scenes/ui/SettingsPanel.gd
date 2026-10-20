@@ -25,6 +25,11 @@ func setup() -> void:
 	full.toggled.connect(GameSettings.set_fullscreen)
 	_add_row("Полный экран").add_child(full)
 
+	var atmo = CheckButton.new()
+	atmo.button_pressed = GameSettings.atmosphere
+	atmo.toggled.connect(GameSettings.set_atmosphere)
+	_add_row("Атмосфера боя").add_child(atmo)
+
 	var volume = HSlider.new()
 	volume.min_value = 0.0
 	volume.max_value = 1.0

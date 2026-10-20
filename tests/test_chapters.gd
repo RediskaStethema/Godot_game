@@ -81,8 +81,9 @@ func _main() -> void:
 
 	var ba = await _snapshot("blood_angels")
 	await _finish()
-	_check("Blood Angels: +15% урона только ближнему бою",
-		_near(ba["assault_marine"]["damage"], ab["damage"] * 1.15) and _near(ba["tactical_marine"]["damage"], tb["damage"]))
+	# Минус ордена (решение пользователя 18.10.2026): Красная жажда — стрелкам −15% урона
+	_check("Blood Angels: +15% урона ближнему бою, стрелкам −15% (минус ордена)",
+		_near(ba["assault_marine"]["damage"], ab["damage"] * 1.15) and _near(ba["tactical_marine"]["damage"], tb["damage"] * 0.85))
 
 	var sw = await _snapshot("space_wolves")
 	await _finish()

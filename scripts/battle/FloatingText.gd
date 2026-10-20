@@ -69,9 +69,9 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	var font := ThemeDB.fallback_font
+	var font := UITheme.world_font()
 	var fs := int(FONT_SIZE * size_mult)
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(SCALE, SCALE))
-	draw_string_outline(font, Vector2(-w / 2.0, 0.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 5, Color(0, 0, 0, 0.85))
+	draw_string_outline(font, Vector2(-w / 2.0, 0.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 5, UITheme.OUTLINE)
 	draw_string(font, Vector2(-w / 2.0, 0.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)

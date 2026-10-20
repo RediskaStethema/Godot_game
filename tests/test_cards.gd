@@ -142,4 +142,16 @@ func _main() -> void:
 		hp_sum_after < hp_sum_before - 150.0 and bm.armed_events.is_empty() and enemy_count > 0)
 
 	bm.stop_battle()
+
+	# Иллюстрации игральных карт (assets/ui/card_art): у каждой карты обеих рас и особых карт орденов и богов
+	var no_art: Array = []
+	var all_cards: Array = CardFactory.build_pool("space_marines") + CardFactory.build_pool("chaos")
+	for ch in Chapters.CHAPTERS:
+		for key in ["unit_card", "building_card"]:
+			if ch.has(key):
+				all_cards.append(CardFactory.special_card(ch[key]))
+	for c in all_cards:
+		if not ResourceLoader.exists("res://assets/ui/card_art/%s.png" % c.id) and not c.id in no_art:
+			no_art.append(c.id)
+	_check("иллюстрации карт: у всех %d карт (нет: %s)" % [all_cards.size(), no_art], no_art.is_empty())
 	quit()

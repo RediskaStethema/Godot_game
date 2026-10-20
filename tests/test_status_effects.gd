@@ -128,8 +128,11 @@ func _main() -> void:
 	var p = _of(1, "plague_marine")[0]
 	var victim = _of(0, "assault_marine")[0]
 	p.target = victim
-	p._do_attack()
-	p._do_attack()
+	# Свой лист с hit_frame: урон — на кадре замаха, вплотную к цели
+	p.global_position = victim.global_position + Vector2(20, 0)
+	for i in range(2):
+		p._do_attack()
+		p._resolve_melee_hit()
 	_check("удар чумного: +1 стак яда за удар (2 удара — 2 стака)", victim.get_status_stacks(StatusEffects.POISONED) == 2)
 
 	# 7. Боевой клич Chaplain — один раз, союзникам в радиусе

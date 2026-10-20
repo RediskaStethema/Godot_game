@@ -10,6 +10,9 @@ var _requisition: Label
 var _citadel: Label
 var _synergy_panel: PanelContainer
 var _synergy_label: Label
+var _synergy_icons: HBoxContainer   # значки активных синергий, ордена / бога и рядов (пакет интерфейса)
+var _shield_icon: Control           # щит цитадели в шапке — только пока щит есть
+var _artillery_icon: TextureRect    # орудие: готово / перезарядка
 var _speed_button: Button   # скорость боя ×1/×2 (GameSettings.battle_speed)
 var _artillery: Label       # орудия игрока в бою: готово / перезарядка (только если есть)
 var _artillery_state: String = ""   # последняя надпись — метка меняется только при смене
@@ -20,6 +23,8 @@ const RESULT_FADE_IN: float = 0.25
 const RESULT_HOLD: float = 1.5
 const RESULT_FADE_OUT: float = 0.4
 var result_banner: Control = null
+const RESULT_PLATE_WIDTH: float = 820.0
+const RESULT_PLATE_FONT_SIZE: int = 44
 
 func setup(wave_text: String, message_label: Label, start_button: Button, synergy_width: float) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -37,13 +42,20 @@ func _build_header(wave_text: String, message_label: Label, start_button: Button
 	hud.offset_bottom = UITheme.HUD_HEIGHT
 	add_child(hud)
 	var row = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 24)
+	row.add_theme_constant_override("separation", 16)
 	hud.add_child(row)
-	row.add_child(UITheme.make_label(wave_text, "HeaderLabel"))
+	row.add_child(UITheme.icon_row("hud", "wave", UITheme.make_label(wave_text, "HeaderLabel")))
 	_requisition = UITheme.make_label("", "ValueLabel")
-	row.add_child(_requisition)
+	row.add_child(UITheme.icon_row("hud", "requisition", _requisition))
 	_citadel = UITheme.make_label("", "ValueLabel")
-	row.add_child(_citadel)
+	var citadel_row := UITheme.icon_row("hud", "citadel_hp", _citadel)
+	citadel_row.tooltip_text = "Цитадель (+ щит стен в этом бою)"
+	citadel_row.mouse_filter = Control.MOUSE_FILTER_PASS
+	_shield_icon = UITheme.make_icon("hud", "shield", UITheme.HUD_ICON_SIZE)
+	if _shield_icon:
+		citadel_row.add_child(_shield_icon)
+		_shield_icon.visible = false
+	row.add_child(citadel_row)
 
 	_message = message_label
 	_message.reparent(row)
@@ -57,7 +69,11 @@ func _build_header(wave_text: String, message_label: Label, start_button: Button
 
 	_artillery = UITheme.make_label("", "ValueLabel")
 	_artillery.visible = false
-	row.add_child(_artillery)
+	var artillery_row := UITheme.icon_row("hud", "cannon_ready", _artillery)
+	_artillery_icon = artillery_row.get_node_or_null("Icon")
+	if _artillery_icon:
+		_artillery_icon.visible = false
+	row.add_child(artillery_row)
 	_speed_button = UITheme.make_button("", "", GameSettings.cycle_battle_speed)
 	_speed_button.custom_minimum_size = Vector2(64, 0)
 	_speed_button.tooltip_text = "Скорость боя"
@@ -80,11 +96,22 @@ func _build_synergy_panel(width: float) -> void:
 	add_child(_synergy_panel)
 	var col = VBoxContainer.new()
 	_synergy_panel.add_child(col)
-	col.add_child(UITheme.make_label("СИНЕРГИИ", "HeaderLabel"))
+	var head = HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	col.add_child(head)
+	head.add_child(UITheme.make_label("СИНЕРГИИ", "HeaderLabel"))
+	_synergy_icons = HBoxContainer.new()
+	_synergy_icons.add_theme_constant_override("separation", 4)
+	head.add_child(_synergy_icons)
 	_synergy_label = UITheme.make_label("", "SmallLabel")
 	_synergy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_synergy_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(_synergy_label)
+	_synergy_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Длинный список (ордены, ряды, доход) прокручивается — иначе уходит за низ экрана
+	var scroll = ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(scroll)
+	scroll.add_child(_synergy_label)
 
 # -------------------------------------------------------
 # API
@@ -102,15 +129,33 @@ func show_result(title: String, subtitle: String, victory: bool) -> void:
 	add_child(banner)
 	banner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var head = UITheme.make_label(title, "TitleLabel")
+	head.name = "Title"
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	head.add_theme_font_size_override("font_size", RESULT_FONT_SIZE)
 	head.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT if victory else UITheme.RED_BRIGHT)
-	head.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	head.add_theme_color_override("font_outline_color", UITheme.OUTLINE)
 	head.add_theme_constant_override("outline_size", 12)
-	banner.add_child(head)
+	# Подложка пакета интерфейса (имперская — победа, хаоситская — нет); заголовок — в её тёмном поле
+	var plate := UITheme.ui_icon("banners", "victory" if victory else "defeat")
+	if plate:
+		var back = TextureRect.new()
+		back.texture = plate
+		back.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		back.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		back.custom_minimum_size = Vector2(RESULT_PLATE_WIDTH, RESULT_PLATE_WIDTH * plate.get_height() / plate.get_width())
+		back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		banner.add_child(back)
+		head.add_theme_font_size_override("font_size", RESULT_PLATE_FONT_SIZE)   # в тёмное поле подложки
+		back.add_child(head)
+		head.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	else:
+		banner.add_child(head)
 	var sub = UITheme.make_label(subtitle, "ValueLabel")
+	sub.name = "Subtitle"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	sub.add_theme_color_override("font_outline_color", UITheme.OUTLINE)
 	sub.add_theme_constant_override("outline_size", 8)
 	banner.add_child(sub)
 	banner.modulate.a = 0.0
@@ -137,6 +182,8 @@ func show_synergies() -> void:
 	var chapter = Chapters.get_chapter(RunManager.player_chapter)
 	if not chapter.is_empty():
 		lines.append("• %s %s — %s" % ["Метка" if chapter["faction"] == "chaos" else "Орден", chapter["name"], chapter["desc"]])
+		if chapter.has("malus_desc"):
+			lines.append("  минус: %s" % chapter["malus_desc"])
 	var rows = SynergyManager.count_position_bonuses(
 		SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
 	for pos in [SynergyManager.FRONT, SynergyManager.BACK]:
@@ -145,6 +192,31 @@ func show_synergies() -> void:
 	lines.append("%s: %d · доход синергии +%d Req" % [tag.capitalize(), SynergyManager.tag_counts.get(tag, 0),
 		SynergyManager.income_bonus])
 	_synergy_label.text = "\n".join(lines)
+	_refresh_synergy_icons(chapter, rows)
+
+# Значки в заголовке панели: синергии (высший уровень тега), орден / бог, ряды с отрядами
+const SYNERGY_ICON_SIZE: float = 26.0
+func _refresh_synergy_icons(chapter: Dictionary, rows: Dictionary) -> void:
+	for c in _synergy_icons.get_children():
+		c.queue_free()
+	var best := {}
+	for s in SynergyManager.active_synergies:
+		best[s["tag"]] = maxi(best.get(s["tag"], 0), s["threshold"])
+	var icons: Array = []
+	for tag in best:
+		icons.append(["synergy", "%s_%d" % [tag, best[tag]], "%s ×%d" % [tag.capitalize(), best[tag]]])
+	if not chapter.is_empty():
+		icons.append(["emblems", chapter["id"], chapter["name"]])
+	for pos in [SynergyManager.FRONT, SynergyManager.BACK]:
+		if rows[pos] > 0:
+			icons.append(["synergy", "front_row" if pos == SynergyManager.FRONT else "rear_row",
+				SynergyManager.POSITION_BONUSES[pos]["name"]])
+	for i in icons:
+		var icon := UITheme.make_icon(i[0], i[1], SYNERGY_ICON_SIZE)
+		if icon:
+			icon.tooltip_text = i[2]
+			icon.mouse_filter = Control.MOUSE_FILTER_PASS
+			_synergy_icons.add_child(icon)
 
 # Орудия игрока: опрос раз в кадр — только надпись, на бой не влияет
 func _process(_delta: float) -> void:
@@ -171,6 +243,9 @@ func _process(_delta: float) -> void:
 	_artillery_state = text
 	_artillery.visible = text != ""
 	_artillery.text = text
+	if _artillery_icon:
+		_artillery_icon.visible = text != ""
+		_artillery_icon.texture = UITheme.ui_icon("hud", "cannon_ready" if ready_count > 0 else "cannon_cooldown")
 	_artillery.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT if ready_count > 0 else UITheme.TEXT_DIM)
 
 func _update_speed_button() -> void:
@@ -180,8 +255,11 @@ func _on_requisition_changed(amount: int) -> void:
 	_requisition.text = "%d Req" % amount
 
 func _on_citadel_changed(hp: float) -> void:
-	_citadel.text = "Цитадель %d/%d" % [ceili(hp), int(BattleManager.CITADEL_MAX_HP)]
+	# «Цитадель» и «щит» — значками шапки (пакет интерфейса), в тексте только числа
+	_citadel.text = "%d/%d" % [ceili(hp), int(BattleManager.CITADEL_MAX_HP)]
 	if BattleManager.citadel_shield > 0.0:
-		_citadel.text += " +%d щит" % ceili(BattleManager.citadel_shield)
+		_citadel.text += "  +%d" % ceili(BattleManager.citadel_shield)
+	if _shield_icon:
+		_shield_icon.visible = BattleManager.citadel_shield > 0.0
 	_citadel.add_theme_color_override("font_color",
 		UITheme.RED_BRIGHT if hp <= BattleManager.CITADEL_MAX_HP / 4 else UITheme.GOLD_BRIGHT)

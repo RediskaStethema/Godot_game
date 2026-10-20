@@ -5,8 +5,13 @@ extends PanelContainer
 @onready var card_desc: Label = $VBoxContainer/UnitStats
 @onready var buy_button: Button = $VBoxContainer/BuyButton
 
-const CARD_SIZE = Vector2(220, 270)
-const PORTRAIT_HEIGHT = 70.0
+const CARD_SIZE = Vector2(220, 330)
+# Портрет по силуэту бойца на грунте расы в рамке редкости (UITheme.make_portrait_frame): окно почти в
+# пропорции рамки по ширине карты без полей (чуть ниже — место описанию)
+const PORTRAIT_HEIGHT = 156.0
+# Есть иллюстрация карты (assets/ui/card_art) — вместо портрета и заголовка лицо игральной карты
+# (UITheme.make_card_face: название на плашке рамки, цена и масть в медальонах)
+const CARD_FACE_WIDTH = 180.0
 # Сноски «на поле» и синергий — над кнопкой «Купить», не на портрете (решение пользователя)
 const NOTE_GAP = 4.0
 const NOTE_SIDE = 8.0
@@ -21,6 +26,8 @@ var _synergy_label: Label
 var _owned_label: Label = null
 var _notes: VBoxContainer
 var _notes_layer: Control
+var _face: Control = null        # лицо игральной карты (есть арт) или null
+var _face_cost: Label = null
 
 signal purchase_requested(slot_index: int)
 
@@ -108,6 +115,18 @@ func _build_owned_note() -> void:
 
 # Редкость · тип, портрет, название
 func _fill_header(data: CardData) -> void:
+	if UITheme.has_card_art(data):
+		_face = UITheme.make_card_face(data, CARD_FACE_WIDTH, str(_cost()))
+		_face.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_face.tooltip_text = "%s · %s" % [UITheme.RARITY_NAMES.get(data.rarity, data.rarity),
+			UITheme.TYPE_NAMES.get(data.card_type, data.card_type)]
+		_face_cost = _face.get_node("Cost")
+		$VBoxContainer.add_child(_face)
+		$VBoxContainer.move_child(_face, 0)
+		card_faction.hide()   # редкость и тип — рамка и масть
+		card_title.text = data.title
+		card_title.hide()     # название — на плашке рамки
+		return
 	card_faction.text = "%s · %s" % [
 		UITheme.RARITY_NAMES.get(data.rarity, data.rarity),
 		UITheme.TYPE_NAMES.get(data.card_type, data.card_type)]
@@ -118,7 +137,7 @@ func _fill_header(data: CardData) -> void:
 	$VBoxContainer.add_child(portrait)
 	$VBoxContainer.move_child(portrait, 1)
 	card_title.text = data.title
-	card_title.theme_type_variation = "HeaderLabel"
+	card_title.theme_type_variation = "CardTitleLabel"
 	card_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
@@ -138,31 +157,49 @@ func _fill_body(data: CardData) -> void:
 	var scroll = ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	$VBoxContainer.add_child(scroll)
-	$VBoxContainer.move_child(scroll, card_desc.get_index())
+	# Описание — во вставке под иллюстрацией (ориентир пользователя — карты 9 Kings, 20.10.2026)
+	var inset = PanelContainer.new()
+	inset.name = "DescInset"
+	inset.add_theme_stylebox_override("panel", UITheme.panel_style(UITheme.BG_DEEP, UITheme.GOLD_DIM, 1, 4, 5))
+	inset.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	inset.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$VBoxContainer.add_child(inset)
+	$VBoxContainer.move_child(inset, card_desc.get_index())
+	inset.add_child(scroll)
 	card_desc.reparent(scroll)
 	card_desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 func _make_portrait(data: CardData) -> Control:
-	var frame = PanelContainer.new()
-	frame.custom_minimum_size = Vector2(0, PORTRAIT_HEIGHT)
-	frame.add_theme_stylebox_override("panel", UITheme.panel_style(UITheme.BG_DEEP, UITheme.GOLD_DIM, 1, 4, 4))
-	var tex = UITheme.card_portrait(data)
-	if tex:
-		var img = TextureRect.new()
-		img.texture = tex
-		img.modulate = UITheme.card_tint(data)
-		img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		img.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-		frame.add_child(img)
-	else:
-		var l = UITheme.make_label(UITheme.TYPE_NAMES.get(data.card_type, "").to_upper(), "HeaderLabel")
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		l.add_theme_color_override("font_color", UITheme.TEXT_DIM)
-		frame.add_child(l)
-	return frame
+	return UITheme.make_portrait_frame(data, PORTRAIT_HEIGHT, true)   # в рамке редкости
+
+# Низ портрета / лица карты — сноски не должны на него залезать (tests/test_battle_ui.gd)
+func portrait_bottom() -> float:
+	if _face:
+		return _face.get_global_rect().end.y
+	return card_title.global_position.y
+
+# Карта переворачивается из рубашки (обновление набора, решение пользователя 20.10.2026): сначала видна
+# рубашка расы, через delay карта сжимается по ширине, рубашка прячется, лицо разворачивается. Только вид
+const FLIP_TIME: float = 0.22
+func reveal(delay: float) -> void:
+	var back_tex := UITheme.card_back(card_data.faction)
+	if _face == null or back_tex == null:
+		return
+	var back = TextureRect.new()
+	back.name = "CardBack"
+	back.texture = back_tex
+	back.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	back.stretch_mode = TextureRect.STRETCH_SCALE
+	back.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_face.add_child(back)
+	back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var t := create_tween()
+	t.tween_interval(delay)
+	t.tween_callback(func(): _face.pivot_offset = _face.size / 2.0)
+	t.tween_property(_face, "scale:x", 0.0, FLIP_TIME / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	t.tween_callback(back.queue_free)
+	t.tween_property(_face, "scale:x", 1.0, FLIP_TIME / 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 func _cost() -> int:
 	return 0 if free else ShopManager.get_price(card_data)
@@ -173,6 +210,8 @@ func set_hand_full(full: bool) -> void:
 
 func _refresh_button() -> void:
 	var cost = _cost()
+	if _face_cost:
+		_face_cost.text = str(cost)
 	if hand_full:
 		buy_button.text = "Рука полна"
 		buy_button.disabled = true

@@ -147,9 +147,10 @@ func _main() -> void:
 		"Path to Glory" in base["panel"] and base["income"] == 2 and "Chaos: 5" in base["panel"])
 	var k = await _battle("khorne")
 	await _finish()
-	_check("Кхорн: +20% урона Raptors (ближний бой), Chaos Marines — без бонуса, в панели «Метка Khorne»",
+	# Минус бога (решение пользователя 18.10.2026): Кхорн презирает стрелков — их урон −20%
+	_check("Кхорн: +20% урона Raptors (ближний бой), Chaos Marines −20% (минус бога), в панели «Метка Khorne»",
 		_near(k["chaos_raptor"]["damage"], base["chaos_raptor"]["damage"] * 1.2)
-		and _near(k["chaos_marine"]["damage"], base["chaos_marine"]["damage"]) and "Метка Khorne" in k["panel"])
+		and _near(k["chaos_marine"]["damage"], base["chaos_marine"]["damage"] * 0.8) and "Метка Khorne" in k["panel"])
 	var n = await _battle("nurgle")
 	await _finish()
 	_check("Нургл: +15% HP всем", _near(n["chaos_marine"]["hp"], base["chaos_marine"]["hp"] * 1.15)

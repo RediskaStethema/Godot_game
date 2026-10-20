@@ -78,8 +78,9 @@ func _main() -> void:
 	var cit_theme: Dictionary = theme.get("citadel", {})
 	# готика — с тоном; анимированный декор (костёр) — без: холодный огонь выглядел бы мёртвым
 	var props_tinted = theme["decorations"].filter(func(d): return not d.has("frames")).all(func(d): return d.has("tint"))
-	_check("готика темнее, ближе к грунту: декор с тоном, цитадель — тон темы",
-		props_tinted and cit_theme.has("tint") and citadel._sprite.modulate == cit_theme["tint"])
+	# цитадель — цветокор запечён в лист (tools/sm_grade.py): оттенка поверх нет — белое ядро вспышки не синеет
+	_check("готика темнее, ближе к грунту: декор с тоном, цитадель — цветокор в листе, без оттенка",
+		props_tinted and not cit_theme.has("tint") and citadel._sprite.modulate == Color.WHITE)
 	var marks: Dictionary = battle.renderer._layout.get("landmarks", {})
 	var fires = marks.keys().filter(func(c): return marks[c] == theme["landmarks"]["campfire"])
 	var flags = marks.keys().filter(func(c): return marks[c] in theme["landmarks"]["banners"])
@@ -129,6 +130,36 @@ func _main() -> void:
 		unique.size() == 71 and ResourceLoader.exists(chaos_citadel.get("sheet", "")) and missing.is_empty() and battle.renderer._animated \
 		and not chaos.has("river") and battle.renderer._layout["rivers"].is_empty() \
 		and blast_tiles.size() == 7 and no_blast_vfx)
+
+	# 3б. Цитадель Космодесанта — лист citadel_spacemarine_spritesheet: все ряды, снаряд — на кадре вспышки из ствола
+	var sm_cit: Dictionary = theme["citadel"]   # раса без темы → тема Космодесанта
+	citadel.apply_theme(sm_cit)   # выше проверялась пустая тема — башня из блоков
+	await _frames(2)
+	var sm_frames: SpriteFrames = citadel._sprite.sprite_frames
+	var counts_ok = sm_frames.get_frame_count("idle") == 1 and sm_frames.get_frame_count("attack") == 9 \
+		and sm_frames.get_frame_count("hit") == 3 and sm_frames.get_frame_count("fall") == 12 \
+		and is_equal_approx(sm_frames.get_animation_speed("attack"), 12.0)
+	var shots_before = bm.projectiles.size()
+	citadel._fire_at(citadel.global_position + Vector2(200, 0))
+	var none_yet = bm.projectiles.size() == shots_before and citadel.get_sprite_animation() == "attack"
+	for i in range(int(ceil(float(sm_cit["shot_frame"]) / 12.0 / 0.1))):
+		citadel.tick(0.1)
+	var shot = bm.projectiles.back() if bm.projectiles.size() > shots_before else null
+	var muzzle = citadel.to_global(citadel._sprite.position + sm_cit["muzzle"] * citadel._sprite.scale)
+	_check("цитадель Космодесанта: 1/9/3/12 кадров (стоит неподвижно), снаряд — на кадре вспышки, из ствола",
+		counts_ok and none_yet and shot != null and shot.global_position.distance_to(muzzle) < 1.0)
+	bm.clear_projectiles()
+
+	# 3в. Попадание по цитадели — белая вспышка на спрайте (как у бойца), гаснет сама
+	citadel.take_hit(0.0)
+	var flash_peak: float = citadel.get_hit_flash()
+	var on_sprite = citadel._sprite.material != null and citadel._sprite.material == citadel.material
+	for i in range(600):   # твин гаснет по времени кадров: ждём, пока погаснет (не дольше 600 кадров)
+		if citadel.get_hit_flash() < 0.01:
+			break
+		await _frames(1)
+	_check("попадание по цитадели: белеет %.2f и гаснет до %.2f" % [flash_peak, citadel.get_hit_flash()],
+		flash_peak > 0.5 and on_sprite and citadel.get_hit_flash() < 0.01)
 
 	# 4. Цитадель: лист кадров → анимации, состояния, область перекрытия
 	citadel.apply_theme({"sheet": SHEET_PATH, "frame_size": Vector2i(FRAME, FRAME),

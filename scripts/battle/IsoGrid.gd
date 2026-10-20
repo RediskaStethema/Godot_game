@@ -89,18 +89,6 @@ static func advance_direction() -> Vector2:
 static func rank_direction() -> Vector2:
 	return Vector2(-TILE_WIDTH, TILE_HEIGHT).normalized()
 
-# Размер ромба сетки в пикселях (рамка королевства или зона врага)
-func get_grid_pixel_size(is_enemy: bool = false) -> Vector2:
-	var n = (enemy_width + enemy_height) if is_enemy else (grid_width + grid_height)
-	return Vector2(n * TILE_WIDTH / 2.0, n * TILE_HEIGHT / 2.0)
-
-# Ограничивающий прямоугольник сетки на экране (для проверок и UI)
-func get_grid_rect(is_enemy: bool = false) -> Rect2:
-	var origin = enemy_origin if is_enemy else player_origin
-	var rows = enemy_height if is_enemy else grid_height
-	var top_left = origin + Vector2(-rows * TILE_WIDTH / 2.0, -TILE_HEIGHT / 2.0)
-	return Rect2(top_left, get_grid_pixel_size(is_enemy))
-
 # tile = (col, row) в сетке
 func tile_to_screen(tile: Vector2i, is_enemy: bool = false) -> Vector2:
 	var origin = enemy_origin if is_enemy else player_origin
@@ -167,7 +155,3 @@ func get_enemy_tiles_front_first() -> Array[Vector2i]:
 		for row in range(enemy_height):
 			tiles.append(Vector2i(col, row))
 	return tiles
-
-# Расстояние между двумя тайлами (для AI)
-func tile_distance(a: Vector2i, b: Vector2i) -> int:
-	return abs(a.x - b.x) + abs(a.y - b.y)

@@ -15,11 +15,6 @@ const SCALE: float = IsoGrid.TILE_WIDTH / TOP_WIDTH_PX
 # Высота одного «этажа» блока на экране — для зданий из нескольких блоков
 const LEVEL_HEIGHT: float = SIDE_HEIGHT_PX * SCALE
 
-# Номера Tiles/Slice N.png по назначению
-const FLOOR = [36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 10, 4]  # пол: в основном тёмный, изредка светлый и с кратерами
-const KINGDOM = [16, 17, 18, 19, 20, 21, 22, 23, 24, 25] # плиты королевства: техно-панели
-const ENEMY = [43, 44, 45, 46, 47]                     # зона врага: тёмные панели
-
 static var _cache: Dictionary = {}
 
 static func tile(n: int) -> Texture2D:

@@ -40,7 +40,7 @@ func _make_card(level: int) -> Control:
 	card.name = "Difficulty_%d" % level
 	card.custom_minimum_size = CARD_SIZE
 	card.disabled = not open
-	card.theme_type_variation = "PrimaryButton" if open else ""
+	card.theme_type_variation = "SelectCard"
 	card.pressed.connect(choose.bind(level))
 	var box = VBoxContainer.new()
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

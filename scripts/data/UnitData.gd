@@ -67,10 +67,14 @@ extends Resource
 # Пока у новых юнитов нет своих спрайтов — различаем их тинтом и размером
 @export var tint: Color = Color.WHITE
 @export var sprite_scale: float = 1.0
+# Броня в цвет ордена игрока (Soldier.ARMOR_SHADER); false — лист уже в цветах своего ордена (особые юниты)
+@export var chapter_armor: bool = true
 # Снаряд стрелка — вид из Projectile.EFFECTS ("bolt" / "charged" / "spark"), "" — без снаряда.
 # Урон и эффекты попадания (стан, отбрасывание) — когда снаряд долетит (Projectile._impact).
 @export var projectile: String = ""
 @export var projectile_warm: bool = false   # синий эффект → красно-оранжевый (Хаос)
+# Цвет крови при попадании (Vfx.BLOOD_COLORS), "" — по тегам: get_blood()
+@export var blood: String = ""
 
 # --- Фракционные флаги ---
 @export var has_reanimation: bool = false
@@ -120,6 +124,19 @@ func get_attack_speed() -> float:
 
 func get_move_speed() -> float:
 	return move_speed * move_speed_multiplier
+
+# Цвет крови (Vfx.BLOOD_COLORS): свой blood или по тегам — техника масло, Космодесант тёмно-красная,
+# Космодесант Хаоса фиолетовая, остальные (люди) красная
+func get_blood() -> String:
+	if blood != "":
+		return blood
+	if "vehicle" in tags:
+		return "oil"
+	if "marine" in tags:
+		return "dark_red"
+	if "chaos" in tags:
+		return "purple"
+	return "red"
 
 # Карта того же отряда: улучшить можно, пока не достигнут максимальный уровень
 func can_merge_upgrade() -> bool:

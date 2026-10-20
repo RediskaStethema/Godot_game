@@ -13,7 +13,7 @@ const COUNT_SCALE: float = 0.5
 const PIP_R: float = 2.0
 const PIP_STEP: float = 5.0
 const PIP_GAP: float = 4.0
-const SHIELD_COLOR = Color(0.45, 0.75, 1.0)   # щит Iron Halo — полоска под HP
+const SHIELD_COLOR = UITheme.SHIELD_BLUE   # щит Iron Halo — полоска под HP
 const SHIELD_HEIGHT: float = 2.0
 
 var squad: Squad
@@ -66,13 +66,13 @@ func _draw() -> void:
 		return
 	var rect := Rect2(Vector2(-SIZE.x / 2.0, -SIZE.y), SIZE)
 	draw_rect(rect.grow(1.0), Color(0, 0, 0, 0.75))
-	var color := UITheme.GREEN if squad.team == GameConstants.TEAM_PLAYER else UITheme.RED_BRIGHT
+	var color := UITheme.GREEN if squad.team == GameConstants.TEAM_PLAYER else UITheme.ENEMY_SIDE
 	draw_rect(Rect2(rect.position, Vector2(rect.size.x * _ratio, rect.size.y)), color)
 	if _shield > 0.0:
 		draw_rect(Rect2(Vector2(rect.position.x, rect.end.y + 1.0), Vector2(rect.size.x * _shield, SHIELD_HEIGHT)), SHIELD_COLOR)
 	if squad.data.squad_size > 1:
 		draw_set_transform(Vector2(rect.end.x + 3.0, 1.0), 0.0, Vector2(COUNT_SCALE, COUNT_SCALE))
-		var font := ThemeDB.fallback_font
+		var font := UITheme.world_font()
 		draw_string_outline(font, Vector2.ZERO, "×%d" % _count, HORIZONTAL_ALIGNMENT_LEFT, -1, COUNT_FONT_SIZE,
 			4, Color(0, 0, 0, 0.8))
 		draw_string(font, Vector2.ZERO, "×%d" % _count, HORIZONTAL_ALIGNMENT_LEFT, -1, COUNT_FONT_SIZE,

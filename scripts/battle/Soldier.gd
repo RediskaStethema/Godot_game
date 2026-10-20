@@ -22,15 +22,17 @@ const STATUS_DOT_GAP: float = 3.0
 const SHADOW_RADIUS: float = 6.0       # × sprite_scale; эллипс сплюснут, как клетка изометрии
 const SHADOW_FLATTEN: float = 0.5
 const SHADOW_COLOR = Color(0, 0, 0, 0.35)
+const SHADOW_SOFT = Color(0, 0, 0, 0.16)   # мягкий край тени: шире и прозрачнее
+const SHADOW_SOFT_SCALE: float = 1.45
 const RING_WIDTH: float = 1.5
-const RING_ALPHA: float = 0.75
+const RING_ALPHA: float = 0.6
 # Всплывающие цифры (FloatingText) — только в схватке: удар не меньше FLOAT_MIN_DAMAGE
 # (герои, техника, орудие; не каждый болт и не яд / огонь), лечение — порциями FLOAT_HEAL_STEP
 const FLOAT_MIN_DAMAGE: float = 20.0
 const FLOAT_HEAL_STEP: float = 10.0
 const FLOAT_HIT_TO_ENEMY = Color(1.0, 0.86, 0.55)
-const FLOAT_HIT_TO_PLAYER = Color(1.0, 0.45, 0.4)
-const FLOAT_HEAL = Color(0.55, 1.0, 0.55)
+const FLOAT_HIT_TO_PLAYER = UITheme.HIT_RED
+const FLOAT_HEAL = UITheme.HEAL
 # Боевой клич (Chaplain): кадр клича (анимация battle_cry листа, если есть), первый выстрел — после него
 const BATTLE_CRY_TIME: float = 0.6
 # Вспышка попадания: боец, получивший урон, на мгновение белеет (общий шейдер на всех)
@@ -119,6 +121,9 @@ var _orbit_sign: float = 1.0      # стрельба на ходу: в каку�
 var extra_on_hit_status: String = ""
 var extra_on_hit_status_power: float = 0.0
 var extra_on_hit_status_duration: float = 0.0
+# Особые бонусы и минусы ордена / бога и их зданий (решение пользователя 18.10.2026) — на этот бой:
+var damage_taken_mult: float = 1.0   # множитель получаемого урона (Slaanesh: ×1.1)
+var lifesteal: float = 0.0           # доля урона ближнего боя, которая лечит бойца (Чаша крови)
 # Эффекты на бойце (Vfx) — только вид: статусы, оглушение / каст, лечение
 var _status_vfx: Dictionary = {}   # статус → Vfx
 var _state_vfx: Vfx
@@ -220,10 +225,33 @@ void fragment() {
 	COLOR = vec4(mix(c.rgb, vec3(1.0), flash), c.a);
 }"""
 static var _armor_materials: Dictionary = {}   # "орден:вспышка" → ShaderMaterial
+# Подсветка края силуэта (решение пользователя 19.10.2026: тёмно-красные бойцы Хаоса терялись на красном поле):
+# пиксели у границы фигуры (сосед на rim_px пикселей текстуры прозрачен) — к тёплому свету; толщина —
+# RIM_SCREEN_PX экранных пикселей при любом размере листа. Тема расы — ключ "unit_rim" {color, strength},
+# только бойцам этой расы. Вспышка попадания — в том же шейдере (иначе на вспышку подсветка пропадала бы)
+const RIM_SCREEN_PX: float = 1.3
+const RIM_SHADER = """shader_type canvas_item;
+uniform float rim_px = 6.0;
+uniform vec3 rim_color = vec3(1.0);
+uniform float strength = 0.5;
+uniform float flash = 0.0;
+void fragment() {
+	vec4 c = COLOR;   // уже текстура × modulate
+	vec2 d = TEXTURE_PIXEL_SIZE * rim_px;
+	float around = min(min(texture(TEXTURE, UV + vec2(d.x, 0.0)).a, texture(TEXTURE, UV - vec2(d.x, 0.0)).a),
+		min(texture(TEXTURE, UV + vec2(0.0, d.y)).a, texture(TEXTURE, UV - vec2(0.0, d.y)).a));
+	float edge = (1.0 - around) * step(0.5, c.a);
+	c.rgb = mix(c.rgb, rim_color, edge * strength);
+	COLOR = vec4(mix(c.rgb, vec3(1.0), flash), c.a);
+}"""
+static var _rim_materials: Dictionary = {}   # "толщина:вспышка" → ShaderMaterial
+static var _rim_shader: Shader = null
+var _rim_px: int = 0   # толщина подсветки края в пикселях текстуры (0 — без подсветки)
 static var _armor_shader: Shader = null        # один на все: в Compatibility шейдер компилируется при первом показе
 var _base_material: Material = null
 var _armor_chapter: String = ""   # орден, в цвет которого перекрашен боец ("" — нет)
-var _hit_flash_id: int = 0   # номер последней вспышки — старый таймер не гасит новую
+var _flash_left: float = 0.0   # сек до конца вспышки попадания (_process: время дерева, на паузе стоит)
+var _walk_cycle_time: float = 0.0   # длина цикла бега листа, сек (0 — бега нет); темп бега — walk_anim_scale
 
 static func _get_frames(sprite_path: String) -> SpriteFrames:
 	if _frames_cache.has(sprite_path):
@@ -249,7 +277,11 @@ func _ready() -> void:
 	sprite.animation_finished.connect(_on_animation_finished)
 	sprite.animation_changed.connect(_on_animation_changed)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _flash_left > 0.0:
+		_flash_left -= delta
+		if _flash_left <= 0.0:
+			sprite.material = _base_material
 	if not _has_tick_from or current_state == State.DEAD or not BattleManager.is_battle_running():
 		return
 	if not _drawn_between:
@@ -275,13 +307,12 @@ func _on_animation_changed() -> void:
 	sprite.speed_scale = 1.0
 
 # Множитель скорости анимации бега при скорости speed (px/с): цикл листа — за WALK_CYCLE_HEIGHTS ростов
+# (зовётся каждый тик у каждого идущего — длина цикла посчитана в _load_animations)
 func walk_anim_scale(speed: float) -> float:
-	var frames := sprite.sprite_frames
-	if frames == null or not frames.has_animation("walk") or frames.get_frame_count("walk") == 0:
+	if _walk_cycle_time <= 0.0:
 		return 1.0
-	var cycle_time: float = frames.get_frame_count("walk") / frames.get_animation_speed("walk")
 	var stride: float = WALK_CYCLE_HEIGHTS * TARGET_SPRITE_HEIGHT * data.sprite_scale
-	return clampf(speed * cycle_time / stride, WALK_SCALE_LIMITS.x, WALK_SCALE_LIMITS.y)
+	return clampf(speed * _walk_cycle_time / stride, WALK_SCALE_LIMITS.x, WALK_SCALE_LIMITS.y)
 
 # Выстрел / удар отыгран — стойка до следующего (последний кадр атаки — со вспышкой ствола)
 func _on_animation_finished() -> void:
@@ -304,6 +335,9 @@ func stand_down(won: bool = false) -> void:
 func _load_animations() -> void:
 	var frames = _get_frames(data.sprite_path)
 	sprite.sprite_frames = frames
+	_walk_cycle_time = 0.0
+	if frames.has_animation("walk") and frames.get_frame_count("walk") > 0:
+		_walk_cycle_time = frames.get_frame_count("walk") / frames.get_animation_speed("walk")
 	# Масштаб по высоте первого кадра idle — все юниты одного роста,
 	# sprite_scale делает Терминатора крупнее, а скаута мельче
 	var base_h = TARGET_SPRITE_HEIGHT
@@ -488,8 +522,8 @@ func _state_move(delta: float) -> void:
 			_play_animation("idle")
 		return
 
-	# Враг в поле зрения — поиск по сетке реестра (на марше каждый боец каждый тик)
-	if SoldierRegistry.find_nearest(1 - team, global_position, data.vision_range):
+	# Враг в поле зрения — поиск по сетке реестра; отряд уже проверил, что врагов рядом нет, — не ищем
+	if not (parent_squad and parent_squad.enemy_out_of_sight) 			and SoldierRegistry.find_nearest(1 - team, global_position, data.vision_range):
 		target = _find_target()
 		transition_to(State.CHASE)
 		return
@@ -618,8 +652,6 @@ func _state_retreating(delta: float) -> void:
 # ПОДДЕРЖКА — лечение (Apothecary). Работает параллельно с FSM.
 # -------------------------------------------------------
 func _tick_support(delta: float) -> void:
-	if current_heal_per_second <= 0.0:
-		return
 	if current_state in [State.IDLE, State.STUNNED, State.DEAD]:
 		return
 	# Лечим самого раненого (по доле HP) союзника в радиусе, включая себя
@@ -657,7 +689,6 @@ func refresh_stats_from_data() -> void:
 	current_attack_speed = data.get_attack_speed()
 	current_move_speed = data.get_move_speed()
 	shield = max_hp * data.shield_ratio
-	queue_redraw()
 
 func heal(amount: float) -> void:
 	if current_state == State.DEAD:
@@ -668,7 +699,6 @@ func heal(amount: float) -> void:
 		_heal_vfx = Vfx.attach(self, "heal", data.sprite_scale * EFFECT_SCALE)
 	var before := current_hp
 	current_hp = min(current_hp + amount, max_hp)
-	queue_redraw()
 	if BattleManager.is_battle_running():
 		_heal_unshown += current_hp - before
 		if _heal_unshown >= FLOAT_HEAL_STEP:
@@ -678,14 +708,16 @@ func heal(amount: float) -> void:
 # -------------------------------------------------------
 # ВИД: тень, кольцо стороны, статусы
 # -------------------------------------------------------
+# HP здесь не рисуется (полоска — у отряда, SquadBar): урон и лечение перерисовки не просят.
 # Рисуется под спрайтом (дочерним): тень и кольцо стороны у ног — свои янтарные, враги красные
 # (решение пользователя: стороны различимы не только оттенком спрайта). Статусы — точки над головой
 func _draw() -> void:
 	if data == null or current_state == State.DEAD or max_hp <= 0.0:
 		return
 	var r := SHADOW_RADIUS * data.sprite_scale
-	var ring := Color(UITheme.GOLD if team == GameConstants.TEAM_PLAYER else UITheme.RED_BRIGHT, RING_ALPHA)
+	var ring := Color(UITheme.PLAYER_SIDE if team == GameConstants.TEAM_PLAYER else UITheme.ENEMY_SIDE, RING_ALPHA)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, SHADOW_FLATTEN))
+	draw_circle(Vector2.ZERO, r * SHADOW_SOFT_SCALE, SHADOW_SOFT)
 	draw_circle(Vector2.ZERO, r, SHADOW_COLOR)
 	draw_arc(Vector2.ZERO, r, 0.0, TAU, 20, ring, RING_WIDTH)
 	if is_entrenched():   # окопался (Devastator) — бруствер дугой перед ногами
@@ -796,7 +828,7 @@ func _attack_anim_scale() -> float:
 	return clampf(length / maxf(gap * ATTACK_ANIM_FILL, GameConstants.FIXED_TICK), 1.0, ATTACK_ANIM_MAX_SCALE)
 
 func _tick_melee_hit(delta: float) -> void:
-	if _hit_timer <= 0.0:
+	if _hit_timer <= 0.0:   # тесты зовут и после удара
 		return
 	_hit_timer -= delta
 	if _hit_timer <= TIMER_EPSILON:
@@ -818,8 +850,10 @@ func _land_melee_hit(victim: Soldier) -> void:
 	AudioManager.play("melee_hit")
 	BattleManager.credit_damage(parent_squad, clampf(dmg - victim.shield, 0.0, victim.current_hp))
 	victim.take_damage(dmg)
+	if lifesteal > 0.0:
+		heal(dmg * lifesteal)
 	var body := victim.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * victim.data.sprite_scale)
-	Vfx.spawn(_world_parent(), "blood", body, EFFECT_SCALE)
+	Vfx.spawn_blood(_world_parent(), body, victim.data, false, EFFECT_SCALE)
 	Vfx.spawn(_world_parent(), "slash", body, EFFECT_SCALE, (victim.global_position - global_position).angle())
 	_apply_on_hit_effects()
 	if is_instance_valid(prev_target):
@@ -890,12 +924,12 @@ func get_aura_damage_bonus() -> float:
 func take_damage(amount: float, flash: bool = true) -> void:
 	if current_state == State.DEAD:
 		return
+	amount *= damage_taken_mult
 	if shield > 0.0:
 		var absorbed = minf(shield, amount)
 		shield -= absorbed
 		amount -= absorbed
 	current_hp -= amount
-	queue_redraw()
 	if flash:
 		_flash_hit()
 		if amount >= FLOAT_MIN_DAMAGE and BattleManager.is_battle_running():
@@ -912,18 +946,38 @@ func take_damage(amount: float, flash: bool = true) -> void:
 		retreat_timer = data.retreat_duration
 		transition_to(State.RETREATING)
 
-# Только визуал: таймер дерева (на паузе стоит, ×2 ускоряет), а не тик боя —
-# иначе вспышка последнего тика осталась бы гореть после конца боя
 # Броня в цвет ордена игрока — только своим Космодесантникам (у врагов и Ultramarines — как нарисовано)
 func _apply_chapter_colors() -> void:
 	_armor_chapter = ""
 	_base_material = null
-	if team == GameConstants.TEAM_PLAYER and data.faction == Chapters.FACTION:
+	if team == GameConstants.TEAM_PLAYER and data.faction == Chapters.FACTION and data.chapter_armor:
 		if Chapters.get_chapter(RunManager.player_chapter).has("armor"):
 			_armor_chapter = RunManager.player_chapter
 			_base_material = _armor_material(_armor_chapter, false)
 			_armor_material(_armor_chapter, true)   # вспышка — заранее, не на первом попадании в бою
+	_rim_px = 0
+	var rim: Dictionary = FactionTheme.current().get("unit_rim", {})
+	if _armor_chapter == "" and not rim.is_empty() and data.faction == RunManager.player_faction:
+		_rim_px = maxi(1, roundi(RIM_SCREEN_PX / maxf(sprite.scale.x, 0.01)))
+		_base_material = _rim_material(_rim_px, false, rim)
+		_rim_material(_rim_px, true, rim)
 	sprite.material = _base_material
+
+static func _rim_material(px: int, flashing: bool, rim: Dictionary = {}) -> ShaderMaterial:
+	var key := "%d:%s" % [px, flashing]
+	if not _rim_materials.has(key):
+		if _rim_shader == null:
+			_rim_shader = Shader.new()
+			_rim_shader.code = RIM_SHADER
+		var m := ShaderMaterial.new()
+		m.shader = _rim_shader
+		var col: Color = rim.get("color", Color.WHITE)
+		m.set_shader_parameter("rim_px", float(px))
+		m.set_shader_parameter("rim_color", Vector3(col.r, col.g, col.b))
+		m.set_shader_parameter("strength", rim.get("strength", 0.5))
+		m.set_shader_parameter("flash", HIT_FLASH_STRENGTH if flashing else 0.0)
+		_rim_materials[key] = m
+	return _rim_materials[key]
 
 static func _armor_material(chapter_id: String, flashing: bool) -> ShaderMaterial:
 	var key := "%s:%s" % [chapter_id, flashing]
@@ -941,6 +995,9 @@ static func _armor_material(chapter_id: String, flashing: bool) -> ShaderMateria
 		_armor_materials[key] = m
 	return _armor_materials[key]
 
+# Только визуал: гаснет по времени дерева в _process (на паузе стоит, ×2 ускоряет), а не по тику боя —
+# иначе вспышка последнего тика осталась бы гореть после конца боя. Повторный урон продлевает.
+# Раньше — таймер дерева с лямбдой на каждое попадание: сотни объектов за тик в сшибке
 func _flash_hit() -> void:
 	if not is_inside_tree():
 		return
@@ -949,12 +1006,13 @@ func _flash_hit() -> void:
 		shader.code = HIT_FLASH_SHADER % HIT_FLASH_STRENGTH
 		_hit_flash_material = ShaderMaterial.new()
 		_hit_flash_material.shader = shader
-	sprite.material = _armor_material(_armor_chapter, true) if _armor_chapter != "" else _hit_flash_material
-	_hit_flash_id += 1
-	var id := _hit_flash_id
-	get_tree().create_timer(HIT_FLASH_TIME, false).timeout.connect(func():
-		if is_instance_valid(self) and _hit_flash_id == id:
-			sprite.material = _base_material)
+	if _armor_chapter != "":
+		sprite.material = _armor_material(_armor_chapter, true)
+	elif _rim_px > 0:
+		sprite.material = _rim_material(_rim_px, true)
+	else:
+		sprite.material = _hit_flash_material
+	_flash_left = HIT_FLASH_TIME
 
 # Apothecarion рядом: шанс встать с долей HP (один раз за бой, только игрок)
 func _try_revive() -> bool:
@@ -981,7 +1039,7 @@ func _die() -> void:
 	AudioManager.play("death_vehicle" if "vehicle" in data.tags else "death")
 	status_effects.clear()
 	_sync_status_vfx()
-	queue_redraw()   # убрать полоску HP
+	queue_redraw()   # убрать тень, кольцо и точки статусов
 	emit_signal("died", self)
 
 # -------------------------------------------------------
@@ -1067,11 +1125,11 @@ func _sync_status_vfx() -> void:
 		if not _status_vfx.has(effect) and StatusEffects.VFX.has(effect):
 			_status_vfx[effect] = Vfx.attach(self, StatusEffects.VFX[effect], data.sprite_scale * EFFECT_SCALE)
 
-# Куда класть разовые эффекты в мире — туда же, куда снаряды (узел отрядов)
 func _float_text(label: String, tint: Color, size: float = 1.0) -> void:
 	FloatingText.spawn(_world_parent(), global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * data.sprite_scale - 6.0),
 		label, tint, size)
 
+# Куда класть разовые эффекты в мире — туда же, куда снаряды (узел отрядов)
 func _world_parent() -> Node:
 	return parent_squad.get_parent() if parent_squad else null
 
@@ -1208,7 +1266,9 @@ func _on_state_enter(state: State) -> void:
 		State.DEAD:
 			sprite.stop()
 			sprite.play("death")
-			Vfx.attach(self, "splatter", data.sprite_scale * EFFECT_SCALE)
+			var pool := Vfx.attach(self, "splatter", data.sprite_scale * EFFECT_SCALE)
+			if pool:
+				pool.material = Vfx.blood_material(data.get_blood())   # лужа — цвета крови павшего
 			sprite.animation_finished.connect(_on_death_finished)
 
 func _on_death_finished() -> void:

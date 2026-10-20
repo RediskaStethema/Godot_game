@@ -23,7 +23,7 @@ signal squad_wiped(squad: Squad)  # все бойцы мертвы
 # Боец — это отдельная сцена с AnimatedSprite2D
 const SOLDIER_SCENE = preload("res://scenes/battle/Soldier.tscn")
 
-# ----------------------------------------s---------------
+# -------------------------------------------------------
 # ИНИЦИАЛИЗАЦИЯ
 # -------------------------------------------------------
 # hp_list — доли HP выживших бойцов (пустой = все с полным HP)
@@ -105,11 +105,7 @@ func tick(delta: float) -> void:
 		State.DEAD:     pass
 
 func _tick_marching(delta: float) -> void:
-	# Тикаем всех живых бойцов
-	# Копия: боец может погибнуть в своём же тике (яд, огонь) и выйти из soldiers
-	for soldier in soldiers.duplicate():
-		if soldier.current_state != Soldier.State.DEAD:
-			soldier.tick(delta)
+	_tick_soldiers(delta)
 
 	# Если хоть один боец вступил в бой — переходим в FIGHTING
 	for soldier in soldiers:
@@ -118,10 +114,36 @@ func _tick_marching(delta: float) -> void:
 			return
 
 func _tick_fighting(delta: float) -> void:
+	_tick_soldiers(delta)
+
+func _tick_soldiers(delta: float) -> void:
+	enemy_out_of_sight = _no_enemy_in_sight()
 	# Копия: боец может погибнуть в своём же тике (яд, огонь) и выйти из soldiers
 	for soldier in soldiers.duplicate():
 		if soldier.current_state != Soldier.State.DEAD:
 			soldier.tick(delta)
+	enemy_out_of_sight = false   # только на время тика отряда: вне его бойцы спрашивают сами
+
+# Поле зрения на марше (Soldier._state_move) — один запрос на отряд вместо запроса каждого бойца:
+# врага нет ближе vision_range + радиус строя от центра идущих — его нет ни у одного из них
+# (неравенство треугольника). На сближении армий сотни запросов за тик давали выброс до 15 мс
+var enemy_out_of_sight: bool = false
+
+func _no_enemy_in_sight() -> bool:
+	var center := Vector2.ZERO
+	var walking := 0
+	for s in soldiers:
+		if s.current_state == Soldier.State.MOVE:
+			center += s.global_position
+			walking += 1
+	if walking < 2:
+		return false   # одному бойцу проверка отряда ничего не сберегает
+	center /= walking
+	var radius := 0.0
+	for s in soldiers:
+		if s.current_state == Soldier.State.MOVE:
+			radius = maxf(radius, center.distance_to(s.global_position))
+	return SoldierRegistry.find_nearest(1 - team, center, data.vision_range + radius) == null
 
 # -------------------------------------------------------
 # КОМАНДЫ ОТ BATTLEMANAGER
@@ -244,6 +266,3 @@ func _on_soldier_died(soldier: Soldier) -> void:
 # -------------------------------------------------------
 func is_alive() -> bool:
 	return current_state != State.DEAD
-
-func get_alive_soldier_count() -> int:
-	return soldiers.size()

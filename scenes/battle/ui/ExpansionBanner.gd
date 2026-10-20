@@ -10,7 +10,8 @@ signal closed
 
 const FADE_TIME: float = 0.35
 const PANEL_WIDTH: float = 560.0
-const DIM = Color(0, 0, 0, 0.55)
+const BLUEPRINT_HEIGHT: float = 150.0
+const DIM = UITheme.DIM_OVERLAY
 
 var button: Button
 var _closing: bool = false
@@ -38,6 +39,10 @@ func setup(tile_cost: int, button_text: String = "В МАГАЗИН") -> void:
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_theme_constant_override("separation", 10)
 	panel.add_child(col)
+	var plan := UITheme.make_icon("screens", "expansion_blueprint", BLUEPRINT_HEIGHT)   # чертёж крепости
+	if plan:
+		plan.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		col.add_child(plan)
 	for line in [["ПРИШЛО ВРЕМЯ РАСШИРЯТЬСЯ", "TitleLabel"],
 			["На расстановке следующей волны можно купить клетки рядом с королевством — от %d Req." % tile_cost, "ValueLabel"],
 			["Отложите Req в магазине. Новый ряд впереди меняет передний ряд и его бонус", "DimLabel"]]:

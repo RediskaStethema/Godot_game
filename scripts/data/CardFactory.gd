@@ -374,6 +374,98 @@ static func orbital_strike() -> CardData:
 	return c
 
 # -------------------------------------------------------
+# ОСОБЫЕ КАРТЫ ОРДЕНОВ И БОГОВ (решение пользователя 18.10.2026; Chapters "unit_card" / "building_card").
+# Юнит — Epic, здание — Rare; в пуле только у своего ордена (chapter_pool). Цифры — черновые, на одобрение
+# -------------------------------------------------------
+static func special_card(id: String) -> CardData:
+	match id:
+		"honour_guard":
+			return _squad_card(id, "Victrix Honour Guard", "Стража Ультрамара: стойкая элита, в начале боя щит 25% HP",
+				"space_marines", 15, "honour_guard", 2)
+		"sanguinary_guard":
+			return _squad_card(id, "Sanguinary Guard", "Прыжок к стрелкам: удар ×2 по площади и оглушение 0.7 с",
+				"space_marines", 15, "sanguinary_guard", 6)
+		"centurion_devastators":
+			return _squad_card(id, "Centurion Devastators", "Тяжёлая огневая точка: дальность 300, окапываются до +40% урона",
+				"space_marines", 14, "centurion_devastators", 2)
+		"thunderwolf_cavalry":
+			return _squad_card(id, "Thunderwolf Cavalry", "Быстрая кавалерия: удар отбрасывает врага",
+				"space_marines", 15, "thunderwolf_cavalry", 2)
+		"firedrakes":
+			return _squad_card(id, "Firedrakes", "Огнемёты вблизи: поджог 4 ур/с на 3 с",
+				"space_marines", 14, "firedrakes", 6)
+		"khorne_berzerkers":
+			return _squad_card(id, "Khorne Berzerkers", "Ярость Кхорна: быстрые удары, не отступают",
+				"chaos", 14, "khorne_berzerkers", 9)
+		"plaguebearers":
+			return _squad_card(id, "Plaguebearers", "Демоны Нургла: живучие, удар отравляет (3 ур/с, 4 с)",
+				"chaos", 14, "plaguebearers", 9)
+		"rubric_marines":
+			return _squad_card(id, "Rubric Marines", "Варп-болты: сильный выстрел на 220 px",
+				"chaos", 15, "rubric_marines", 6)
+		"noise_marines":
+			return _squad_card(id, "Noise Marines", "Звуковое оружие: попадание оглушает на 0.25 с",
+				"chaos", 14, "noise_marines", 9)
+		"codex_bastion":
+			return _building_card(id, "Codex Bastion", "Отряды на соседних клетках начинают бой со щитом 25% HP.",
+				"space_marines", 8, "codex_bastion", {"shield_ratio": 0.25}, {"shield_ratio": 0.3})
+		"blood_chalice":
+			return _building_card(id, "Blood Chalice", "Отряды на соседних клетках лечатся на 20% урона ближнего боя.",
+				"space_marines", 8, "blood_chalice", {"lifesteal": 0.2}, {"lifesteal": 0.25})
+		"fists_bastion":
+			return _building_card(id, "Bastion", "Стена с турелью: щит цитадели +150 и стрельба по ближайшему врагу.",
+				"space_marines", 9, "fists_bastion", {"shield": 150.0, "damage": 12.0, "attack_speed": 1.2},
+				{"shield": 0.5, "damage": 0.25})
+		"wolf_totem":
+			return _building_card(id, "Wolf Totem", "В начале боя клич: отряды на соседних клетках +20% урона на 8 с.",
+				"space_marines", 7, "wolf_totem", {"empower": 0.2, "duration": 8.0}, {"empower": 0.25, "duration": 0.25})
+		"vulkan_forge":
+			return _building_card(id, "Vulkan's Forge", "Соседние отряды +10% урона. После боя чинит цитадель на 50 HP.",
+				"space_marines", 8, "vulkan_forge", {"damage_bonus": 0.1, "repair": 50.0}, {"damage_bonus": 0.5, "repair": 0.5})
+		"skull_altar":
+			return _building_card(id, "Altar of Skulls", "Каждый убитый враг: +1% урона всей армии до конца боя (до +30%).",
+				"chaos", 8, "skull_altar", {"per_kill": 0.01, "max_bonus": 0.3}, {"per_kill": 0.25, "max_bonus": 0.25})
+		"plague_cauldron":
+			return _building_card(id, "Plague Cauldron", "Травит врагов рядом: яд 4 ур/с в круге 140 px.",
+				"chaos", 8, "plague_cauldron", {"poison": 4.0, "poison_radius": 140.0}, {"poison": 0.3, "poison_radius": 0.2})
+		"warp_spire":
+			return _building_card(id, "Warp Spire", "Молния варпа по ближайшему врагу: 30 урона и оглушение 0.6 с, раз в 2.5 с.",
+				"chaos", 9, "warp_spire", {"damage": 30.0, "attack_speed": 0.4, "stun": 0.6}, {"damage": 0.25, "attack_speed": 0.2})
+		"pleasure_shrine":
+			return _building_card(id, "Shrine of Excess", "Замедляет врагов рядом на 45% в круге 160 px.",
+				"chaos", 7, "pleasure_shrine", {"slow_mult": 0.55, "slow_radius": 160.0}, {"slow_radius": 0.2})
+	return null
+
+static func _squad_card(id: String, title: String, desc: String, faction: String, cost: int, unit: String,
+		count: int) -> CardData:
+	var c = CardData.new()
+	c.id = id
+	c.title = title
+	c.description = desc
+	c.faction = faction
+	c.cost = cost
+	c.rarity = "epic"
+	c.card_type = "squad"
+	c.unit_factory_id = unit
+	c.unit_count = count
+	return c
+
+static func _building_card(id: String, title: String, desc: String, faction: String, cost: int, type: String,
+		stats: Dictionary, level_bonuses: Dictionary) -> CardData:
+	var c = CardData.new()
+	c.id = id
+	c.title = title
+	c.description = desc
+	c.faction = faction
+	c.cost = cost
+	c.rarity = "rare"
+	c.card_type = "building"
+	c.building_type = type
+	c.building_stats = stats
+	c.building_level_bonuses = level_bonuses
+	return c
+
+# -------------------------------------------------------
 # ХАОС ИГРОКА (решение пользователя 16.10.2026: 8 отрядов + общие карты под названиями Хаоса)
 # -------------------------------------------------------
 # Отряды — юниты Хаоса (UnitFactory); цены — паритет силы отряда за Req с Космодесантом.
@@ -485,6 +577,9 @@ static func create(id: String) -> CardData:
 		for card in build_pool(faction):
 			if card.id == id:
 				return card
+	var special := special_card(id)
+	if special:
+		return special
 	push_warning("CardFactory: неизвестная карта '%s'" % id)
 	return null
 
@@ -519,8 +614,33 @@ static func run_faction() -> String:
 static func build_pool(faction: String = "") -> Array:
 	if faction == "":
 		faction = run_faction()
-	if faction == "chaos":
-		return _chaos_pool()
+	var pool: Array = _chaos_pool() if faction == "chaos" else _space_marine_pool()
+	pool.append_array(chapter_pool(run_chapter(), faction))
+	return pool
+
+# Особые карты ордена / бога (решение пользователя 18.10.2026): юнит (Epic) и здание (Rare) по
+# SPECIAL_COPIES копий — только в магазине забега с этим орденом и только своей расы
+const SPECIAL_COPIES: int = 2
+
+static func chapter_pool(chapter_id: String, faction: String) -> Array:
+	var c: Dictionary = Chapters.get_chapter(chapter_id)
+	var pool: Array = []
+	if c.is_empty() or c["faction"] != faction:
+		return pool
+	for i in SPECIAL_COPIES:
+		for key in ["unit_card", "building_card"]:
+			var card := special_card(c.get(key, ""))
+			if card:
+				pool.append(card)
+	return pool
+
+# Орден забега: автолоад — из дерева (скрипты -s компилируются до автолоадов)
+static func run_chapter() -> String:
+	var tree := Engine.get_main_loop() as SceneTree
+	var rm: Node = tree.root.get_node_or_null("RunManager") if tree else null
+	return rm.player_chapter if rm else ""
+
+static func _space_marine_pool() -> Array:
 	var pool = []
 	# Common — 27 копий: доли ~60/30/10 держатся — на 6 новых Rare базовых отрядов по +1 (на одобрение цифр)
 	# Враги (chaos_*) в пул игрока не входят
@@ -567,7 +687,7 @@ static func _chaos_pool() -> Array:
 	for i in range(2): pool.append(chaos_champions())
 	for i in range(2): pool.append(hellbrute_card())
 	for i in range(2): pool.append(chaos_lord_card())
-	for card in build_pool("space_marines"):
+	for card in _space_marine_pool():   # без особых карт ордена — у них нет версии Хаоса
 		if card.card_type != "squad":
 			pool.append(_chaos_version(card))
 	return pool

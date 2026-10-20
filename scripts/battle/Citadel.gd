@@ -24,10 +24,18 @@ const BLOCKS = [
 const HP_BAR_SIZE = Vector2(90, 7)
 const HP_BAR_GAP: float = 14.0
 const SHIELD_BAR_HEIGHT: float = 4.0
-const SHIELD_COLOR = Color(0.45, 0.7, 1.0)
+const SHIELD_COLOR = UITheme.SHIELD_BLUE
 # Враг атакует цитадель, когда до её центра не больше его дальности + HIT_RADIUS
 const HIT_RADIUS: float = 50.0
-const FLASH_COLOR = Color(1.0, 0.45, 0.4)
+# Попадание по цитадели: белеет, как боец (Soldier.HIT_FLASH_SHADER), и плавно гаснет
+const HIT_FLASH_STRENGTH: float = 0.8   # доля белого на пике
+const HIT_FLASH_TIME: float = 0.18      # секунд до исходного цвета
+const HIT_FLASH_SHADER = """shader_type canvas_item;
+uniform float flash = 0.0;
+void fragment() {
+	vec4 c = COLOR;   // уже текстура × modulate — texture() ещё раз дал бы цвет в квадрат
+	COLOR = vec4(mix(c.rgb, vec3(1.0), flash), c.a);
+}"""
 
 # --- Орудие цитадели ---
 const DAMAGE: float = 30.0          # каждому врагу в радиусе взрыва
@@ -35,9 +43,11 @@ const ATTACK_SPEED: float = 1.0     # выстрелов в секунду
 const ATTACK_RANGE: float = 320.0   # пиксели от центра цитадели
 const SPLASH_RADIUS: float = 80.0   # радиус взрыва вокруг цели
 const SHOT_SHOW_TIME: float = 0.2   # сколько секунд виден взрыв
-const SHOT_PROJECTILE: String = "bolt"   # снаряд орудия (Projectile.EFFECTS), взрыв — при попадании
-const SHOT_IMPACT_VFX = ["citadel_blast"]   # взрыв снаряда (Vfx, пак Pixel)
-const SHOT_COLOR = Color(1.0, 0.85, 0.45)
+const SHOT_PROJECTILE: String = "fireball"   # огненный снаряд FXpack13 (Projectile.EFFECTS), взрыв — при попадании
+# Взрыв снаряда — дым и огонь, как у Thunderfire (Vfx, assets/Spritesheets). explosion_side пака Pixel
+# не использовать — не подходит по стилю (решение пользователя 18.10.2026)
+const SHOT_IMPACT_VFX = ["explosion", "fireball"]
+const SHOT_COLOR = UITheme.AMBER_LIGHT
 
 var attack_timer: float = 0.0
 var shot_timer: float = 0.0
@@ -49,9 +59,15 @@ var shot_target: Vector2 = Vector2.ZERO   # в глобальных коорди
 # (OcclusionFader меняет self_modulate — переносим его на спрайт)
 var _sprite: AnimatedSprite2D = null
 var _sheet: Dictionary = {}
+# Выстрел ждёт кадра вспышки листа ("shot_frame"): {"point", "target", "time"}; пусто — нет
+var _pending_shot: Dictionary = {}
+# Вспышка попадания: один материал на крепость (блоки — сам узел, лист — спрайт; HP-бар без него)
+var _flash_material: ShaderMaterial
+var _flash_tween: Tween
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	material = _get_flash_material()
 	apply_theme(FactionTheme.current().get("citadel", {}))
 	_hp_bar = Node2D.new()
 	_hp_bar.draw.connect(_draw_hp_bar)
@@ -83,7 +99,7 @@ func apply_theme(citadel_theme: Dictionary) -> void:
 	for anim in _sheet["rows"]:
 		var row: Array = _sheet["rows"][anim]
 		frames.add_animation(anim)
-		frames.set_animation_speed(anim, _sheet.get("fps", 8.0))
+		frames.set_animation_speed(anim, float(row[2]) if row.size() > 2 else _sheet.get("fps", 8.0))
 		frames.set_animation_loop(anim, anim == "idle")
 		for i in range(int(row[1])):
 			var at = AtlasTexture.new()
@@ -98,6 +114,7 @@ func apply_theme(citadel_theme: Dictionary) -> void:
 	_sprite.position = -Vector2(_sheet.get("anchor", Vector2(frame.x / 2.0, frame.y))) * k
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_sprite.modulate = _sheet.get("tint", Color.WHITE)   # вспышка попадания — modulate узла, не спрайта
+	_sprite.material = _get_flash_material()
 	_sprite.animation_finished.connect(_on_sprite_animation_finished)
 	add_child(_sprite)
 	move_child(_sprite, 0)   # под HP-баром
@@ -130,6 +147,7 @@ func _process(_delta: float) -> void:
 		_sprite.self_modulate = self_modulate
 
 func _draw() -> void:
+	Building.draw_ground_shadow(self, Vector2.ZERO, IsoGrid.TILE_WIDTH * SHADOW_WIDTH)
 	# BLOCKS уже упорядочены от дальних подклеток к ближним, внутри — снизу вверх
 	if _sprite == null:
 		for b in BLOCKS:
@@ -140,8 +158,12 @@ func _draw() -> void:
 		draw_circle(to, SPLASH_RADIUS * 0.5, Color(SHOT_COLOR, 0.35 * a))
 		draw_arc(to, SPLASH_RADIUS, 0.0, TAU, 32, Color(SHOT_COLOR, 0.6 * a), 2.0, true)
 
-# Откуда вылетает выстрел — верх донжона
+const SHADOW_WIDTH: float = 1.7   # тень на грунте — доля клетки (крепость шире клетки)
+
+# Откуда вылетает выстрел — ствол листа ("muzzle", px кадра) или верх донжона
 func _muzzle() -> Vector2:
+	if _sprite and _sheet.has("muzzle"):
+		return _sprite.position + Vector2(_sheet["muzzle"]) * _sprite.scale
 	return Vector2(0, _top_y() + 6.0)
 
 # Центр верхней грани блока подклетки (i, j) на ярусе level
@@ -186,6 +208,14 @@ func tick(delta: float) -> void:
 	if shot_timer > Soldier.TIMER_EPSILON:
 		shot_timer -= delta
 		queue_redraw()
+	if not _pending_shot.is_empty():
+		_pending_shot["time"] -= delta
+		if _pending_shot["time"] <= Soldier.TIMER_EPSILON:
+			var target = _pending_shot["target"]
+			if not is_instance_valid(target) or target.current_state == Soldier.State.DEAD:
+				target = null
+			_launch_shot(_pending_shot["point"] if target == null else target.global_position, target)
+			_pending_shot = {}
 	attack_timer -= delta
 	if attack_timer > Soldier.TIMER_EPSILON:
 		return
@@ -208,7 +238,22 @@ func _find_target() -> Soldier:
 
 # Выстрел снарядом: взрыв (урон всем врагам в SPLASH_RADIUS) — где он попадёт.
 # target — за кем снаряд наводится (null — в точку point)
+# С листом кадров снаряд вылетает на кадре вспышки ствола ("shot_frame" ряда attack)
 func _fire_at(point: Vector2, target: Soldier = null) -> void:
+	play_state("attack")
+	var delay = _shot_delay()
+	if delay > Soldier.TIMER_EPSILON:
+		_pending_shot = {"point": point, "target": target, "time": delay}
+		return
+	_launch_shot(point, target)
+
+# Сколько секунд от начала анимации выстрела до кадра вспышки (0 — сразу)
+func _shot_delay() -> float:
+	if _sprite == null or not _sheet.has("shot_frame") or _sprite.animation != "attack":
+		return 0.0
+	return float(_sheet["shot_frame"]) / _sprite.sprite_frames.get_animation_speed("attack")
+
+func _launch_shot(point: Vector2, target: Soldier) -> void:
 	var shot = Projectile.launch(get_parent(), SHOT_PROJECTILE, to_global(_muzzle()), target,
 			Vector2.ZERO if target else point)
 	shot.damage = DAMAGE
@@ -216,7 +261,6 @@ func _fire_at(point: Vector2, target: Soldier = null) -> void:
 	shot.splash_team = GameConstants.TEAM_ENEMY
 	shot.on_impact = _show_explosion
 	shot.impact_vfx = SHOT_IMPACT_VFX
-	play_state("attack")
 
 func _show_explosion(point: Vector2) -> void:
 	shot_target = point
@@ -228,8 +272,27 @@ func take_hit(amount: float) -> void:
 	AudioManager.play("citadel_hit")
 	BattleManager.damage_citadel(amount)
 	play_state("fall" if BattleManager.citadel_hp <= 0.0 else "hit")
-	modulate = FLASH_COLOR
-	create_tween().tween_property(self, "modulate", Color.WHITE, 0.25)
+	_flash_hit()
+
+func _get_flash_material() -> ShaderMaterial:
+	if _flash_material == null:
+		var shader = Shader.new()
+		shader.code = HIT_FLASH_SHADER
+		_flash_material = ShaderMaterial.new()
+		_flash_material.shader = shader
+	return _flash_material
+
+# Белая вспышка попадания: новый удар начинает её заново
+func _flash_hit() -> void:
+	if _flash_tween:
+		_flash_tween.kill()
+	_get_flash_material().set_shader_parameter("flash", HIT_FLASH_STRENGTH)
+	_flash_tween = create_tween()
+	_flash_tween.tween_method(func(v: float): _flash_material.set_shader_parameter("flash", v),
+		HIT_FLASH_STRENGTH, 0.0, HIT_FLASH_TIME).set_ease(Tween.EASE_OUT)
+
+func get_hit_flash() -> float:
+	return _get_flash_material().get_shader_parameter("flash")
 
 func _on_hp_changed(_hp: float) -> void:
 	_hp_bar.queue_redraw()

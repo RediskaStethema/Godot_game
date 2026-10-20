@@ -71,8 +71,9 @@ func _ready() -> void:
 	_build_ui()
 	_build_field()
 	_populate_field()
-	Vfx.warm_cache()          # листы эффектов и снарядов — на загрузке, не посреди схватки
+	Vfx.warm_cache()          # листы эффектов и снарядов и файлы звуков — на загрузке, не посреди схватки
 	Projectile.warm_cache()
+	AudioManager.warm_cache()
 	SaveManager.save_run()
 	# Загрузили сохранение посреди боя: армия уже стоит как была — сразу в бой
 	if BattleManager.battle_in_progress:
@@ -84,6 +85,10 @@ func _build_ui() -> void:
 	bg_layer.layer = -1
 	add_child(bg_layer)
 	bg_layer.add_child(UITheme.make_background())
+	# Цветокоррекция мира — слой 1 перед UI в дереве: UI того же слоя рисуется позже и не тонируется
+	var grade := WorldGrade.new()
+	add_child(grade)
+	move_child(grade, $UI.get_index())
 
 	bench = BENCH_SCENE.instantiate()
 	add_child(bench)
@@ -130,6 +135,10 @@ func _build_field() -> void:
 	reticle = ArtilleryReticle.new()
 	reticle.camera = camera
 	add_child(reticle)
+	# Пепел / угли в воздухе над всем полем (только вид)
+	var atmosphere := Atmosphere.new()
+	add_child(atmosphere)
+	atmosphere.setup(iso_grid.get_world_bounds().grow(300.0), FactionTheme.current().get("atmosphere", ""))
 	_fit_camera(false)
 	get_viewport().size_changed.connect(_fit_camera.bind(false))
 
@@ -152,7 +161,7 @@ func _get_play_area() -> Rect2:
 	var top = UITheme.HUD_HEIGHT
 	var bottom = screen.y
 	if is_placement_phase:
-		bottom -= UITheme.BENCH_HEIGHT
+		bottom -= UITheme.BENCH_PEEK
 	return Rect2(PLAY_AREA_MARGIN, top + PLAY_AREA_MARGIN,
 		screen.x - PLAY_AREA_MARGIN * 2.0, bottom - top - PLAY_AREA_MARGIN * 2.0)
 
@@ -577,6 +586,7 @@ func _on_start_pressed() -> void:
 	SynergyManager.apply_chapter_bonus(my_soldiers)
 	SynergyManager.apply_meta_bonus(my_soldiers)
 	SynergyManager.apply_commander_bonus(my_soldiers)
+	Building.apply_battle_start()   # здания на соседние отряды: щит, клич, вампиризм, +урон
 	hud.show_synergies()
 
 	player_soldiers_at_start = my_soldiers.size()
@@ -648,6 +658,9 @@ func _on_battle_ended(winner_team: int) -> void:
 	var building_income := EconomyManager.collect_building_income(BattleManager.player_buildings)
 	if building_income > 0:
 		result_text += " · генераторы +%d Req" % building_income
+	var repaired := BattleManager.repair_from_forges()
+	if repaired > 0.0:
+		result_text += " · кузня +%d HP цитадели" % roundi(repaired)
 	hud.set_message(result_text)
 	AudioManager.play("victory" if won else "defeat")
 	var summary := _battle_summary(alive_at_end)

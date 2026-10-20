@@ -50,7 +50,7 @@ func _set_quick_pause(on: bool) -> void:
 	AudioManager.play("pause")
 	if on and _quick_label == null:
 		_quick_label = UITheme.make_label("ПАУЗА — пробел, чтобы продолжить", "HeaderLabel")
-		_quick_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+		_quick_label.add_theme_color_override("font_outline_color", UITheme.OUTLINE)
 		_quick_label.add_theme_constant_override("outline_size", 8)
 		_quick_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_quick_label.mouse_filter = Control.MOUSE_FILTER_IGNORE

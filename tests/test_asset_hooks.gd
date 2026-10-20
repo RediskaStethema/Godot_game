@@ -87,8 +87,8 @@ func _main() -> void:
 	var tower_frames := _sheet({"idle": 2, "attack": 3, "idle_2": 2})
 	tower_frames.set_meta("muzzle", Vector2(20, -60))
 	tower_frames.set_meta("shot_frame", 1)
-	B._frames_cache["tower"] = tower_frames
-	B._frames_cache["wall"] = null
+	B._frames_cache["space_marines/tower"] = tower_frames
+	B._frames_cache["space_marines/wall"] = null
 	var turret = CardFactory.bolter_turret()
 	var wall = CardFactory.fortress_wall()
 	await _battle([_squad_unit("tactical_marine", 3)] as Array[UnitData], {turret: Vector2i(0, 0), wall: Vector2i(0, 2)})
@@ -115,7 +115,7 @@ func _main() -> void:
 	bm.stop_battle()
 
 	# 2. Казармы вернули бойцов — анимация refill
-	B._frames_cache["barracks"] = _sheet({"idle": 2, "refill": 3})
+	B._frames_cache["space_marines/barracks"] = _sheet({"idle": 2, "refill": 3})
 	var barracks = CardFactory.barracks()
 	var wounded = _squad_unit("tactical_marine", 9)
 	wounded.saved_hp = [1.0, 1.0, 1.0] as Array[float]
@@ -123,7 +123,7 @@ func _main() -> void:
 	var bb = bm.buildings.filter(func(b): return b.card == barracks)[0]
 	var added: int = bm.refill_from_barracks()
 	_check("Казармы вернули бойцов (%d) — анимация refill" % added, added > 0 and bb.sprite.animation == "refill")
-	for k in ["tower", "wall", "barracks"]:
+	for k in ["space_marines/tower", "space_marines/wall", "space_marines/barracks"]:
 		B._frames_cache.erase(k)
 
 	# 3. Apothecary с рядом heal

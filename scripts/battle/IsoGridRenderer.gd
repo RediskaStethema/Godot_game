@@ -12,18 +12,18 @@ var grid: IsoGrid
 # --- Плоты королевства (полупрозрачная подсветка поверх плит) ---
 const COLOR_NORMAL   = Color(0.30, 0.40, 0.58, 0.10)   # сталь
 const COLOR_HOVER    = Color(0.94, 0.83, 0.55, 0.40)   # светлое золото
-const COLOR_OCCUPIED = Color(0.79, 0.63, 0.29, 0.22)   # золото
+const COLOR_OCCUPIED = Color(UITheme.PLAYER_SIDE, 0.22)   # золото
 const COLOR_SAME_SQUAD = Color(0.98, 0.72, 0.29, 0.45)  # отряд карты под курсором (скамейка)
 const LINE_SAME_SQUAD  = Color(1.0, 0.82, 0.45, 1.0)
-const COLOR_EFFECT = Color(0.35, 0.85, 0.80, 0.30)     # зона действия здания (Казармы — соседи)
-const LINE_EFFECT  = Color(0.45, 0.95, 0.90, 0.95)
-const LINE_PLAYER    = Color(0.79, 0.63, 0.29, 0.45)
-const BORDER_PLAYER  = Color(0.79, 0.63, 0.29, 0.95)
+const COLOR_EFFECT = Color(0.35, 0.72, 0.70, 0.24)     # зона действия здания (Казармы — соседи)
+const LINE_EFFECT  = Color(0.45, 0.82, 0.78, 0.85)
+const LINE_PLAYER    = Color(UITheme.PLAYER_SIDE, 0.45)
+const BORDER_PLAYER  = Color(UITheme.PLAYER_SIDE, 0.95)
 # --- Закрытые клетки рамки королевства ---
-const LINE_LOCKED    = Color(0.79, 0.63, 0.29, 0.12)
-const COLOR_BUYABLE  = Color(0.30, 0.55, 0.30, 0.25)   # можно купить
-const COLOR_BUYABLE_HOVER = Color(0.45, 0.80, 0.45, 0.45)
-const LINE_BUYABLE   = Color(0.55, 0.85, 0.55, 0.80)
+const LINE_LOCKED    = Color(UITheme.PLAYER_SIDE, 0.12)
+const COLOR_BUYABLE  = Color(0.32, 0.50, 0.30, 0.22)   # можно купить
+const COLOR_BUYABLE_HOVER = Color(0.45, 0.72, 0.42, 0.42)
+const LINE_BUYABLE   = Color(0.55, 0.78, 0.5, 0.80)
 const PRICE_FONT_SIZE: int = 15
 
 # --- Платформа ---
@@ -75,6 +75,28 @@ var _splash_left: float = RIVER_SPLASH_EVERY
 var _animated: bool = false
 var _anim_step: int = 0
 var _layout: Dictionary = {}
+# Свет на поле (решение пользователя 18.10.2026, гримдарк): пятна с ADD-смешением у плит и объектов темы
+# с ключом "glow" (костры, извержения, кристаллы), мерцают с анимацией пола. Только вид; выключается
+# настройкой GameSettings.atmosphere
+const GLOW_FLICKER: float = 0.15
+var _glow: Node2D = null
+# Отсвет на бойцах и постройках (решение пользователя 19.10.2026): тот же свет вторым слоем поверх бойцов,
+# слабее (LIT_STRENGTH) и выше на рост бойца — у костра / извержения / кристалла тёплый отблеск на телах.
+# Под частицами (Atmosphere z 40) и полосками отрядов (z 50); один слой на поле, не расчёт на бойца
+const LIT_Z: int = 35
+const LIT_STRENGTH: float = 0.4
+const LIT_RAISE: float = 14.0   # px: пятно приподнято к корпусам
+var _lit: Node2D = null
+static var _glow_tex: GradientTexture2D
+# Дымка (решение пользователя 19.10.2026): плиты с ключом "mist" {color, radius} — на клетку MIST_PUFFS
+# мягких пятен шире клетки со сдвигом по хэшу клетки (форма не повторяется), соседние сливаются в облако;
+# густеет и редеет волной (_cell_time, период MIST_PERIOD). Над полом, под бойцами; только вид
+const MIST_PUFFS: int = 3
+const MIST_SPREAD: float = 0.35   # сдвиг пятен от центра клетки — доля радиуса
+const MIST_PERIOD: float = 5.0
+const MIST_BREATH: float = 0.3    # насколько редеет: альфа от (1 − MIST_BREATH) до 1
+var _mist: Node2D = null
+static var _mist_tex: GradientTexture2D
 
 func setup(iso_grid: IsoGrid) -> void:
 	grid = iso_grid
@@ -84,6 +106,22 @@ func setup(iso_grid: IsoGrid) -> void:
 	_floor.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # пиксель-арт без размытия
 	_floor.draw.connect(_draw_floor)
 	add_child(_floor)
+	_mist = Node2D.new()
+	_mist.draw.connect(_draw_mist)
+	add_child(_mist)
+	_glow = Node2D.new()
+	var add := CanvasItemMaterial.new()
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_glow.material = add
+	_glow.draw.connect(_draw_glow.bind(_glow, 1.0, 0.0))
+	add_child(_glow)
+	GameSettings.changed.connect(_glow.queue_redraw)
+	_lit = Node2D.new()
+	_lit.material = add
+	_lit.z_index = LIT_Z
+	_lit.draw.connect(_draw_glow.bind(_lit, LIT_STRENGTH, LIT_RAISE))
+	add_child(_lit)
+	GameSettings.changed.connect(_lit.queue_redraw)
 	refresh_floor()
 
 # Время анимированных плит — по часам, не по тикам боя (декор идёт и на паузе, и на расстановке)
@@ -98,6 +136,11 @@ func _process(delta: float) -> void:
 		_anim_step = step
 		anim_time = step / ANIM_REDRAW_FPS
 		_floor.queue_redraw()
+		if _layout.get("glow", []).size() > 0:
+			_glow.queue_redraw()
+			_lit.queue_redraw()
+		if _layout.get("mist", []).size() > 0:
+			_mist.queue_redraw()
 
 func _draw() -> void:
 	if not grid or not grid_overlay:
@@ -330,6 +373,11 @@ func _draw_floor() -> void:
 		var terrain_cells = _terrain_cells(floor_cells, river_cells)
 		_layout = {"cells": floor_cells, "rivers": river_cells, "terrain": terrain_cells,
 			"landmarks": _landmark_cells(floor_cells, river_cells, terrain_cells)}
+		_layout["glow"] = _glow_sources()
+		_glow.queue_redraw()
+		_lit.queue_redraw()
+		_layout["mist"] = _mist_sources()
+		_mist.queue_redraw()
 	var cells: Array[Vector2i] = _layout["cells"]
 	var rivers: Dictionary = _layout["rivers"]
 	var terrain: Dictionary = _layout["terrain"]
@@ -412,6 +460,87 @@ func _landmark_cells(cells: Array[Vector2i], rivers: Dictionary, terrain: Dictio
 		out[apart[rng.randi() % apart.size()]] = war[i % war.size()]
 	return out
 
+# Источники света раскладки: [точка, цвет, радиус] — ориентиры и местность с ключом "glow"
+func _glow_sources() -> Array:
+	var out: Array = []
+	var entries: Dictionary = {}
+	for c in _layout["terrain"]:
+		entries[c] = _layout["terrain"][c][0]
+	for c in _layout["landmarks"]:   # ориентир стоит на грунте своей клетки — его свет важнее
+		entries[c] = _layout["landmarks"][c]
+	for c in entries:
+		var e = entries[c]
+		if e is Dictionary and e.has("glow"):
+			# плита светится центром грани, ориентир (костёр) — там, где стоит: в вершине клетки, как рисует
+			# _draw_cell_decoration (решение пользователя 20.10.2026: свет был на клетку ниже огня)
+			var center := grid.lattice_to_screen(c.x, c.y)
+			if not _layout["landmarks"].has(c):
+				center += Vector2(0.0, IsoGrid.TILE_HEIGHT / 2.0)
+			out.append([center, e["glow"], e.get("glow_radius", 60.0), TerrainTiles.hash_cell(c, 53) % 100 / 100.0 * TAU])
+	return out
+
+# Туманные клетки: [клетка, центр грани, тема дымки]
+func _mist_sources() -> Array:
+	var out: Array = []
+	for c in _layout["terrain"]:
+		var e = _layout["terrain"][c][0]
+		if e is Dictionary and e.has("mist"):
+			out.append([c, grid.lattice_to_screen(c.x, c.y) + Vector2(0.0, IsoGrid.TILE_HEIGHT / 2.0), e["mist"]])
+	return out
+
+func _draw_mist() -> void:
+	if _layout.is_empty():
+		return
+	if _mist_tex == null:
+		var g := Gradient.new()
+		g.set_color(0, Color.WHITE)
+		g.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+		g.add_point(0.5, Color(1.0, 1.0, 1.0, 0.55))
+		_mist_tex = GradientTexture2D.new()
+		_mist_tex.gradient = g
+		_mist_tex.fill = GradientTexture2D.FILL_RADIAL
+		_mist_tex.fill_from = Vector2(0.5, 0.5)
+		_mist_tex.fill_to = Vector2(0.5, 0.0)
+		_mist_tex.width = 128
+		_mist_tex.height = 128
+	for src in _layout.get("mist", []):
+		var c: Vector2i = src[0]
+		var mist: Dictionary = src[2]
+		var col: Color = mist["color"]
+		col.a *= 1.0 - MIST_BREATH * (0.5 + 0.5 * sin(_cell_time(c) * TAU / MIST_PERIOD))
+		for i in MIST_PUFFS:
+			var h := TerrainTiles.hash_cell(c, 71 + i * 13)
+			var r: float = mist["radius"] * (0.8 + (h % 40) / 100.0)
+			var ang := (h / 40 % 360) * PI / 180.0
+			var at: Vector2 = src[1] + Vector2(cos(ang), sin(ang) * 0.5) * mist["radius"] * MIST_SPREAD
+			# пятно на земле — сплющено под изометрию
+			_mist.draw_texture_rect(_mist_tex, Rect2(at - Vector2(r, r * 0.5), Vector2(r * 2.0, r)), false, col)
+
+# Пятна света на canvas: strength — доля яркости, raise — px вверх (отсвет на телах — _lit)
+func _draw_glow(canvas: Node2D, strength: float, raise: float) -> void:
+	if not GameSettings.atmosphere or _layout.is_empty():
+		return
+	if _glow_tex == null:
+		var g := Gradient.new()
+		g.set_color(0, Color.WHITE)
+		g.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+		g.add_point(0.35, Color(1.0, 1.0, 1.0, 0.45))
+		_glow_tex = GradientTexture2D.new()
+		_glow_tex.gradient = g
+		_glow_tex.fill = GradientTexture2D.FILL_RADIAL
+		_glow_tex.fill_from = Vector2(0.5, 0.5)
+		_glow_tex.fill_to = Vector2(0.5, 0.0)
+		_glow_tex.width = 128
+		_glow_tex.height = 128
+	for src in _layout.get("glow", []):
+		var r: float = src[2]
+		var flicker := 1.0 + GLOW_FLICKER * sin(anim_time * 5.0 + src[3]) * sin(anim_time * 2.3 + src[3] * 1.7)
+		var col: Color = src[1]
+		col.a *= flicker * strength
+		# пятно на земле — сплющено под изометрию
+		var at: Vector2 = src[0] - Vector2(0.0, raise)
+		canvas.draw_texture_rect(_glow_tex, Rect2(at - Vector2(r, r * 0.55), Vector2(r * 2.0, r * 1.1)), false, col)
+
 func _cheb(d: Vector2i) -> int:
 	return maxi(absi(d.x), absi(d.y))
 
@@ -437,7 +566,7 @@ func decoration_for(c: Vector2i, rivers: Dictionary, terrain: Dictionary) -> Var
 		if tile.has("prop") or tile.get("no_decor", false):
 			return null
 	var in_strip = _is_battle_strip(c)
-	if TerrainTiles.hash_cell(c, 7) % 100 >= (DECOR_FLAT_CHANCE if in_strip else DECOR_CHANCE):
+	if TerrainTiles.hash_cell(c, 7) % 100 >= (DECOR_FLAT_CHANCE if in_strip else theme.get("decor_chance", DECOR_CHANCE)):
 		return null
 	var flag_ok := _is_player_side(c) and TerrainTiles.hash_cell(c, 41) % FLAG_DECOR_RARITY == 0
 	var options = theme.get("decorations", []).filter(func(d):
@@ -475,7 +604,7 @@ func _draw_kingdom() -> void:
 		if grid.is_valid_tile(tile):
 			_draw_diamond(grid.tile_to_screen(tile, false), COLOR_EFFECT, LINE_EFFECT, 2.5)
 
-	var font = ThemeDB.fallback_font
+	var font = UITheme.world_font()
 	for tile in expansion_tiles:
 		var center = grid.tile_to_screen(tile, false)
 		var color = COLOR_BUYABLE_HOVER if tile == hovered_tile else COLOR_BUYABLE
@@ -483,7 +612,7 @@ func _draw_kingdom() -> void:
 		var text = "+ %d Req" % expansion_cost
 		var w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, PRICE_FONT_SIZE).x
 		draw_string_outline(font, center + Vector2(-w / 2.0, PRICE_FONT_SIZE * 0.35), text,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, PRICE_FONT_SIZE, 4, Color(0, 0, 0, 0.85))
+			HORIZONTAL_ALIGNMENT_LEFT, -1, PRICE_FONT_SIZE, 4, UITheme.OUTLINE)
 		draw_string(font, center + Vector2(-w / 2.0, PRICE_FONT_SIZE * 0.35), text,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, PRICE_FONT_SIZE, LINE_BUYABLE)
 

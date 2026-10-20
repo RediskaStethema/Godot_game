@@ -111,6 +111,7 @@ const BONUS_MULT_FIELDS = {
 	"attack_speed_mult": "current_attack_speed",
 	"heal_mult": "current_heal_per_second",
 	"attack_range_mult": "current_attack_range",
+	"damage_taken_mult": "damage_taken_mult",   # получаемый урон (минус Slaanesh)
 }
 const BONUS_ADD_FIELDS = {
 	"attack_range_add": "current_attack_range",
@@ -182,6 +183,10 @@ func apply_chapter_bonus(soldiers: Array) -> void:
 	for s in soldiers:
 		if c.has("bonus") and (tag == "" or tag in s.data.tags):
 			_apply_bonus(s, c["bonus"])
+		# Минус ордена / бога (решение пользователя 18.10.2026: плата за бонус) — те же ключи, свой тег
+		var malus_tag: String = c.get("malus_tag", "")
+		if c.has("malus") and (malus_tag == "" or malus_tag in s.data.tags):
+			_apply_bonus(s, c["malus"])
 		if c.has("on_hit_status"):
 			s.extra_on_hit_status = c["on_hit_status"]
 			s.extra_on_hit_status_power = c["on_hit_status_power"]
@@ -230,15 +235,6 @@ func get_discounted_cost(card: CardData) -> int:
 func consume_discount(card: CardData) -> void:
 	if card.rarity == GameConstants.RARITY_EPIC:
 		epic_discount_pending = 0
-
-# -------------------------------------------------------
-# UI
-# -------------------------------------------------------
-func get_active_synergy_names() -> Array[String]:
-	var names: Array[String] = []
-	for s in active_synergies:
-		names.append("%s (%s %d/%d): %s" % [s["name"], s["tag"], s["count"], s["threshold"], s["desc"]])
-	return names
 
 # -------------------------------------------------------
 # СОХРАНЕНИЕ (SaveManager) — своё состояние забега

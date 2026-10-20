@@ -15,6 +15,7 @@ const HAND_CARD_SIZE = Vector2(118, 96)
 # при 10 картах в окне 1152 px — ~90 px; уже этого — прокрутка
 const HAND_CARD_MIN_WIDTH: float = 84.0
 const HAND_CARD_GAP: int = 8
+const HAND_PORTRAIT_ALPHA: float = 0.22   # портрет фоном карты руки — под текстом, не мешает читать
 const HAND_CARD_PAD: float = 5.0       # поля карты руки по бокам (у card_style — 10)
 const HAND_BUTTON_PAD: float = 4.0     # поля кнопки «Продать» по бокам
 
@@ -68,6 +69,11 @@ func _ready() -> void:
 	if ShopManager.catch_up_just_issued:
 		_open_catch_up()
 
+# Новый набор после обновления — карты переворачиваются из рубашки по очереди (ShopSlot.reveal)
+const REVEAL_DELAY: float = 0.25
+const REVEAL_STAGGER: float = 0.12
+var _reveal_next: bool = false
+
 func _populate_shop(offers: Array) -> void:
 	for child in shop_slots.get_children():
 		child.queue_free()
@@ -77,6 +83,9 @@ func _populate_shop(offers: Array) -> void:
 		slot.setup(offers[i], i)
 		slot.set_hand_full(_is_hand_full())
 		slot.purchase_requested.connect(_on_purchase_requested)
+		if _reveal_next:
+			slot.reveal(REVEAL_DELAY + REVEAL_STAGGER * i)
+	_reveal_next = false
 	_refresh_reroll_button()
 
 func _on_purchase_requested(slot_index: int) -> void:
@@ -160,6 +169,21 @@ func _make_hand_card(card: CardData) -> Control:
 	style.content_margin_right = HAND_CARD_PAD
 	panel.add_theme_stylebox_override("panel", style)
 	panel.tooltip_text = card.description
+	panel.clip_contents = true   # иллюстрация по большей стороне — лишнее за краем карты
+	# Иллюстрация карты (или портрет) — фоном карты, приглушена: высота карт та же, рука помещается в окно 648
+	var art := UITheme.make_card_backdrop(card)
+	var tex = null if art else UITheme.card_portrait(card)
+	if art:
+		panel.add_child(art)
+	if tex:
+		var bg = TextureRect.new()
+		bg.texture = tex
+		bg.modulate = UITheme.card_tint(card) * Color(1, 1, 1, HAND_PORTRAIT_ALPHA)
+		bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(bg)
 	var col = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 2)
 	panel.add_child(col)
@@ -169,11 +193,13 @@ func _make_hand_card(card: CardData) -> Control:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	title.add_theme_font_size_override("font_size", 13)
+	title.add_theme_constant_override("outline_size", 4)   # поверх иллюстрации
 	col.add_child(title)
 
 	var info = "×%d" % card.unit_count if card.card_type == "squad" else UITheme.TYPE_NAMES.get(card.card_type, "")
 	var info_label = UITheme.make_label(info, "DimLabel")
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info_label.add_theme_constant_override("outline_size", 4)
 	col.add_child(info_label)
 
 	var sell = Button.new()
@@ -258,7 +284,9 @@ func _on_catch_up_reroll() -> void:
 # -------------------------------------------------------
 func _on_reroll_pressed() -> void:
 	var cost = ShopManager.get_reroll_cost()
+	_reveal_next = true
 	if not ShopManager.try_reroll():
+		_reveal_next = false
 		AudioManager.play("no_money")
 		_show_message("Не хватает Requisition: обновление стоит %d" % cost)
 		return
@@ -294,7 +322,7 @@ func _build_hud() -> void:
 	hud.offset_bottom = UITheme.HUD_HEIGHT
 	add_child(hud)
 	var hud_row = HBoxContainer.new()
-	hud_row.add_theme_constant_override("separation", 24)
+	hud_row.add_theme_constant_override("separation", 16)
 	hud.add_child(hud_row)
 	hud_row.add_child(UITheme.make_label("WH40KINGS", "TitleLabel"))
 	message_label = UITheme.make_label("", "SmallLabel")
@@ -303,16 +331,19 @@ func _build_hud() -> void:
 	message_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	message_label.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT)
 	hud_row.add_child(message_label)
-	round_label.reparent(hud_row)
+	hud_row.add_child(UITheme.icon_row("hud", "wave", round_label))
 	round_label.theme_type_variation = "HeaderLabel"
 	timeline = RunTimeline.new()   # 15 волн: мини-боссы, босс, события, ближайшая волна
 	hud_row.add_child(timeline)
-	requisition_label.reparent(hud_row)
+	hud_row.add_child(UITheme.icon_row("hud", "requisition", requisition_label))
 	requisition_label.theme_type_variation = "ValueLabel"
-	citadel_label = UITheme.make_label("Цитадель %d/%d" % [ceili(BattleManager.citadel_hp), int(BattleManager.CITADEL_MAX_HP)], "ValueLabel")
+	citadel_label = UITheme.make_label("%d/%d" % [ceili(BattleManager.citadel_hp), int(BattleManager.CITADEL_MAX_HP)], "ValueLabel")
 	if BattleManager.citadel_hp <= BattleManager.CITADEL_MAX_HP / 4:
 		citadel_label.add_theme_color_override("font_color", UITheme.RED_BRIGHT)
-	hud_row.add_child(citadel_label)
+	var citadel_row := UITheme.icon_row("hud", "citadel_hp", citadel_label)   # «Цитадель» — значком
+	citadel_row.tooltip_text = "Цитадель"
+	citadel_row.mouse_filter = Control.MOUSE_FILTER_PASS
+	hud_row.add_child(citadel_row)
 	for l in [round_label, requisition_label, citadel_label]:
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	$TopBar.hide()

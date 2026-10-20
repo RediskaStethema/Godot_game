@@ -6,7 +6,7 @@ extends Node2D
 # перезарядка — тусклый контур и дуга оставшегося времени. Орудий нет / не бой — скрыт.
 # Только вид: залп по клику делает BattleScene._unhandled_input.
 
-const COLOR_READY = Color(1.0, 0.72, 0.25)
+const COLOR_READY = UITheme.GOLD_BRIGHT
 const COLOR_RELOAD = Color(0.7, 0.75, 0.85)
 const FILL_ALPHA: float = 0.12
 const LINE_WIDTH: float = 2.0

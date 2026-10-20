@@ -157,7 +157,7 @@ func _main() -> void:
 	dread3._do_attack()   # второй замах сразу — первый удар проходит сейчас
 	_check("быстрый повторный замах: прошлый удар засчитан, а не потерян", e4.current_hp < hp4)
 
-	# Assault — свой лист с hit_frame (assets/Assault_marine_assets.png): удар цепным мечом на кадре замаха
+	# Assault — свой лист с hit_frame (assets/source_sheets/Assault_marine_assets.png): удар цепным мечом на кадре замаха
 	var assault = _of(0, "assault_marine")[0]
 	var a_frames: SpriteFrames = assault.sprite.sprite_frames
 	var a_hit: float = a_frames.get_meta("hit_frame", -1) / a_frames.get_animation_speed("attack")
