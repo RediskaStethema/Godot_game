@@ -121,6 +121,11 @@ func _build_ui() -> void:
 func _build_field() -> void:
 	# Бойцы рисуются по глубине: кто ниже на экране — тот ближе
 	units_container.y_sort_enabled = true
+	# Тени и кольца бойцов — одним слоем под отрядами (SoldierShadows)
+	var shadows := SoldierShadows.new()
+	add_child(shadows)
+	move_child(shadows, units_container.get_index())
+	shadows.setup(units_container)
 	iso_grid.set_unlocked_tiles(BattleManager.kingdom_tiles)
 	iso_grid.setup()
 	renderer = IsoGridRenderer.new()
@@ -192,13 +197,14 @@ func _place_player_buildings() -> void:
 		if iso_grid.is_valid_tile(tile) and not _is_tile_occupied(tile):
 			_spawn_building(card, tile)
 
-func _spawn_building(card: CardData, tile: Vector2i) -> void:
+func _spawn_building(card: CardData, tile: Vector2i) -> Building:
 	var building = Building.new()
 	building.setup(card, tile)
 	building.position = iso_grid.tile_to_screen(tile)
 	units_container.add_child(building)
 	BattleManager.buildings.append(building)
 	renderer.set_occupied(tile, true)
+	return building
 
 # Один UnitData = один отряд; без сохранённой клетки — первая свободная
 func _place_player_squads() -> void:
@@ -233,7 +239,7 @@ func _place_enemy_squads() -> void:
 		if "elite" in enemy_data.tags:
 			enemy_elites_at_start += spec["count"]
 
-func _spawn_squad(unit_data: UnitData, team: int, tile: Vector2i, count: int, hp_list: Array[float] = []) -> void:
+func _spawn_squad(unit_data: UnitData, team: int, tile: Vector2i, count: int, hp_list: Array[float] = []) -> Squad:
 	var is_enemy = team == GameConstants.TEAM_ENEMY
 	var squad = SQUAD_SCENE.instantiate()
 	units_container.add_child(squad)
@@ -246,6 +252,7 @@ func _spawn_squad(unit_data: UnitData, team: int, tile: Vector2i, count: int, hp
 	renderer.set_occupied(tile, true, is_enemy)
 	if not is_enemy and is_placement_phase:
 		_update_synergy_preview()
+	return squad
 
 func _is_tile_occupied(tile: Vector2i) -> bool:
 	return renderer.occupied_tiles_player.has(tile)
@@ -363,7 +370,7 @@ func _play_squad_card(card: CardData, tile: Vector2i) -> bool:
 	var unit_data = UnitFactory.create(card.unit_factory_id)
 	unit_data.squad_size = card.unit_count
 	unit_data.squad_growth = UnitFactory.squad_growth_for(card)
-	_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, card.unit_count)
+	_materialize(_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, card.unit_count))
 	return true
 
 # Улучшение бросают НА свой отряд
@@ -391,7 +398,7 @@ func _play_building_card(card: CardData, tile: Vector2i) -> bool:
 	if _is_tile_occupied(tile):
 		_show_message("Тайл занят")
 		return false
-	_spawn_building(card, tile)
+	_materialize(_spawn_building(card, tile))
 	BattleManager.player_buildings[card] = tile
 	_show_message("Построено: %s" % card.title)
 	return true
@@ -410,14 +417,31 @@ func _play_event_card(card: CardData, tile: Vector2i) -> bool:
 			var unit_data = UnitFactory.create(squad_card.unit_factory_id)
 			unit_data.squad_size = squad_card.unit_count
 			unit_data.squad_growth = UnitFactory.squad_growth_for(squad_card)
-			_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, squad_card.unit_count)
+			_materialize(_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, squad_card.unit_count))
 			_show_message("Подкрепление: %s" % squad_card.title)
 			return true
 		"orbital_strike":
 			BattleManager.armed_events.append(card.id)
+			Vfx.spawn(units_container, "cast", iso_grid.tile_to_screen(tile), SPAWN_POOF_SIZE)
 			_show_message("Орбитальный удар наведён: ударит в начале боя")
 			return true
 	return false
+
+# Карта легла на клетку — моделька проявляется (решение пользователя 21.10.2026: на поле кладут карту, а не
+# модельку): вырастает из клетки с облачком. Только вид, расстановка
+const SPAWN_TIME: float = 0.3
+const SPAWN_FROM_SCALE: float = 0.35
+const SPAWN_POOF_SIZE: float = 1.6
+var _spawn_tweens: Array[Tween] = []   # «В БОЙ» раньше конца — доводим сразу (масштаб отряда сдвигает бойцов)
+func _materialize(node: Node2D) -> void:
+	node.scale = Vector2(SPAWN_FROM_SCALE, SPAWN_FROM_SCALE)
+	node.modulate.a = 0.0
+	var tw := node.create_tween().set_parallel(true)
+	_spawn_tweens = _spawn_tweens.filter(func(t: Tween): return t.is_valid())
+	_spawn_tweens.append(tw)
+	tw.tween_property(node, "scale", Vector2.ONE, SPAWN_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "modulate:a", 1.0, SPAWN_TIME * 0.6)
+	Vfx.spawn(units_container, "poof", node.global_position, SPAWN_POOF_SIZE)
 
 func _get_player_building_at(tile: Vector2i) -> Building:
 	for b in BattleManager.buildings:
@@ -556,6 +580,10 @@ func get_same_card_tiles(card: CardData) -> Array[Vector2i]:
 	return tiles
 
 func _on_start_pressed() -> void:
+	for tw in _spawn_tweens:   # моделька ещё растёт из клетки — сразу в полный размер
+		if tw.is_valid():
+			tw.custom_step(SPAWN_TIME)
+	_spawn_tweens.clear()
 	is_placement_phase = false
 	AudioManager.play("battle_start")
 	_on_bench_card_hovered(null)

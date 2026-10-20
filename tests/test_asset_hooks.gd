@@ -197,7 +197,7 @@ func _main() -> void:
 	audio.history.clear()
 	await _battle([_squad_unit("tactical_marine", 3)] as Array[UnitData])
 	var P = load("res://scripts/battle/Projectile.gd")
-	P.launch(current_scene, "bolt", Vector2.ZERO, null, Vector2(100, 0))
+	P.launch(current_scene, "bolt", Vector2.ZERO, null, Vector2(100, 0)).tick(0.1)   # звук — при вылете из ствола
 	_check("события звука: музыка боя, выстрел снаряда (%s)" % ", ".join(audio.history.slice(0, 4)),
 		audio.current_music() == "battle" and audio.history.any(func(h): return h.begins_with("shot_bolt")))
 	quit()

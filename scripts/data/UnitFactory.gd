@@ -38,6 +38,9 @@ const PAIR_GROWTH: int = 1
 # Космодесант в силовой броне и техника — на ARMOUR_SCALE крупнее (решение пользователя); люди
 # (Scout, культисты) — прежнего роста
 const ARMOUR_SCALE: float = 1.1
+# Дальность ближнего боя — ноги к ногам, px (решение пользователя 21.10.2026: при 60 бойцы ростом 31 px
+# били через пустоту — «стоят слишком далеко»). Крупные модели (Champion, Дредноут, Hellbrute, Chaos Lord) — дальше
+const MELEE_RANGE: float = 30.0
 
 # Бойцов за уровень у отряда карты: пехота — SQUAD_GROWTH, пары — PAIR_GROWTH
 static func squad_growth_for(card: CardData) -> int:
@@ -149,7 +152,7 @@ static func assault_marine() -> UnitData:
 	d.hp = 90.0
 	d.damage = 18.0
 	d.attack_speed = 1.2
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 120.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	# Прыжковый ранец (решение пользователя 17.10.2026): раз за бой — на вражеского стрелка, удар при
@@ -189,7 +192,7 @@ static func chaos_champion() -> UnitData:
 	d.hp = 180.0
 	d.damage = 22.0
 	d.attack_speed = 1.0
-	d.attack_range = 70.0
+	d.attack_range = MELEE_RANGE * 1.15   # Champion крупнее
 	d.move_speed = 80.0
 	d.retreat_hp_threshold = 0.0
 	d.rarity = GameConstants.RARITY_RARE
@@ -207,7 +210,7 @@ static func chaos_lord() -> UnitData:
 	d.hp = 2200.0
 	d.damage = 50.0
 	d.attack_speed = 0.8
-	d.attack_range = 80.0
+	d.attack_range = MELEE_RANGE * 1.35   # Chaos Lord крупнее всех
 	d.move_speed = 60.0
 	d.on_hit_knockback = 250.0
 	d.retreat_hp_threshold = 0.0
@@ -226,7 +229,7 @@ static func chaos_hellbrute() -> UnitData:
 	d.hp = 600.0
 	d.damage = 30.0
 	d.attack_speed = 0.7
-	d.attack_range = 75.0
+	d.attack_range = MELEE_RANGE * 1.25   # Hellbrute крупнее
 	d.move_speed = 55.0
 	d.on_hit_knockback = 150.0
 	d.retreat_hp_threshold = 0.0
@@ -283,7 +286,7 @@ static func chaos_raptor() -> UnitData:
 	d.hp = 120.0
 	d.damage = 15.0
 	d.attack_speed = 0.9
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 140.0
 	d.priority = GameConstants.PRIORITY_RANGED_FIRST
 	d.sprite_path = "res://assets/sprites/chaos_raptor"  # лист assets/source_sheets/chaos_raptor_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
@@ -298,7 +301,7 @@ static func plague_marine() -> UnitData:
 	d.hp = 300.0
 	d.damage = 12.0
 	d.attack_speed = 0.8
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 55.0
 	d.retreat_hp_threshold = 0.0
 	d.on_hit_status = StatusEffects.POISONED   # яд Nurgle: стак за удар
@@ -360,7 +363,7 @@ static func terminator() -> UnitData:
 	d.hp = 320.0
 	d.damage = 38.0
 	d.attack_speed = 0.8
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 55.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.retreat_hp_threshold = 0.0   # терминаторы не отступают
@@ -381,7 +384,7 @@ static func apothecary() -> UnitData:
 	d.hp = 300.0
 	d.damage = 10.0
 	d.attack_speed = 0.8
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 80.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.heal_per_second = 20.0
@@ -473,7 +476,7 @@ static func dreadnought() -> UnitData:
 	d.hp = 1400.0
 	d.damage = 90.0
 	d.attack_speed = 0.6
-	d.attack_range = 70.0
+	d.attack_range = MELEE_RANGE * 1.15   # Дредноут крупнее
 	d.move_speed = 45.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.on_hit_knockback = 300.0
@@ -493,7 +496,7 @@ static func chapter_master() -> UnitData:
 	d.hp = 1000.0
 	d.damage = 75.0
 	d.attack_speed = 1.0
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 70.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.commander_damage_bonus = 0.15
@@ -581,7 +584,7 @@ static func honour_guard() -> UnitData:
 	d.hp = 1300.0
 	d.damage = 70.0
 	d.attack_speed = 0.9
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 60.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.shield_ratio = 0.25
@@ -681,7 +684,7 @@ static func khorne_berzerkers() -> UnitData:
 	d.hp = 180.0
 	d.damage = 40.0
 	d.attack_speed = 1.4
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 100.0
 	d.retreat_hp_threshold = 0.0
 	d.cost = 14
@@ -699,7 +702,7 @@ static func plaguebearers() -> UnitData:
 	d.hp = 400.0
 	d.damage = 18.0
 	d.attack_speed = 0.8
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 50.0
 	d.on_hit_status = StatusEffects.POISONED
 	d.on_hit_status_power = 3.0

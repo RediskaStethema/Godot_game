@@ -378,26 +378,52 @@ func _draw_floor() -> void:
 		_lit.queue_redraw()
 		_layout["mist"] = _mist_sources()
 		_mist.queue_redraw()
-	var cells: Array[Vector2i] = _layout["cells"]
+		_layout["plan"] = _floor_plan()
+	# План (что рисовать на каждой клетке) считается раз на раскладку: пол перерисовывается ANIM_REDRAW_FPS
+	# раз/с ради анимированных плит, и подбор плиты и декора на каждой клетке был основной ценой (21.10.2026)
+	for step in _layout["plan"]:
+		var c: Vector2i = step[0]
+		var top: Vector2 = step[1]
+		match step[2]:
+			PLAN_TILE:
+				TerrainTiles.draw_theme_tile(_floor, step[3], top, step[4], step[5], _cell_time(c))
+			PLAN_EDGE:
+				_draw_line_tile(theme["edge"], c, top, step[3])
+			PLAN_RIVER:
+				_draw_river_tile(c, top, step[3])
+		var deco: Array = step[6]
+		if not deco.is_empty():
+			TerrainTiles.draw_prop(_floor, deco[0], deco[1], FLOOR_TINT, deco[2], _cell_time(c))
+
+const PLAN_TILE := 0
+const PLAN_EDGE := 1
+const PLAN_RIVER := 2
+
+# [клетка, верх, вид, плита / ось, оттенок, отражение, декор [объект, точка, отражение] или []]
+func _floor_plan() -> Array:
+	var plan: Array = []
 	var rivers: Dictionary = _layout["rivers"]
 	var terrain: Dictionary = _layout["terrain"]
-	for c in cells:
+	for c in _layout["cells"]:
 		var top = grid.lattice_to_screen(c.x, c.y)
+		var step: Array
 		if grid.is_valid_tile(c):
-			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["kingdom"], c), top, Color.WHITE, false, _cell_time(c))
+			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(theme["kingdom"], c), Color.WHITE, false]
 		elif _is_floor_edge(c) and theme.has("edge"):
 			# Края с постоянным u идут вдоль оси v, с постоянным v — вдоль u
 			var along_v = c.x == -FLOOR_PAD_TILES or c.x == grid.get_layout_cols() + FLOOR_PAD_TILES - 1
-			_draw_line_tile(theme["edge"], c, top, "v" if along_v else "u")
+			step = [c, top, PLAN_EDGE, "v" if along_v else "u", FLOOR_TINT, false]
 		elif rivers.has(c):
-			_draw_river_tile(c, top, rivers[c])
+			step = [c, top, PLAN_RIVER, rivers[c], FLOOR_TINT, false]
 		elif terrain.has(c):
-			TerrainTiles.draw_theme_tile(_floor, terrain[c][0], top, FLOOR_TINT, terrain[c][1], _cell_time(c))
+			step = [c, top, PLAN_TILE, terrain[c][0], FLOOR_TINT, terrain[c][1]]
 		elif _is_enemy_cell(c):
-			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["enemy"], c), top, FLOOR_TINT, false, _cell_time(c))
+			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(theme["enemy"], c), FLOOR_TINT, false]
 		else:
-			TerrainTiles.draw_theme_tile(_floor, TerrainTiles.pick_any(theme["floor"], c), top, FLOOR_TINT, false, _cell_time(c))
-		_draw_cell_decoration(c, top, rivers, terrain)
+			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(theme["floor"], c), FLOOR_TINT, false]
+		step.append(_cell_decoration(c, top, rivers, terrain))
+		plan.append(step)
+	return plan
 
 # Ориентиры темы ("landmarks": {"campfire", "banners", "random_banners", "war_banners", "war_banner_count"},
 # все ключи необязательны): клетка → объект.
@@ -544,16 +570,16 @@ func _draw_glow(canvas: Node2D, strength: float, raise: float) -> void:
 func _cheb(d: Vector2i) -> int:
 	return maxi(absi(d.x), absi(d.y))
 
-# Декор — на своей клетке сразу после её плиты (передние клетки перекрывают задний декор)
-func _draw_cell_decoration(c: Vector2i, top: Vector2, rivers: Dictionary, terrain: Dictionary) -> void:
+# Декор — на своей клетке сразу после её плиты (передние клетки перекрывают задний декор): [объект, точка,
+# отражение] или []
+func _cell_decoration(c: Vector2i, top: Vector2, rivers: Dictionary, terrain: Dictionary) -> Array:
 	if _layout.get("landmarks", {}).has(c):
-		TerrainTiles.draw_prop(_floor, _layout["landmarks"][c], top, FLOOR_TINT, false, _cell_time(c))
-		return
+		return [_layout["landmarks"][c], top, false]
 	var deco = decoration_for(c, rivers, terrain)
 	if deco == null:
-		return
+		return []
 	var jitter = Vector2((TerrainTiles.hash_cell(c, 21) % 41) - 20, (TerrainTiles.hash_cell(c, 29) % 17) - 8)
-	TerrainTiles.draw_prop(_floor, deco, top + jitter, FLOOR_TINT, TerrainTiles.hash_cell(c, 37) % 2 == 1, _cell_time(c))
+	return [deco, top + jitter, TerrainTiles.hash_cell(c, 37) % 2 == 1]
 
 # Декор клетки (объект темы {"texture", "base", "scale", "flat", "flag"}) или null. Нет декора:
 # королевство, цитадель и клетки вокруг, реки, край поля, руины, туман и большие кратеры ("no_decor").

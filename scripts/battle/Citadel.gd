@@ -63,7 +63,7 @@ var _sheet: Dictionary = {}
 var _pending_shot: Dictionary = {}
 # Вспышка попадания: один материал на крепость (блоки — сам узел, лист — спрайт; HP-бар без него)
 var _flash_material: ShaderMaterial
-var _flash_tween: Tween
+var _flash_left: float = 0.0   # сек до конца вспышки попадания (гаснет в _process, не Tween на удар)
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -142,9 +142,12 @@ func _on_sprite_animation_finished() -> void:
 	if _sprite.animation in ["attack", "hit"]:
 		_sprite.play("idle")
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _sprite:
 		_sprite.self_modulate = self_modulate
+	if _flash_left > 0.0:
+		_flash_left = maxf(_flash_left - delta, 0.0)
+		_flash_material.set_shader_parameter("flash", HIT_FLASH_STRENGTH * _flash_left / HIT_FLASH_TIME)
 
 func _draw() -> void:
 	Building.draw_ground_shadow(self, Vector2.ZERO, IsoGrid.TILE_WIDTH * SHADOW_WIDTH)
@@ -282,14 +285,11 @@ func _get_flash_material() -> ShaderMaterial:
 		_flash_material.shader = shader
 	return _flash_material
 
-# Белая вспышка попадания: новый удар начинает её заново
+# Белая вспышка попадания: новый удар начинает её заново; гаснет счётчиком в _process — на штурме по
+# цитадели бьют десятки врагов, Tween на каждый удар был бы лишним объектом (как у Soldier)
 func _flash_hit() -> void:
-	if _flash_tween:
-		_flash_tween.kill()
 	_get_flash_material().set_shader_parameter("flash", HIT_FLASH_STRENGTH)
-	_flash_tween = create_tween()
-	_flash_tween.tween_method(func(v: float): _flash_material.set_shader_parameter("flash", v),
-		HIT_FLASH_STRENGTH, 0.0, HIT_FLASH_TIME).set_ease(Tween.EASE_OUT)
+	_flash_left = HIT_FLASH_TIME
 
 func get_hit_flash() -> float:
 	return _get_flash_material().get_shader_parameter("flash")

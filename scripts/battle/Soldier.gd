@@ -55,7 +55,7 @@ const ATTACK_STAGGER: float = 0.5
 const GOLDEN_RATIO_FRAC: float = 0.618034
 # Удар ближнего боя проходит на кадре hit_frame анимации атаки (метаданные frames.tres), если цель
 # ещё рядом: дальность × это
-const MELEE_HIT_REACH: float = 1.5
+const MELEE_HIT_REACH: float = 2.5   # ×дальность: при MELEE_RANGE 30 (21.10.2026) — 75 px, отходящий за замах не уходит
 # Прыжок (UnitData.jump_range): скорость полёта не больше SoldierRegistry.GRID_SLACK за тик —
 # поиск ближайшего по сетке остаётся точным; дуга (JUMP_HEIGHT × sprite_scale) — только вид
 const JUMP_SPEED: float = 450.0
@@ -714,15 +714,12 @@ func heal(amount: float) -> void:
 func _draw() -> void:
 	if data == null or current_state == State.DEAD or max_hp <= 0.0:
 		return
-	var r := SHADOW_RADIUS * data.sprite_scale
-	var ring := Color(UITheme.PLAYER_SIDE if team == GameConstants.TEAM_PLAYER else UITheme.ENEMY_SIDE, RING_ALPHA)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, SHADOW_FLATTEN))
-	draw_circle(Vector2.ZERO, r * SHADOW_SOFT_SCALE, SHADOW_SOFT)
-	draw_circle(Vector2.ZERO, r, SHADOW_COLOR)
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 20, ring, RING_WIDTH)
+	# Тень и кольцо стороны — общий слой SoldierShadows (один вызов на всех; здесь пакет рвался на каждом бойце)
 	if is_entrenched():   # окопался (Devastator) — бруствер дугой перед ногами
+		var r := SHADOW_RADIUS * data.sprite_scale
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, SHADOW_FLATTEN))
 		draw_arc(Vector2.ZERO, r * 1.4, 0.15 * PI, 0.85 * PI, 10, SANDBAG_COLOR, RING_WIDTH * 2.0)
-	draw_set_transform(Vector2.ZERO)
+		draw_set_transform(Vector2.ZERO)
 	# Статус-эффекты — точки над головой, по точке на стак
 	var stacks := 0
 	for effect in status_effects:
@@ -865,17 +862,23 @@ func _shoot_projectile(to: Node2D, aim_offset: Vector2) -> Projectile:
 	if data.projectile == "" or parent_squad == null:
 		return null
 	var frames := sprite.sprite_frames
+	var delay := 0.0
+	if frames.has_meta("shot_frame"):   # анимация атаки ускорена под частые выстрелы — кадр вспышки раньше
+		delay = frames.get_meta("shot_frame") / frames.get_animation_speed("attack") / _attack_anim_scale()
+	var shot := Projectile.launch(parent_squad.get_parent(), data.projectile, _muzzle_point(),
+			to, aim_offset, delay, data.projectile_warm, frames.get_meta("muzzle_color", Color(0, 0, 0, 0)))
+	shot.source = parent_squad
+	shot.origin_fn = _muzzle_point   # к кадру вспышки стрелок мог сдвинуться — вылет из ствола там, где он сейчас
+	return shot
+
+# Ствол в мире (metadata/muzzle листа — от центра низа кадра; нет — у груди)
+func _muzzle_point() -> Vector2:
+	var frames := sprite.sprite_frames
 	var base_h := TARGET_SPRITE_HEIGHT / sprite.scale.y   # высота кадра idle
 	var muzzle: Vector2 = frames.get_meta("muzzle", Vector2(base_h * 0.3, -base_h * 0.5))
 	if sprite.flip_h:
 		muzzle.x = -muzzle.x
-	var delay := 0.0
-	if frames.has_meta("shot_frame"):   # анимация атаки ускорена под частые выстрелы — кадр вспышки раньше
-		delay = frames.get_meta("shot_frame") / frames.get_animation_speed("attack") / _attack_anim_scale()
-	var shot := Projectile.launch(parent_squad.get_parent(), data.projectile, global_position + muzzle * sprite.scale,
-			to, aim_offset, delay, data.projectile_warm, frames.get_meta("muzzle_color", Color(0, 0, 0, 0)))
-	shot.source = parent_squad
-	return shot
+	return global_position + muzzle * sprite.scale
 
 # Урон одного удара: аура союзников + разброс damage_variance
 func _roll_damage() -> float:

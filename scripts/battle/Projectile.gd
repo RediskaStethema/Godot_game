@@ -73,6 +73,7 @@ var splash_team: int = GameConstants.TEAM_ENEMY
 var on_impact: Callable             # (точка) — вспышка взрыва у стрелка (цитадель)
 var impact_vfx: Array = ["explosion"]   # эффекты взрыва (Vfx), масштаб — по splash_radius
 var arc_height: float = 0.0         # > 0 — рисуется по дуге (артиллерия), попадание то же
+var origin_fn: Callable             # () -> Vector2: ствол стрелка сейчас — снаряд с задержкой вылетает из него
 
 var finished: bool = false
 
@@ -84,6 +85,7 @@ var _pos: Vector2                   # логическая позиция (ме�
 var _delay: float
 var _life: float = 0.0
 var _angle_offset: float = 0.0
+var _released: bool = false         # вылетел из ствола (кадр вспышки дошёл)
 
 # Выстрел из точки from в цель (Soldier / Citadel): aim — куда в цели (смещение от её ног).
 # tint (альфа > 0) — снаряд в цвет вспышки стрелка; иначе warm — синий → красный (Хаос), иначе как на листе.
@@ -117,10 +119,8 @@ static func launch(parent: Node, kind: String, from: Vector2, target: Node2D, ai
 		p.material = _get_warm_material()
 	parent.add_child(p)
 	p.global_position = from
-	p.visible = delay <= Soldier.TIMER_EPSILON
+	p.visible = delay <= Soldier.TIMER_EPSILON   # без задержки — виден у ствола сразу, звук — при вылете
 	p._kind = kind
-	if p.visible:
-		AudioManager.play("shot_" + kind)
 	p._face(p._aim_point - from)
 	if p.sprite_frames:
 		FrameBlend.attach(p)   # кадры перетекают (только вид)
@@ -184,16 +184,30 @@ func tick(delta: float) -> void:
 	_track_target()
 	if _delay > Soldier.TIMER_EPSILON:
 		_delay -= delta
+		if _delay > Soldier.TIMER_EPSILON:
+			return
+	if not _released:
+		_release()
 		return
-	if not visible:   # вылетел после задержки (кадр выстрела) — звук выстрела сейчас
-		AudioManager.play("shot_" + _kind)
-	visible = true
 	var step := SPEED * delta
 	if _pos.distance_to(_aim_point) <= step or _life > MAX_LIFETIME:
 		_pos = _aim_point
 		_impact()
 		return
 	_pos = _pos.move_toward(_aim_point, step)
+
+# Кадр вспышки дошёл (без задержки — тик выстрела): снаряд у ствола (стрелок мог сдвинуться — Land Speeder
+# кружит) и на этом тике стоит, летит со следующего: снаряд тикает в тот же тик, что выпущен, и раньше первый
+# кадр рисовался на шаг полёта (75 px) впереди ствола — «из воздуха» (решение пользователя 21.10.2026)
+func _release() -> void:
+	_released = true
+	if origin_fn.is_valid():
+		_origin = origin_fn.call()
+		_pos = _origin
+		global_position = _pos
+	_face(_aim_point - _pos)
+	visible = true
+	AudioManager.play("shot_" + _kind)
 
 # Самонаведение: живая цель тянет снаряд за собой. Цель погибла — летим в последнюю точку,
 # урона там не будет (если только это не взрыв).
