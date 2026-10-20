@@ -11,7 +11,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/attack/4.png" id="attack_4"]
 
 [resource]
-metadata/muzzle = Vector2(196.1, -219.9)
+metadata/muzzle = Vector2(200.5, -224.9)
 metadata/shot_frame = 1
 metadata/muzzle_color = Color(1.000, 0.552, 0.060, 1)
 animations = [{

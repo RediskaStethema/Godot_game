@@ -49,6 +49,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/death/9.png" id="death_9"]
 
 [resource]
+metadata/muzzle = Vector2(61.0, -106.0)
 metadata/shot_frame = 5
 animations = [{
 "frames": [{

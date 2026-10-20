@@ -11,7 +11,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/fists_bastion/attack/4.png" id="attack_4"]
 
 [resource]
-metadata/muzzle = Vector2(177.7, -302.0)
+metadata/muzzle = Vector2(173.0, -291.2)
 metadata/shot_frame = 3
 metadata/muzzle_color = Color(1.000, 0.771, 0.032, 1)
 animations = [{

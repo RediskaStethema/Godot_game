@@ -52,6 +52,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/chaos_noise_marines/death/10.png" id="death_10"]
 
 [resource]
+metadata/muzzle = Vector2(42.0, -124.0)
 metadata/shot_frame = 6
 animations = [{
 "frames": [{
