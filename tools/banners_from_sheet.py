@@ -1,6 +1,6 @@
 """Знамёна листа UI_assets.png (раздел BANNERS / FLAGS) → декор поля боя в палитре расы.
 
-    python tools/banners_from_sheet.py UI_assets.png
+    python tools/banners_from_sheet.py assets/source_sheets/UI_assets.png
 
 На листе знамёна висят на перекладине без древка — скрипт дорисовывает древко до земли и подножие
 (цвет — металл перекладины), чтобы знамя стояло на клетке. Точка основания — низ подножия (печатает
@@ -111,4 +111,4 @@ def main(sheet):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "UI_assets.png")
+    main(sys.argv[1] if len(sys.argv) > 1 else "assets/source_sheets/UI_assets.png")

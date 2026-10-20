@@ -1,6 +1,6 @@
-"""Лист интерфейса UI_assets.png (корень проекта, прозрачный фон) → текстуры UITheme и главного меню.
+"""Лист интерфейса assets/source_sheets/UI_assets.png (прозрачный фон) → текстуры UITheme и главного меню.
 
-    python tools/ui_from_sheet.py UI_assets.png
+    python tools/ui_from_sheet.py assets/source_sheets/UI_assets.png
 
 Пишет:
   assets/ui/button_normal|hover|pressed.png — кнопки без текста и иконки (StyleBoxTexture 9-slice:
@@ -111,4 +111,4 @@ def main(sheet):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "UI_assets.png")
+    main(sys.argv[1] if len(sys.argv) > 1 else "assets/source_sheets/UI_assets.png")

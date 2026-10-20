@@ -1,6 +1,6 @@
 """Лист объектов на прозрачном фоне → отдельные PNG объектов (руины, декор, цитадель).
 
-    python tools/props_from_sheet.py assets/FightFleed/Assets_cosmodesant/goticImperial.png assets/sprites/props/space_marines gothic
+    python tools/props_from_sheet.py assets/source_sheets/goticImperial.png assets/sprites/props/space_marines gothic
 
 Объект — связное пятно плотных пикселей (альфа > ALPHA_MIN), куски одного объекта склеиваются
 через зазор JOIN px. Порядок — по рядам сверху вниз (ROW_PX), в ряду слева направо: <имя>_00.png, …
