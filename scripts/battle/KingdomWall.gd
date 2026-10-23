@@ -43,7 +43,7 @@ func refresh_stats() -> void:
 	for s in segments:
 		s.max_hp = stats.get("wall_hp", 0.0)
 		s.hp = s.max_hp
-		s.queue_redraw()
+		s.mark_dirty()
 
 func get_citadel_shield() -> float:
 	return stats.get("shield", 0.0)
@@ -163,6 +163,11 @@ class Segment extends Node2D:
 		if hp <= 0.0:
 			AudioManager.play("wall_break")
 			Vfx.spawn(get_parent(), "ground_slam", position, 1.6)
+		mark_dirty()
+
+	# HP или статы изменились — геометрию звена собрать заново
+	func mark_dirty() -> void:
+		_dirty = true
 		queue_redraw()
 
 	func _process(delta: float) -> void:
@@ -171,6 +176,8 @@ class Segment extends Node2D:
 		_hit_left = maxf(_hit_left - delta, 0.0)
 		var rising := rise_delay >= 0.0 and _t < rise_delay + KingdomWall.RISE_TIME
 		if flash_left <= 0.0 and _hit_left <= 0.0 and not rising:
+			if rise_delay >= 0.0:
+				_dirty = true   # дорос — последний кадр в полную высоту
 			rise_delay = -1.0
 			set_process(false)
 		queue_redraw()
@@ -180,6 +187,13 @@ class Segment extends Node2D:
 	var _pts := PackedVector2Array()
 	var _cols := PackedColorArray()
 	var _idx := PackedInt32Array()
+	# Геометрия звена собирается только при смене HP / статов и пока звено растёт; вспышки (щит, попадание) —
+	# один многоугольник поверх готовой: сборка на GDScript ~70 мкс, а вспышка щита в начале боя перерисовывает
+	# все 48 звеньев каждый кадр 0.9 с — было +3.5 мс на кадр (test_performance, 23.10.2026)
+	var _dirty := true
+	var _base_pts := 0
+	var _base_idx := 0
+	var _face := PackedVector2Array()   # лицевая грань — под вспышки
 
 	func _poly(p: PackedVector2Array, col: Color) -> void:   # выпуклый многоугольник — веером
 		var base := _pts.size()
@@ -197,10 +211,25 @@ class Segment extends Node2D:
 		_poly(PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]), col)
 
 	func _draw() -> void:
-		_pts.clear()
-		_cols.clear()
-		_idx.clear()
-		_build()
+		if _dirty or rise_delay >= 0.0:
+			_pts.clear()
+			_cols.clear()
+			_idx.clear()
+			_face.clear()
+			_build()
+			_dirty = false
+			_base_pts = _pts.size()
+			_base_idx = _idx.size()
+		else:   # вспышки прошлого кадра — прочь
+			_pts.resize(_base_pts)
+			_cols.resize(_base_pts)
+			_idx.resize(_base_idx)
+		if not _face.is_empty():
+			if flash_left > 0.0:   # щит стен: голубой отсвет по стене
+				var f := sin(flash_left / KingdomWall.FLASH_TIME * PI) * 0.6
+				_poly(_face, Color(flash_color, f))
+			if _hit_left > 0.0:
+				_poly(_face, Color(1, 1, 1, 0.7 * _hit_left / Soldier.HIT_FLASH_TIME))
 		if not _idx.is_empty():
 			RenderingServer.canvas_item_add_triangle_array(get_canvas_item(), _idx, _pts, _cols)
 
@@ -227,8 +256,8 @@ class Segment extends Node2D:
 		var along := (lb - la).normalized()
 		var n := Vector2(-along.y, along.x)
 		n = Vector2(n.x, n.y * 0.5).normalized() * KingdomWall.THICK * 0.5
-		var face := PackedVector2Array([la, lb, lb + up, la + up])
-		_poly(face, face_col)
+		_face = PackedVector2Array([la, lb, lb + up, la + up])
+		_poly(_face, face_col)
 		_poly(PackedVector2Array([la + up - n, lb + up - n, lb + up + n, la + up + n]), top_col)
 		_line(la + up, lb + up, dark_col, 1.0)
 		_line(la, lb, dark_col, 1.0)
@@ -267,8 +296,3 @@ class Segment extends Node2D:
 				var bar := Rect2(Vector2(-w / 2.0, -KingdomWall.POST_HEIGHT - 6.0), Vector2(w, 2.0))
 				_rect(bar, Palette.OUTLINE)
 				_rect(Rect2(bar.position, Vector2(w * ratio, 2.0)), Palette.HIT_RED)
-		if flash_left > 0.0:   # щит стен: голубой отсвет по стене
-			var f := sin(flash_left / KingdomWall.FLASH_TIME * PI) * 0.6
-			_poly(face, Color(flash_color, f))
-		if _hit_left > 0.0:
-			_poly(face, Color(1, 1, 1, 0.7 * _hit_left / Soldier.HIT_FLASH_TIME))
