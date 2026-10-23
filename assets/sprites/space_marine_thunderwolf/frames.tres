@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" load_steps=45 format=3]
+[gd_resource type="SpriteFrames" load_steps=44 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/sprites/space_marine_thunderwolf/idle/0.png" id="idle_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/space_marine_thunderwolf/idle/1.png" id="idle_1"]
@@ -42,7 +42,6 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/space_marine_thunderwolf/death/4.png" id="death_4"]
 [ext_resource type="Texture2D" path="res://assets/sprites/space_marine_thunderwolf/death/5.png" id="death_5"]
 [ext_resource type="Texture2D" path="res://assets/sprites/space_marine_thunderwolf/death/6.png" id="death_6"]
-[ext_resource type="Texture2D" path="res://assets/sprites/space_marine_thunderwolf/death/7.png" id="death_7"]
 [ext_resource type="Texture2D" path="res://assets/sprites/space_marine_thunderwolf/death/8.png" id="death_8"]
 
 [resource]
@@ -189,9 +188,6 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("death_6")
-}, {
-"duration": 1.0,
-"texture": ExtResource("death_7")
 }, {
 "duration": 1.0,
 "texture": ExtResource("death_8")

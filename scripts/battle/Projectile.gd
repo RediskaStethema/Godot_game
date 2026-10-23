@@ -31,12 +31,13 @@ const EFFECTS = {
 	"chaos_bolt": {"sheet": "res://assets/effects/chaos_bolt/spritesheet.png", "size": Vector2i(214, 156),
 		"frames": 8, "fps": 14.0, "scale": 0.11, "pivot": Vector2(194, 78), "own_colors": true},
 	# пакет эффектов по ТЗ EFFECTS_NEEDED.txt (21.10.2026): звуковая волна Noise Marines (Slaanesh),
-	# пылающий череп Hellfire Mortar — свои цвета
+	# пылающий череп Hellfire Mortar — свои цвета. Снаряд летит по кругу кадров: в листах нарисована и его гибель
+	# (волна гаснет в кадрах 5–7, череп рассыпается в 5–7) — в полёте мигал раз в цикл; берутся только полные кадры
 	"sonic_wave": {"sheet": "res://assets/effects/sonic_wave/spritesheet.png", "size": Vector2i(64, 64),
-		"frames": 8, "fps": 18.0, "scale": 0.45, "pivot": Vector2(44, 32), "own_colors": true},
+		"from": 1, "frames": 4, "fps": 18.0, "scale": 0.45, "pivot": Vector2(44, 32), "own_colors": true},
 	# лист tools/fx_fix.py: кадры 80 px, череп — у правого края в одной точке (в пакете срезан сеткой)
 	"hellfire_shell": {"sheet": "res://assets/effects/hellfire_shell/spritesheet.png", "size": Vector2i(80, 64),
-		"frames": 8, "fps": 16.0, "scale": 0.6, "pivot": Vector2(63, 34), "own_colors": true},
+		"frames": 5, "fps": 16.0, "scale": 0.6, "pivot": Vector2(63, 34), "own_colors": true},
 }
 const FPS: float = 14.0             # кадры эффектов — по 70 мс
 const SCALE: float = 0.4            # листы рисованы крупно: шар charged — с голову марина (рост 31 px)

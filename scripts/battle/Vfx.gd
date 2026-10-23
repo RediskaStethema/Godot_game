@@ -37,7 +37,7 @@ const EFFECTS = {
 	"splatter":   {"sheet": "Splatter-Sheet.png", "size": Vector2i(150, 150), "frames": 30, "fps": 30.0,
 		"loop": false, "scale": 0.45, "pivot": Vector2(85, 140), "behind": true},
 	# обломки взрыва залпа Thunderfire
-	"impact":     {"sheet": "Spark1-Sheet.png", "size": Vector2i(150, 150), "frames": 30, "fps": 33.0,
+	"impact":     {"sheet": "Spark1-Sheet.png", "size": Vector2i(150, 150), "from": 1, "frames": 29, "fps": 33.0,
 		"add": true, "loop": false, "scale": 0.4, "pivot": Vector2(72, 140)},
 	# дым взрыва Thunderfire Cannon — масштаб по радиусу взрыва
 	"explosion":  {"sheet": "Smoke-Sheet.png", "size": Vector2i(80, 80), "frames": 19, "fps": 18.0,
@@ -79,9 +79,10 @@ const EFFECTS = {
 	"heal":       {"sheet": PIXEL_DIR + "magic/heal_side.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
 		"loop": false, "scale": 1.4, "pivot": Vector2(16, 37)},
 	# щит Iron Halo на бойце в начале боя; щит цитадели от стен — большой
-	"shield":     {"sheet": PIXEL_DIR + "magic/shield.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
+	# 12-й кадр листа пустой — без него угасание (FADE_TAIL) идёт по видимым кадрам
+	"shield":     {"sheet": PIXEL_DIR + "magic/shield.png", "size": Vector2i(32, 32), "frames": 11, "fps": 12.0,
 		"loop": false, "scale": 1.5, "pivot": Vector2(16, 37)},
-	"citadel_shield": {"sheet": PIXEL_DIR + "magic/shield.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
+	"citadel_shield": {"sheet": PIXEL_DIR + "magic/shield.png", "size": Vector2i(32, 32), "frames": 11, "fps": 12.0,
 		"loop": false, "scale": 5.0, "pivot": Vector2(16, 28)},
 	# боец встал (Apothecarion), высадка Deep Strike
 	"poof":       {"sheet": PIXEL_DIR + "movement/poof_side.png", "size": Vector2i(32, 32), "frames": 8, "fps": 12.0,
@@ -157,7 +158,7 @@ const EFFECTS = {
 		"modulate": Color(1, 1, 1, 0.55)},
 	"jump_trail":    {"sheet": FX_DIR + "jump_trail/spritesheet.png", "size": Vector2i(64, 32), "frames": 6,
 		"fps": 16.0, "add": true, "loop": true, "scale": 1.2, "pivot": Vector2(60, 16), "behind": true},
-	"jump_land":     {"sheet": FX_DIR + "jump_land/spritesheet.png", "size": Vector2i(128, 64), "frames": 10,
+	"jump_land":     {"sheet": FX_DIR + "jump_land/spritesheet.png", "size": Vector2i(128, 64), "frames": 9,   # 10-й съехал вверх
 		"fps": 16.0, "loop": false, "scale": 1.2, "pivot": Vector2(64, 50)},
 	"retreat_dust":  {"sheet": FX_DIR + "retreat_dust/spritesheet.png", "size": Vector2i(32, 16), "frames": 6,
 		"fps": 14.0, "loop": false, "scale": 2.0, "pivot": Vector2(16, 14)},
