@@ -12,6 +12,7 @@ const PIXEL_DIR = "res://assets/effects/Pixel/PNG_native/"   # пак Pixel: she
 const BLOOD_DIR = "res://assets/effects/NEw pack blood/"     # брызги попадания снаряда: 5 листов 6×6 по 100 px
 # Листы в палитре игры (tools/vfx_grade.py): res://assets/<путь> → res://assets/graded/<путь>, если перекрашен
 const GRADED_DIR = "res://assets/graded/"
+const FX_DIR = "res://assets/effects/"   # пакет художника по ТЗ EFFECTS_NEEDED.txt (tools/fx_fix.py)
 # sheet — файл листа, size — кадр, frames — кадров (пустые хвосты листа не берём), fps, loop,
 # scale — масштаб на бойце роста 62 px, pivot — точка кадра, которая встаёт в позицию эффекта
 # add — ADD-смешение (огонь, искры, энергия светятся; тёмные края листа исчезают)
@@ -82,9 +83,7 @@ const EFFECTS = {
 		"loop": false, "scale": 1.5, "pivot": Vector2(16, 37)},
 	"citadel_shield": {"sheet": PIXEL_DIR + "magic/shield.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
 		"loop": false, "scale": 5.0, "pivot": Vector2(16, 28)},
-	# сигналы игроку: улучшение отряда, боец встал (Apothecarion)
-	"level_up":   {"sheet": PIXEL_DIR + "pickup_ui/level_up.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
-		"add": true, "loop": false, "scale": 1.2, "pivot": Vector2(16, 74)},
+	# боец встал (Apothecarion), высадка Deep Strike
 	"poof":       {"sheet": PIXEL_DIR + "movement/poof_side.png", "size": Vector2i(32, 32), "frames": 8, "fps": 12.0,
 		"loop": false, "scale": 1.5, "pivot": Vector2(16, 37)},
 	# статусы над головой — StatusEffects.VFX; оглушение (STUNNED) — звёздочки
@@ -98,10 +97,88 @@ const EFFECTS = {
 		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
 	"stun":       {"sheet": PIXEL_DIR + "status/stun.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
 		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
+	# --- Пакет художника по ТЗ EFFECTS_NEEDED.txt (21.10.2026; листы — tools/fx_fix.py из
+	# assets/source_sheets/effects_pack: сборка пакета сдвигала и заворачивала кадры). Размер — экранный
+	# (клетка 140×70), scale 1 в мире; вариант «_chaos» берёт race_kind по расе игрока ---
+	# Решение пользователя 22.10.2026 (стиль): столбы и купола пакета на клетку заменены кодом — появление, уровень,
+	# лечение отряда и подъём павшего — LevelUpGlow на каждом бойце; стройка, улучшение здания, доход генератора,
+	# метка Orbital Strike — TileGlow по клетке; разлом купола щита — вспышка стены (KingdomWall)
+	# карты-улучшения: знак карты над отрядом — "upgrade_<id карты>" (Squad.apply_upgrade)
+	"upgrade_blessed_armour":  {"sheet": FX_DIR + "upgrades/upgrade_blessed_armour.png", "size": Vector2i(128, 128),
+		"frames": 8, "fps": 12.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 64)},
+	"upgrade_daemonic_armour": {"sheet": FX_DIR + "upgrades/upgrade_daemonic_armour.png", "size": Vector2i(128, 128),
+		"frames": 8, "fps": 12.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 64)},
+	"upgrade_battle_fury":     {"sheet": FX_DIR + "upgrades/upgrade_battle_fury.png", "size": Vector2i(128, 128),
+		"frames": 8, "fps": 12.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 64)},
+	"upgrade_blood_rage":      {"sheet": FX_DIR + "upgrades/upgrade_blood_rage.png", "size": Vector2i(128, 128),
+		"frames": 8, "fps": 12.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 64)},
+	"upgrade_iron_halo":       {"sheet": FX_DIR + "upgrades/upgrade_iron_halo.png", "size": Vector2i(128, 128),
+		"frames": 8, "fps": 12.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 64)},
+	"upgrade_warp_ward":       {"sheet": FX_DIR + "upgrades/upgrade_warp_ward.png", "size": Vector2i(128, 128),
+		"frames": 8, "fps": 12.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 64)},
+	"upgrade_combat_stimms":   {"sheet": FX_DIR + "upgrades/upgrade_combat_stimms.png", "size": Vector2i(128, 128),
+		"frames": 8, "fps": 12.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 64)},
+	"upgrade_combat_drugs":    {"sheet": FX_DIR + "upgrades/upgrade_combat_drugs.png", "size": Vector2i(128, 128),
+		"frames": 8, "fps": 12.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 64)},
+	"upgrade_chapter_banner":  {"sheet": FX_DIR + "upgrades/upgrade_chapter_banner.png", "size": Vector2i(128, 192),
+		"frames": 6, "fps": 8.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 96)},
+	"upgrade_icon_of_chaos":   {"sheet": FX_DIR + "upgrades/upgrade_icon_of_chaos.png", "size": Vector2i(128, 128),
+		"frames": 6, "fps": 8.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 64)},
+	# аура знамени на носителе весь бой (кольцо 165 px листа → радиус UnitData.BANNER_RADIUS)
+	"banner_aura":       {"sheet": FX_DIR + "banner_aura/spritesheet.png", "size": Vector2i(192, 128), "frames": 12,
+		"fps": 8.0, "add": true, "loop": true, "scale": 1.9, "pivot": Vector2(96, 64), "behind": true,
+		"modulate": Color(1, 1, 1, 0.35)},
+	"banner_aura_chaos": {"sheet": FX_DIR + "banner_aura/banner_aura_chaos.png", "size": Vector2i(192, 128), "frames": 12,
+		"fps": 8.0, "add": true, "loop": true, "scale": 1.9, "pivot": Vector2(96, 64), "behind": true,
+		"modulate": Color(1, 1, 1, 0.35)},
+	# Orbital Strike: удар в начале боя (метка до боя — TileGlow "strike")
+	"orbital_strike": {"sheet": FX_DIR + "orbital_strike/spritesheet.png", "size": Vector2i(256, 384), "frames": 16,
+		"fps": 18.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(128, 340)},
+	# удар варпа: в пакете кадры 8+9 и 10+11 — половинки одной широкой картинки, fx_fix склеил (кадр 512)
+	"orbital_strike_chaos": {"sheet": FX_DIR + "warp_strike/spritesheet.png", "size": Vector2i(512, 384), "frames": 14,
+		"fps": 18.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(256, 340)},
+	# здания: ауры в бою (кольцо листа 190 px → радиус ауры; ауры стены нет — KingdomWall),
+	# ремонт цитадели, череп алтаря
+	"aura_plague":   {"sheet": FX_DIR + "buildings/aura_plague.png", "size": Vector2i(216, 144), "frames": 12,
+		"fps": 8.0, "add": true, "loop": true, "scale": 1.0 / 95.0, "pivot": Vector2(108, 72), "behind": true,
+		"modulate": Color(1, 1, 1, 0.6)},
+	"aura_pleasure": {"sheet": FX_DIR + "buildings/aura_pleasure.png", "size": Vector2i(216, 144), "frames": 12,
+		"fps": 8.0, "add": true, "loop": true, "scale": 1.0 / 95.0, "pivot": Vector2(108, 72), "behind": true,
+		"modulate": Color(1, 1, 1, 0.6)},
+	"forge_repair":  {"sheet": FX_DIR + "buildings/forge_repair.png", "size": Vector2i(256, 256), "frames": 10,
+		"fps": 14.0, "add": true, "loop": false, "scale": 0.45, "pivot": Vector2(128, 200),
+		"modulate": Color(1, 1, 1, 0.75)},
+	"skull_add":     {"sheet": FX_DIR + "buildings/skull_add.png", "size": Vector2i(64, 64), "frames": 6,
+		"fps": 12.0, "loop": false, "scale": 0.6, "pivot": Vector2(32, 62)},
+	# способности: клич Chaplain (кольцо листа до 500 px → радиус клича), прыжок Assault.
+	# На бойце масштаб × data.sprite_scale × Soldier.EFFECT_SCALE (0.5) — у таких видов scale вдвое
+	"chaplain_warcry": {"sheet": FX_DIR + "chaplain_warcry/spritesheet.png", "size": Vector2i(512, 192), "frames": 9,
+		"fps": 16.0, "add": true, "loop": false, "scale": 1.0 / 250.0, "pivot": Vector2(256, 96),
+		"modulate": Color(1, 1, 1, 0.55)},
+	"jump_trail":    {"sheet": FX_DIR + "jump_trail/spritesheet.png", "size": Vector2i(64, 32), "frames": 6,
+		"fps": 16.0, "add": true, "loop": true, "scale": 1.2, "pivot": Vector2(60, 16), "behind": true},
+	"jump_land":     {"sheet": FX_DIR + "jump_land/spritesheet.png", "size": Vector2i(128, 64), "frames": 10,
+		"fps": 16.0, "loop": false, "scale": 1.2, "pivot": Vector2(64, 50)},
+	"retreat_dust":  {"sheet": FX_DIR + "retreat_dust/spritesheet.png", "size": Vector2i(32, 16), "frames": 6,
+		"fps": 14.0, "loop": false, "scale": 2.0, "pivot": Vector2(16, 14)},
+	# гибель техники, отряд пал, рикошет по броне техники
+	"vehicle_explode": {"sheet": FX_DIR + "vehicle_explode/spritesheet.png", "size": Vector2i(128, 128), "frames": 12,
+		"fps": 14.0, "loop": false, "scale": 0.65, "pivot": Vector2(64, 122)},
+	"squad_lost":    {"sheet": FX_DIR + "squad_lost/spritesheet.png", "size": Vector2i(64, 64), "frames": 8,
+		"fps": 12.0, "loop": false, "scale": 0.8, "pivot": Vector2(32, 60)},
+	"ricochet":      {"sheet": FX_DIR + "ricochet/spritesheet.png", "size": Vector2i(32, 32), "frames": 6,
+		"fps": 20.0, "add": true, "loop": false, "scale": 1.6, "pivot": Vector2(16, 16)},
+	# взрыв Hellfire Mortar (Хаос) — вместо огня и дыма Thunderfire
+	"hellfire_blast": {"sheet": FX_DIR + "hellfire_blast/spritesheet.png", "size": Vector2i(192, 192), "frames": 12,
+		"fps": 18.0, "add": true, "loop": false, "scale": 0.35, "pivot": Vector2(96, 176)},
+	# цитадель: начало штурма
+	"siege_alarm":   {"sheet": FX_DIR + "siege_alarm/spritesheet.png", "size": Vector2i(352, 256), "frames": 7,
+		"fps": 12.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(176, 128), "flat": true},
+	# ромб клетки под картой и купленная клетка — TileGlow (шейдер по клетке, не лист)
 }
 # Частые эффекты попаданий (каждый удар и снаряд) — под лимитом, как FloatingText: в сшибке сотен бойцов
 # узел на каждый удар съедал тик (test_performance). Лишние не создаются — бой от этого не меняется
-const HIT_EFFECTS = ["blood", "blood_1", "blood_2", "blood_3", "blood_4", "blood_5", "slash", "hit_spark"]
+const HIT_EFFECTS = ["blood", "blood_1", "blood_2", "blood_3", "blood_4", "blood_5", "slash", "hit_spark", "ricochet"]
 const SHOT_BLOOD = ["blood_1", "blood_2", "blood_3", "blood_4", "blood_5"]
 # Цвет крови по UnitData.get_blood() (решение пользователя 18.10.2026): Космодесант — тёмно-красная,
 # люди (культисты) — красная, Космодесант Хаоса — фиолетовая, нурглиты — зелёная, техника — чёрное масло + искра
@@ -130,6 +207,21 @@ const FLAT_Y: float = 0.5       # эффект «на земле» сплюще�
 
 static var _frames_cache: Dictionary = {}   # вид → SpriteFrames
 
+# Плавность (решение пользователя 22.10.2026): эффект не возникает и не пропадает скачком. Разовый —
+# проявляется за FADE_IN, вырастая из POP_SCALE размера, и тает на последних FADE_TAIL кадрах (не меньше
+# одного кадра); постоянный (статус, аура, ромб под картой) — проявляется за LOOP_FADE_IN, а снимает его
+# владелец через dismiss() — тает за FADE_OUT. Время — дерева (на паузе стоит, скорость боя ускоряет)
+const FADE_IN: float = 0.08
+const POP_SCALE: float = 0.8
+const FADE_TAIL: float = 0.25
+const LOOP_FADE_IN: float = 0.2
+const FADE_OUT: float = 0.15
+var _base_alpha := 1.0
+var _base_scale := Vector2.ONE
+var _fade_in := 0.0
+var _age := 0.0
+var _dismiss_left := -1.0
+
 # Разовый эффект в мировой точке. size — множитель масштаба, angle — поворот (радианы)
 static func spawn(parent: Node, kind: String, at: Vector2, size: float = 1.0, angle: float = 0.0) -> Vfx:
 	if parent == null or not EFFECTS.has(kind):
@@ -149,6 +241,16 @@ static func spawn(parent: Node, kind: String, at: Vector2, size: float = 1.0, an
 		v.tree_exited.connect(_free_hit_slot)
 	return v
 
+# Вариант эффекта по расе: "<вид>_chaos", если он есть и раса — Хаос; faction "" — раса игрока забега.
+# RunManager — через дерево: Vfx компилируется и из скриптов -s (до автолоадов)
+static func race_kind(kind: String, faction: String = "") -> String:
+	if faction == "":
+		var tree := Engine.get_main_loop() as SceneTree
+		var run = tree.root.get_node_or_null("RunManager") if tree else null
+		faction = run.player_faction if run else ""
+	var chaos := kind + "_chaos"
+	return chaos if faction == "chaos" and EFFECTS.has(chaos) else kind
+
 # Кровь попадания в бойца цвета victim.get_blood(): shot — снаряд (случайный вариант пака), иначе удар вплотную.
 # Техника — масло и искра по металлу
 static func spawn_blood(parent: Node, at: Vector2, victim: UnitData, shot: bool, size: float = 1.0) -> void:
@@ -158,7 +260,7 @@ static func spawn_blood(parent: Node, at: Vector2, victim: UnitData, shot: bool,
 	if v:
 		v.material = blood_material(blood)
 	if blood == "oil":
-		spawn(parent, "hit_spark", at, size * 0.5)   # мельче брызг — масло под искрой видно
+		spawn(parent, "ricochet", at, size * 0.5)   # рикошет по броне; мельче брызг — масло под ним видно
 
 static var _add: CanvasItemMaterial
 # Фильтрация листов эффектов и снарядов (пиксель-арт — NEAREST; сравнение стилей — tests/capture_style.gd)
@@ -219,13 +321,54 @@ static func _make(kind: String, size: float) -> Vfx:
 	var s: float = e["scale"] * size
 	v.scale = Vector2(s, s * (FLAT_Y if e.get("flat", false) else 1.0))
 	v.modulate = e.get("modulate", Color.WHITE)
+	v._base_alpha = v.modulate.a
+	v._base_scale = v.scale
+	v._fade_in = LOOP_FADE_IN if e["loop"] else FADE_IN
 	if e.get("add", false):
 		v.material = _add_material()
 	if not e["loop"]:
 		v.animation_finished.connect(v.queue_free)
 	FrameBlend.attach(v, e.get("add", false))   # кадры перетекают; ADD — родитель гаснет на ту же долю
 	v.play("play")
+	v._apply_fade()   # первый кадр — уже прозрачный и мельче, без вспышки до первого _process
 	return v
+
+# Снять постоянный эффект плавно (вместо queue_free): тает за FADE_OUT и освобождается сам
+# Без типа: эффект могли освободить раньше (боец пал), а освобождённый объект в типизированный аргумент не
+# передать («Cannot convert argument 1 from Object to Object»)
+static func dismiss(v) -> void:
+	if is_instance_valid(v) and v._dismiss_left < 0.0:
+		v._dismiss_left = FADE_OUT
+		v.set_process(true)
+
+func _process(delta: float) -> void:
+	_age += delta
+	if _dismiss_left >= 0.0:
+		_dismiss_left -= delta
+		if _dismiss_left <= 0.0:
+			queue_free()
+			return
+	_apply_fade()
+
+func _apply_fade() -> void:
+	var a := 1.0
+	var loop := sprite_frames.get_animation_loop("play")
+	if _age < _fade_in:
+		var t := _age / _fade_in
+		a = t
+		if not loop:
+			scale = _base_scale * lerpf(POP_SCALE, 1.0, ease(t, 0.4))   # ease < 1 — быстрый рост, мягкий конец
+	else:
+		scale = _base_scale
+	if not loop:
+		var count := sprite_frames.get_frame_count("play")
+		var tail := maxf(count * FADE_TAIL, 1.0)
+		a *= clampf((count - frame - frame_progress) / tail, 0.0, 1.0)
+	if _dismiss_left >= 0.0:
+		a *= _dismiss_left / FADE_OUT
+	modulate.a = _base_alpha * a
+	if loop and _age >= _fade_in and _dismiss_left < 0.0:
+		set_process(false)   # постоянный проявился — дальше ничего не считаем (статусы на сотнях бойцов)
 
 # Все листы — заранее (BattleScene._ready): иначе первый эффект каждого вида читает лист посреди боя
 static func warm_cache() -> void:

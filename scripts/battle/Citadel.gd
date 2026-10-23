@@ -63,6 +63,7 @@ var _sheet: Dictionary = {}
 var _pending_shot: Dictionary = {}
 # Вспышка попадания: один материал на крепость (блоки — сам узел, лист — спрайт; HP-бар без него)
 var _flash_material: ShaderMaterial
+var _siege_shown: bool = false   # тревога штурма показана (цитадель — новая на каждый бой)
 var _flash_left: float = 0.0   # сек до конца вспышки попадания (гаснет в _process, не Tween на удар)
 
 func _ready() -> void:
@@ -208,6 +209,9 @@ func _draw_hp_bar() -> void:
 # БОЙ (штурм)
 # -------------------------------------------------------
 func tick(delta: float) -> void:
+	if BattleManager.siege_started and not _siege_shown:   # армия пала — тревога: кольцо от цитадели
+		_siege_shown = true
+		Vfx.spawn(get_parent(), "siege_alarm", global_position)
 	if shot_timer > Soldier.TIMER_EPSILON:
 		shot_timer -= delta
 		queue_redraw()
@@ -273,7 +277,12 @@ func _show_explosion(point: Vector2) -> void:
 # Враг атаковал цитадель
 func take_hit(amount: float) -> void:
 	AudioManager.play("citadel_hit")
+	var shielded := BattleManager.citadel_shield > 0.0
 	BattleManager.damage_citadel(amount)
+	if shielded and BattleManager.citadel_shield <= 0.0:   # щит стен кончился — стена гаснет красным, искры у цитадели
+		if BattleManager.has_kingdom_wall():
+			BattleManager.kingdom_wall.flash_shield(true)
+		Vfx.spawn(get_parent(), "hit_spark", global_position + Vector2(0.0, -40.0), 2.0)
 	play_state("fall" if BattleManager.citadel_hp <= 0.0 else "hit")
 	_flash_hit()
 

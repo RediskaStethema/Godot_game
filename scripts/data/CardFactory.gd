@@ -219,20 +219,21 @@ static func fortress_wall() -> CardData:
 	var c = CardData.new()
 	c.id = "fortress_wall"
 	c.title = "Fortress Wall"
-	c.description = "Щит цитадели +200 в каждом бою. Замедляет врагов рядом на 40%."
+	c.description = "Стена вокруг владений: враги ломают её, прежде чем войти. Щит цитадели +200 в каждом бою."
 	c.faction = "space_marines"
 	c.cost = 5   # TDD: Common 3–5
 	c.rarity = "common"
 	c.card_type = "building"
 	c.building_type = "wall"
-	# TDD: «+20 HP базе» при базе 100 → у нас 20% от HP цитадели (1000), щитом на каждый бой
+	# Решение пользователя 22.10.2026: клетку не занимает — стена по контуру королевства и цитадели (KingdomWall),
+	# физическая преграда: wall_hp — HP каждого звена (0.5 клетки), каждый бой заново целая. Щит цитадели — как
+	# было (TDD: «+20 HP базе» при базе 100 → 20% от HP цитадели). Замедления больше нет — его заменила преграда
 	c.building_stats = {
+		"wall_hp": 250.0,
 		"shield": 200.0,
-		"slow_mult": 0.6,
-		"slow_radius": 130.0,
 	}
-	# Уровень (такая же карта на стену): +50% щита, +20% радиуса замедления
-	c.building_level_bonuses = {"shield": 0.50, "slow_radius": 0.20}
+	# Уровень (такая же карта на любую клетку): звенья крепче на 50%, щит +50%
+	c.building_level_bonuses = {"wall_hp": 0.50, "shield": 0.50}
 	return c
 
 # TDD: «+2 Req/волна» (Rare 7–10). Доход после каждого боя, при любом итоге
@@ -517,7 +518,7 @@ const CHAOS_RESKINS = {
 	"bolter_turret": ["heretic_autocannon", "Heretic Autocannon", "Турель: стреляет в ближайшего врага на всём поле. Стоит между раундами."],
 	"thunderfire_cannon": ["hellfire_mortar", "Hellfire Mortar", "Орудие: в бою кликните по полю — залп по площади. Перезарядка 4 с."],
 	"barracks": ["cult_shrine", "Cult Shrine", "После победы возвращают павших (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Отряд бога Хаоса рядом — павшие других соседей встают его бойцами (сила — по редкости отряда)."],
-	"fortress_wall": ["spiked_barricade", "Spiked Barricade", "Щит цитадели +200 в каждом бою. Замедляет врагов рядом на 40%."],
+	"fortress_wall": ["spiked_barricade", "Spiked Barricade", "Частокол с шипами вокруг владений: враги ломают его, прежде чем войти. Щит цитадели +200 в каждом бою."],
 	"plasma_generatorium": ["dark_altar", "Dark Altar", "+2 Req после каждого боя. Стоит между раундами."],
 	"apothecarion": ["warp_rift", "Warp Rift", "Павший боец отряда на соседней клетке по сторонам встаёт с 30% HP (шанс 15%, раз за бой)."],
 	"blessed_armour": ["daemonic_armour", "Daemonic Armour", "Отряд Хаоса: +25% HP"],

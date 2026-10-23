@@ -8,7 +8,7 @@ extends Node2D
 #   tower — турель: бьёт ближайшего врага в радиусе
 #   artillery — орудие игрока: клик по полю в бою (BattleScene) → fire_at, залп по
 #           площади только по врагам, перезарядка cooldown (готово в начале боя)
-#   wall  — стена: щит цитадели на каждый бой + замедляет врагов рядом
+#   wall  — карта стены владений: клетку не занимает, стена по контуру королевства — KingdomWall
 #           (статус slowed без стаков, держится WALL_SLOW_LINGER после выхода из радиуса)
 #   generator   — Plasma Generatorium: +Req после каждого боя (EconomyManager.collect_building_income)
 #   apothecarion — Apothecarion: павший боец отряда на клетке его зоны (крест) может встать (revive_at)
@@ -55,6 +55,13 @@ const ARTILLERY_BARREL_LENGTH: float = 40.0
 const ARTILLERY_PROJECTILE: String = "rocket"
 const ARTILLERY_ARC: float = 90.0          # px — высота дуги полёта ракеты (только вид)
 const ARTILLERY_IMPACT_VFX = ["explosion", "fireball", "impact"]   # огонь поверх дыма
+# Hellfire Mortar (орудие Хаоса, card.faction "chaos"): пылающий череп и бордовый взрыв пакета эффектов
+const HELLFIRE_PROJECTILE: String = "hellfire_shell"
+const HELLFIRE_IMPACT_VFX = ["explosion", "hellfire_blast"]
+# Аура в бою (Vfx, цикл; радиус — stats): замедление стены / шипов, яд котла, дымка Slaanesh
+const SKULL_RISE: float = 70.0          # px — череп алтаря встаёт над крышей
+const SKULL_SPREAD: float = 9.0         # px — черепа кладутся в стопку со сдвигом
+var _aura_vfx: Vfx = null
 const RECOIL_DISTANCE: float = 12.0        # px — откат ствола при залпе
 const RECOIL_TIME: float = 0.35
 const EXPLOSION_SHAKE: float = 6.0         # px — тряска камеры от взрыва залпа
@@ -223,6 +230,10 @@ func _process(_delta: float) -> void:
 	if sprite:
 		sprite.modulate.a = self_modulate.a
 		hold_idle_outside_battle(sprite)
+	if _aura_vfx != null and not BattleManager.is_battle_running():
+		Vfx.dismiss(_aura_vfx)
+		_aura_vfx = null
+		queue_redraw()
 
 # Вне схватки (расстановка, итог) стойка здания — один кадр idle, в бою — анимация (решение пользователя
 # 20.10.2026: покачивание стоек на расстановке мелькало; бойцы анимируются всегда). Уровни — idle_2 / idle_3
@@ -240,10 +251,10 @@ static func hold_idle_outside_battle(s: AnimatedSprite2D) -> void:
 # -------------------------------------------------------
 func _draw() -> void:
 	draw_ground_shadow(self, Vector2.ZERO, IsoGrid.TILE_WIDTH * GROUND_SHADOW_WIDTH)
-	if stats.get("slow_radius", 0.0) > 0.0:
+	if _aura_vfx == null and stats.get("slow_radius", 0.0) > 0.0:   # в бою — кольцо ауры (_show_aura)
 		draw_circle(Vector2.ZERO, stats["slow_radius"], SLOW_AURA_COLOR)
 		draw_arc(Vector2.ZERO, stats["slow_radius"], 0.0, TAU, 48, SLOW_AURA_LINE, 1.5, true)
-	if stats.get("poison_radius", 0.0) > 0.0:
+	if _aura_vfx == null and stats.get("poison_radius", 0.0) > 0.0:
 		draw_circle(Vector2.ZERO, stats["poison_radius"], POISON_AURA_COLOR)
 		draw_arc(Vector2.ZERO, stats["poison_radius"], 0.0, TAU, 48, POISON_AURA_LINE, 1.5, true)
 	if sprite:   # свой спрайт — блоков и нарисованных стволов нет
@@ -326,9 +337,9 @@ func describe() -> String:
 		"tower":
 			lines.append("Стреляет в ближайшего врага на всём поле: %d урона, %.1f выстр./с" % [
 				stats.get("damage", 0.0), stats.get("attack_speed", 0.0)])
-		"wall":
-			lines.append("Щит цитадели +%d в каждом бою. Замедляет врагов на %d%% в круге %d px" % [
-				stats.get("shield", 0.0), roundi((1.0 - stats.get("slow_mult", 1.0)) * 100.0), stats.get("slow_radius", 0.0)])
+		"wall":   # стена владений клетку не занимает (KingdomWall) — описание карты
+			lines.append("Стена вокруг владений: звено %d HP, щит цитадели +%d в каждом бою" % [
+				stats.get("wall_hp", 0.0), stats.get("shield", 0.0)])
 		"artillery":
 			lines.append("В бою — клик по полю: залп %d урона в радиусе %d px, перезарядка %.1f с" % [
 				stats.get("damage", 0.0), stats.get("splash_radius", 0.0), stats.get("cooldown", 0.0)])
@@ -453,12 +464,14 @@ func fire_at(point: Vector2) -> bool:
 		muzzle = _sprite_muzzle()
 		if play_once("attack"):
 			delay = _shot_delay()
-	var shot = Projectile.launch(get_parent(), ARTILLERY_PROJECTILE, muzzle, null, point, delay)
+	var hellfire: bool = card.faction == "chaos"
+	var shot = Projectile.launch(get_parent(), HELLFIRE_PROJECTILE if hellfire else ARTILLERY_PROJECTILE,
+		muzzle, null, point, delay)
 	shot.damage = stats.get("damage", 0.0)
 	shot.splash_radius = stats.get("splash_radius", 0.0)
 	shot.splash_team = GameConstants.TEAM_ENEMY
 	shot.on_impact = _show_explosion
-	shot.impact_vfx = ARTILLERY_IMPACT_VFX
+	shot.impact_vfx = HELLFIRE_IMPACT_VFX if hellfire else ARTILLERY_IMPACT_VFX
 	shot.arc_height = ARTILLERY_ARC
 	_play_fire_animation(muzzle)
 	return true
@@ -525,6 +538,9 @@ func _tick_skull_altar() -> void:
 		return
 	var k := (1.0 + bonus) / (1.0 + _altar_bonus)
 	_altar_bonus = bonus
+	# Вид: череп встаёт в стопку над алтарём (на прибавку — один, стопка растёт до предела бонуса)
+	var n := roundi(bonus / maxf(stats.get("per_kill", 0.01), 0.001))
+	Vfx.spawn(get_parent(), "skull_add", global_position + Vector2(((n % 5) - 2) * SKULL_SPREAD, -SKULL_RISE))
 	for s in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER):
 		s.current_damage *= k
 
@@ -538,6 +554,7 @@ static func apply_battle_start() -> void:
 			continue
 		b._enemies_at_start = enemies
 		b._altar_bonus = 0.0
+		b._show_aura()
 		if b.stats.get("shield", 0.0) > 0.0:
 			b.play_once("shield")   # стена подняла щит цитадели (ряд листа, если есть)
 		var area := get_effect_tiles(b.building_type, b.tile)
@@ -545,6 +562,21 @@ static func apply_battle_start() -> void:
 			if sq.tile in area:
 				for s in sq.soldiers:
 					b._apply_start_effect(s)
+
+# Аура здания в бою — кольцо листа вместо круга (только вид; снимает _process после боя)
+func _show_aura() -> void:
+	var kind := ""
+	var r: float = 0.0
+	if stats.get("poison_radius", 0.0) > 0.0:
+		kind = "aura_plague"
+		r = stats["poison_radius"]
+	elif stats.get("slow_radius", 0.0) > 0.0:
+		kind = "aura_pleasure"   # замедляет только Святилище Slaanesh: стена владений — преграда (KingdomWall)
+		r = stats["slow_radius"]
+	if kind == "" or _aura_vfx != null:
+		return
+	_aura_vfx = Vfx.attach(self, kind, r)
+	queue_redraw()
 
 func _apply_start_effect(s: Soldier) -> void:
 	match building_type:

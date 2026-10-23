@@ -1,7 +1,7 @@
 extends SceneTree
 
 # Статус-эффекты (StatusEffects): яд, горение, усиление, замедление — стаки до 3,
-# источники (Plague Marine, Havoc, Chaplain, Fortress Wall). Бойцы тикаются вручную
+# источники (Plague Marine, Havoc, Chaplain, Святилище Slaanesh). Бойцы тикаются вручную
 # (FIXED_TICK) на расстановке — бой не идёт, ход теста детерминирован.
 # Сохранение выключено — забег игрока не трогает.
 #   godot --headless --path . -s tests/test_status_effects.gd
@@ -48,8 +48,9 @@ func _main() -> void:
 		placements[d] = p[1]
 	bm.player_units = army
 	bm.player_placements = placements
-	var wall = CardFactory.fortress_wall()
-	bm.player_buildings[wall] = Vector2i(0, 1)
+	# Замедляет аурой Святилище Slaanesh (стена владений — преграда, ауры у неё нет: KingdomWall)
+	var shrine = CardFactory.create("pleasure_shrine")
+	bm.player_buildings[shrine] = Vector2i(0, 1)
 	var scene = load("res://scenes/battle/BattleScene.tscn").instantiate()
 	root.add_child(scene)
 	current_scene = scene
@@ -153,10 +154,10 @@ func _main() -> void:
 		and chaplain.sprite.animation == "idle"
 		and chaplain.attack_timer <= chaplain.ATTACK_STAGGER / chaplain.current_attack_speed + EPS)
 
-	# 8. Стена: аура замедляет врага в радиусе 1 стаком, вне радиуса — проходит за 0.5 с
+	# 8. Святилище Slaanesh: аура замедляет врага в радиусе 1 стаком, вне радиуса — проходит за 0.5 с
 	var wall_node = null
 	for bld in bm.buildings:
-		if bld.building_type == "wall":
+		if bld.building_type == "pleasure_shrine":
 			wall_node = bld
 	p.global_position = wall_node.global_position + Vector2(30, 0)
 	for i in range(5):
@@ -166,8 +167,8 @@ func _main() -> void:
 	p.global_position = wall_node.global_position + Vector2(1000, 0)
 	wall_node.tick(TICK)
 	_ticks(p, 0.6)
-	_check("стена: в ауре бег ×%.2f (1 стак), вне — замедление прошло" % in_aura,
-		absf(in_aura - 0.6) < EPS and stacks_in == 1 and not p.status_effects.has(StatusEffects.SLOWED))
+	_check("святилище: в ауре бег ×%.2f (1 стак), вне — замедление прошло" % in_aura,
+		absf(in_aura - 0.55) < EPS and stacks_in == 1 and not p.status_effects.has(StatusEffects.SLOWED))
 
 	scene.queue_free()
 	await process_frame

@@ -30,6 +30,13 @@ const EFFECTS = {
 	# зелёных разрядах — свои цвета (own_colors: цвет вспышки стрелка не перекрашивает)
 	"chaos_bolt": {"sheet": "res://assets/effects/chaos_bolt/spritesheet.png", "size": Vector2i(214, 156),
 		"frames": 8, "fps": 14.0, "scale": 0.11, "pivot": Vector2(194, 78), "own_colors": true},
+	# пакет эффектов по ТЗ EFFECTS_NEEDED.txt (21.10.2026): звуковая волна Noise Marines (Slaanesh),
+	# пылающий череп Hellfire Mortar — свои цвета
+	"sonic_wave": {"sheet": "res://assets/effects/sonic_wave/spritesheet.png", "size": Vector2i(64, 64),
+		"frames": 8, "fps": 18.0, "scale": 0.45, "pivot": Vector2(44, 32), "own_colors": true},
+	# лист tools/fx_fix.py: кадры 80 px, череп — у правого края в одной точке (в пакете срезан сеткой)
+	"hellfire_shell": {"sheet": "res://assets/effects/hellfire_shell/spritesheet.png", "size": Vector2i(80, 64),
+		"frames": 8, "fps": 16.0, "scale": 0.6, "pivot": Vector2(63, 34), "own_colors": true},
 }
 const FPS: float = 14.0             # кадры эффектов — по 70 мс
 const SCALE: float = 0.4            # листы рисованы крупно: шар charged — с голову марина (рост 31 px)
@@ -86,6 +93,8 @@ var _delay: float
 var _life: float = 0.0
 var _angle_offset: float = 0.0
 var _released: bool = false         # вылетел из ствола (кадр вспышки дошёл)
+var _standing: bool = false         # тик вылета: стоит у ствола, летит со следующего (только вид — в _process)
+var _show_after: float = 0.0        # с какой доли тика вылета (сек) снаряд виден — вспышка в листе стрелка
 
 # Выстрел из точки from в цель (Soldier / Citadel): aim — куда в цели (смещение от её ног).
 # tint (альфа > 0) — снаряд в цвет вспышки стрелка; иначе warm — синий → красный (Хаос), иначе как на листе.
@@ -183,12 +192,14 @@ func tick(delta: float) -> void:
 	_life += delta
 	_track_target()
 	if _delay > Soldier.TIMER_EPSILON:
+		_show_after = _delay   # остаток задержки внутри этого тика — вспышка в листе стрелка (только вид)
 		_delay -= delta
 		if _delay > Soldier.TIMER_EPSILON:
 			return
 	if not _released:
 		_release()
 		return
+	_standing = false
 	var step := SPEED * delta
 	if _pos.distance_to(_aim_point) <= step or _life > MAX_LIFETIME:
 		_pos = _aim_point
@@ -201,6 +212,7 @@ func tick(delta: float) -> void:
 # кадр рисовался на шаг полёта (75 px) впереди ствола — «из воздуха» (решение пользователя 21.10.2026)
 func _release() -> void:
 	_released = true
+	_standing = true
 	if origin_fn.is_valid():
 		_origin = origin_fn.call()
 		_pos = _origin
@@ -253,7 +265,7 @@ func _impact() -> void:
 			s.apply_status(status, status_power, status_duration)
 			if status == StatusEffects.BURNING:
 				Vfx.spawn(get_parent(), "flame_burst", _aim_point, Soldier.EFFECT_SCALE, rotation)
-	elif _target is Citadel:
+	elif _target.has_method("take_hit"):   # цитадель, звено стены владений (KingdomWall.Segment)
 		_target.take_hit(damage)
 		Vfx.spawn(get_parent(), "hit_spark", _aim_point, 1.0, rotation)
 	queue_free()
@@ -262,7 +274,19 @@ func _impact() -> void:
 # ОТРИСОВКА — плавно между тиками
 # -------------------------------------------------------
 func _process(_delta: float) -> void:
-	if finished or not visible:
+	if finished:
+		return
+	if not _released:   # ждёт кадра вспышки (видимость — по задержке в launch)
+		global_position = _pos
+		return
+	# Тик вылета: снаряд стоит у ствола и появляется с кадром вспышки стрелка (задержка короче тика — турель
+	# 1/16 с), а не летит вперёд по доле тика: искра уходила со ствола раньше вспышки, и выстрел в листе
+	# загорался позади неё (23.10.2026)
+	if _standing:
+		visible = BattleManager.get_tick_alpha() * GameConstants.FIXED_TICK >= _show_after - Soldier.TIMER_EPSILON
+		global_position = _pos
+		return
+	if not visible:
 		return
 	var ahead := SPEED * GameConstants.FIXED_TICK * BattleManager.get_tick_alpha()
 	var shown := _pos.move_toward(_aim_point, ahead)

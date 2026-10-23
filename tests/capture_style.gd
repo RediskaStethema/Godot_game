@@ -81,7 +81,7 @@ func _battle(faction: String) -> void:
 	bm.player_units = _army(faction)
 	var chaos := faction == "chaos"   # здания расы — свои листы (Building: buildings/chaos/<тип>)
 	bm.player_buildings[CardFactory.create("heretic_autocannon" if chaos else "bolter_turret")] = Vector2i(0, 0)
-	bm.player_buildings[CardFactory.create("spiked_barricade" if chaos else "fortress_wall")] = Vector2i(0, 2)
+	bm.player_buildings[CardFactory.create("spiked_barricade" if chaos else "fortress_wall")] = bm.WALL_TILE   # стена владений
 	bm.player_buildings[CardFactory.create("cult_shrine" if chaos else "barracks")] = Vector2i(1, 2)
 	# Рука на расстановке — игральные карты внизу (Bench), одна под курсором поднята
 	var hand: Array = ["cultists", "havocs", "hellbrute", "warp_ward", "dark_altar"] if chaos else 		["tactical_squad", "assault_squad", "librarian", "iron_halo", "plasma_generatorium", "orbital_strike"]
@@ -131,7 +131,7 @@ func _battle(faction: String) -> void:
 # эффекты идут: Vfx не тикают с боем). Кровь — по цвету стороны
 const GALLERY = ["fireball", "explosion", "impact", "muzzle_flash", "muzzle_smoke", "flame_burst",
 	"hit_spark", "slash", "ground_slam", "lightning", "cast", "heal",
-	"shield", "level_up", "poof", "burning", "poisoned", "empowered",
+	"shield", "poof", "burning", "poisoned", "empowered",
 	"slowed", "stun", "splatter", "river_splash"]
 const GALLERY_COLS = 6
 const GALLERY_STEP = Vector2(60, 55)

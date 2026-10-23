@@ -57,6 +57,9 @@ var armed_events: Array[String] = []
 # Здания: стоят между раундами на своих клетках (CardData → Vector2i)
 var player_buildings: Dictionary = {}
 var buildings: Array = []           # узлы Building текущего боя (ставит BattleScene)
+# Стена вокруг владений (карта building_type "wall") клетку не занимает: в player_buildings — на WALL_TILE вне поля
+const WALL_TILE := Vector2i(-100, -100)
+var kingdom_wall: Node2D = null     # KingdomWall текущего боя (ставит BattleScene), null — стены нет
 var projectiles: Array = []         # снаряды в полёте (Projectile.launch) — тикают в бою, урон при попадании
 
 signal citadel_hp_changed(hp: float)
@@ -244,6 +247,16 @@ func reset_kingdom() -> void:
 # -------------------------------------------------------
 func has_citadel() -> bool:
 	return is_instance_valid(citadel)
+
+func has_kingdom_wall() -> bool:
+	return kingdom_wall != null and is_instance_valid(kingdom_wall)
+
+# Карта стены владений в забеге (null — не построена)
+func get_wall_card() -> CardData:
+	for card in player_buildings:
+		if card.building_type == "wall":
+			return card
+	return null
 
 func damage_citadel(amount: float) -> void:
 	if citadel_hp <= 0.0:
@@ -440,7 +453,13 @@ func load_state(d: Dictionary) -> void:
 		var card = CardFactory.create(entry["card"])
 		if card:
 			card.building_level = clampi(int(entry.get("level", 1)), 1, CardData.MAX_BUILDING_LEVEL)
-			player_buildings[card] = _arr_to_v2i(entry["tile"])
+			# Стена — вне клеток (старые сохранения: стояла на клетке — клетка освобождается; две стены — одна
+			# уровнем выше)
+			var wall := get_wall_card() if card.building_type == "wall" else null
+			if wall:
+				wall.building_level = mini(wall.building_level + card.building_level, CardData.MAX_BUILDING_LEVEL)
+				continue
+			player_buildings[card] = WALL_TILE if card.building_type == "wall" else _arr_to_v2i(entry["tile"])
 	pending_cards = CardFactory.create_many(d["hand"])
 	battle_in_progress = bool(d.get("in_progress", false))
 	catch_up_pending = bool(d.get("catch_up_pending", false))
@@ -491,12 +510,14 @@ func _densest_enemy_point(radius: float) -> Variant:
 			best = e.global_position
 	return best
 
-# Щит цитадели на бой — сумма от зданий (Fortress Wall)
+# Щит цитадели на бой — от стены владений (Fortress Wall) и зданий со щитом (бастион Imperial Fists)
 func prepare_citadel_shield() -> void:
 	citadel_shield = MetaProgress.passive_value("walls")   # пассивка «Освящённые стены»
 	for b in buildings:
 		if is_instance_valid(b):
 			citadel_shield += b.get_citadel_shield()
+	if has_kingdom_wall():
+		citadel_shield += kingdom_wall.get_citadel_shield()
 	emit_signal("citadel_hp_changed", citadel_hp)
 
 # Волна, в которой можно расширять королевство

@@ -202,6 +202,25 @@ func _main() -> void:
 		and shot_tint.is_equal_approx(Vector3(c_orange.r, c_orange.g, c_orange.b)) and untinted.material == null)
 	bm.clear_projectiles()
 
+	# Вылет короче тика (турель: вспышка через 1/16 с): тик вылета снаряд стоит у ствола и виден с кадра вспышки,
+	# а не улетает вперёд по доле тика раньше неё (выстрел в листе загорался позади искры)
+	var muzzle := Vector2(40, -30)
+	var early = P.launch(scene, "spark", muzzle, null, Vector2(400, 0), 0.0625)
+	early.tick(0.1)   # тик выстрела: задержка кончилась внутри него
+	var seen := []
+	for alpha in [0.3, 0.9]:
+		bm._accumulator = alpha * 0.1
+		early._process(0.016)
+		seen.append([early.visible, early.global_position.is_equal_approx(muzzle)])
+	early.tick(0.1)
+	bm._accumulator = 0.5 * 0.1
+	early._process(0.016)
+	var flies: bool = early.global_position.x > muzzle.x
+	bm._accumulator = 0.0
+	_check("вылет короче тика: до вспышки скрыт у ствола, со вспышкой — у ствола, дальше летит (%s)" % [seen],
+		seen == [[false, true], [true, true]] and flies)
+	bm.clear_projectiles()
+
 	# Каст — часть перезарядки: Библиарий колдует раз в 1 / attack_speed, а не каст + перезарядка
 	# (раньше вход в ATTACK после каста сбрасывал перезарядку на короткий сдвиг первого удара)
 	scene._spawn_squad(UnitFactory.create("librarian"), GameConstants.TEAM_PLAYER, Vector2i(0, 0), 1)

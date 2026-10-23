@@ -46,9 +46,12 @@ void fragment() {
 # Таймеры уменьшаются на 0.1 — из-за погрешности float 1.0 - 10*0.1 != 0
 const TIMER_EPSILON: float = 0.001
 # Темп бега — по скорости бойца, чтобы ноги не скользили: за цикл анимации бега боец проходит
-# WALK_CYCLE_HEIGHTS своих ростов (два шага); множитель скорости анимации — в пределах WALK_SCALE_LIMITS
-const WALK_CYCLE_HEIGHTS: float = 2.0
-const WALK_SCALE_LIMITS = Vector2(0.5, 2.0)
+# WALK_CYCLE_HEIGHTS своих ростов (два шага); множитель скорости анимации — в пределах WALK_SCALE_LIMITS.
+# 23.10.2026 (решение пользователя — компромисс): было 2 роста и ×2 — в листах шаг ≈ 0.7–0.9 роста за цикл
+# (размах ступней), ноги отставали от тела в 2.5 раза, бойцы «летели» (заметнее всего — Chapter Master).
+# 1 рост и ×3: ноги вдвое быстрее, самые быстрые (Scout, Raptor) упираются в ×3 и чуть скользят
+const WALK_CYCLE_HEIGHTS: float = 1.0
+const WALK_SCALE_LIMITS = Vector2(0.5, 3.0)
 # Бойцы отряда бьют вразнобой, а не залпом: первый удар после входа в ATTACK — со сдвигом
 # до этой доли перезарядки (доля бойца — по номеру в отряде, золотое сечение: без случайности)
 const ATTACK_STAGGER: float = 0.5
@@ -61,6 +64,7 @@ const MELEE_HIT_REACH: float = 2.5   # ×дальность: при MELEE_RANGE 
 const JUMP_SPEED: float = 450.0
 const JUMP_MIN_TIME: float = 0.3
 const JUMP_HEIGHT: float = 30.0
+const JUMP_TRAIL_RISE: float = 14.0   # px — шлейф ранца на высоте спины (боец роста 31)
 # Отряд прыгает разом — приземления (удар по площади, оглушение) в один тик давали выброс тика
 # (test_performance). Полёт бойца длиннее на attack_stagger × JUMP_STAGGER — отряд садится волной
 const JUMP_STAGGER: float = 0.5
@@ -112,9 +116,11 @@ var _leap_to: Vector2 = Vector2.ZERO
 var _leap_target: Soldier = null
 var _leap_t: float = 1.0          # доля пути после последнего тика (дуга в _process); 1 — на земле
 var _leap_prev: float = 1.0       # … и до него
+var _jump_trail: Vfx = null       # шлейф ранца в полёте (только вид)
 # Окапывание (Devastator): сколько стоит на месте; _moved — сдвинулся в этом тике
 var _still_time: float = 0.0
 var _moved: bool = false
+var wall_segment: Node2D = null   # звено стены владений, в которое упёрся враг (KingdomWall.Segment) — ломает его
 var _orbit_sign: float = 1.0      # стрельба на ходу: в какую сторону кружит (по номеру в отряде)
 # Эффект при попадании от ордена (Salamanders) — если у юнита своего нет; ставит
 # SynergyManager.apply_chapter_bonus в начале боя
@@ -293,6 +299,8 @@ func _process(delta: float) -> void:
 	global_position = _tick_from.lerp(_tick_to, alpha)
 	if _leap_prev < 1.0:   # дуга прыжка: спрайт над тенью
 		sprite.position.y = -sin(PI * lerpf(_leap_prev, _leap_t, alpha)) * JUMP_HEIGHT * data.sprite_scale
+		if _jump_trail:
+			_jump_trail.position.y = sprite.position.y - JUMP_TRAIL_RISE * data.sprite_scale
 
 # Начало тика боя: узел — обратно в логическую позицию, от неё отсчитывается следующий шаг
 func restore_tick_position() -> void:
@@ -354,9 +362,13 @@ func _load_animations() -> void:
 	queue_redraw()
 	sprite.play("idle")
 
+# Бег и стойка — с кадра по номеру бойца в отряде (attack_stagger): отряд шагал в ногу, все бойцы на одном
+# кадре, и строй из 9–15 одинаковых фигурок читался как замерший спрайт (23.10.2026). Только вид
 func _play_animation(anim_name: String) -> void:
 	if sprite.animation != anim_name:
 		sprite.play(anim_name)
+		if anim_name == "walk" or anim_name == "idle":
+			sprite.frame = int(attack_stagger * sprite.sprite_frames.get_frame_count(anim_name))
 
 # -------------------------------------------------------
 # ГЛАВНЫЙ ТИК
@@ -414,7 +426,16 @@ func _try_jump() -> bool:
 	_leap_prev = 0.0
 	_face(prey.global_position - global_position)
 	_play_animation("jump" if sprite.sprite_frames.has_animation("jump") else "idle")   # полёт на ранце (Assault)
+	# Шлейф ранца — хвостом назад по полёту, на высоте спины (дугу спрайта повторяет _process)
+	_jump_trail = Vfx.attach(self, "jump_trail", data.sprite_scale * EFFECT_SCALE)
+	if _jump_trail:
+		_jump_trail.rotation = (_leap_to - _leap_from).angle()
+		_jump_trail.position.y = -JUMP_TRAIL_RISE * data.sprite_scale
 	return true
+
+func _clear_jump_trail() -> void:
+	Vfx.dismiss(_jump_trail)
+	_jump_trail = null
 
 func _tick_leap(delta: float) -> void:
 	_leap_time -= delta
@@ -440,7 +461,8 @@ func _land_jump() -> void:
 		e.take_damage(dmg)
 		if data.jump_stun > 0.0:
 			e.apply_stun(data.jump_stun)
-	Vfx.spawn(_world_parent(), "ground_slam", global_position, data.sprite_scale * EFFECT_SCALE)
+	_clear_jump_trail()
+	Vfx.spawn(_world_parent(), "jump_land", global_position, data.sprite_scale * EFFECT_SCALE)
 	AudioManager.play("jump_land")
 	target = _leap_target if is_instance_valid(_leap_target) and _leap_target.current_state != State.DEAD \
 		else _find_target()
@@ -462,6 +484,7 @@ func _end_leap_view() -> void:
 	_leap_prev = 1.0
 	_leap_target = null
 	sprite.position.y = 0.0
+	_clear_jump_trail()
 
 # Окапывание (Devastator): стоял весь тик — копит, сдвинулся (бег, кружение, отброс) — с нуля
 func _tick_entrench(delta: float) -> void:
@@ -570,6 +593,29 @@ func _attack_citadel(delta: float) -> void:
 			shot.damage = _roll_damage()   # урон — при попадании
 		else:
 			citadel.take_hit(_roll_damage())
+
+# -------------------------------------------------------
+# СТЕНА ВЛАДЕНИЙ — враг упёрся в целое звено (_move_towards) и ломает его тем же ударом / выстрелом
+# -------------------------------------------------------
+const WALL_AIM := Vector2(0.0, -10.0)   # выстрел — в середину высоты стены
+
+# Зовёт _move_towards, когда шаг к точке внутри стены упёрся в звено: ломать или обходить — решает только он,
+# по точке, куда боец идёт (цель вышла за стену — следующий шаг уже обход, а не удар)
+func _attack_wall(delta: float) -> void:
+	var seg = wall_segment
+	if not is_instance_valid(seg) or seg.hp <= 0.0:
+		wall_segment = null   # пролом — дальше обычным ходом
+		return
+	_face(seg.global_position - global_position)
+	attack_timer -= delta
+	if attack_timer <= TIMER_EPSILON:
+		attack_timer = 1.0 / (current_attack_speed * get_attack_speed_mult())
+		_play_attack_animation()
+		var shot := _shoot_projectile(seg, WALL_AIM)
+		if shot:
+			shot.damage = _roll_damage()   # урон — при попадании
+		else:
+			seg.take_hit(_roll_damage())
 
 # Преследуем конкретную цель до дальности атаки
 func _state_chase(delta: float) -> void:
@@ -738,8 +784,26 @@ func _draw() -> void:
 # -------------------------------------------------------
 func _move_towards(point: Vector2, delta: float) -> void:
 	var direction = (point - global_position).normalized()
-	var speed = current_move_speed * get_move_speed_mult()   # замедление (стены игрока)
-	global_position += direction * speed * delta
+	var speed = current_move_speed * get_move_speed_mult()   # замедление (ауры зданий игрока)
+	var step: Vector2 = direction * speed * delta
+	# Стена владений (решение пользователя 22.10.2026): враг снаружи не входит через целое звено — встаёт и ломает.
+	# Точка снаружи, а путь срезает угол владений — обходит вдоль звена (иначе стоял бы: ломать незачем, идти некуда)
+	if team == GameConstants.TEAM_ENEMY and BattleManager.has_kingdom_wall():
+		var wall = BattleManager.kingdom_wall
+		var seg = wall.blocking_segment(global_position, global_position + step)
+		if seg and wall.is_inside(point):
+			wall_segment = seg
+			_face(direction)
+			_attack_wall(delta)
+			return
+		wall_segment = null
+		if seg:
+			var along: Vector2 = (seg.b - seg.a).normalized()
+			step = along * (1.0 if step.dot(along) >= 0.0 else -1.0) * step.length()
+			if wall.blocking_segment(global_position, global_position + step):
+				return
+			direction = step.normalized()
+	global_position += step
 	_moved = true
 	_face(direction)
 	_play_animation("walk")
@@ -1032,7 +1096,7 @@ func _try_revive() -> bool:
 	current_hp = max_hp * r["hp"]
 	if BattleManager.is_battle_running():
 		_float_text("Встал!", FLOAT_HEAL)   # иначе подъём на поле незаметен
-		Vfx.spawn(_world_parent(), "poof", global_position, data.sprite_scale * EFFECT_SCALE)
+		LevelUpGlow.play(self, 0, 0.0, "heal")   # свет лечения на бойце (лист пакета revive — неоновый столб)
 		AudioManager.play("revive")
 	return true
 
@@ -1042,6 +1106,8 @@ func _die() -> void:
 	_end_leap_view()
 	transition_to(State.DEAD)
 	AudioManager.play("death_vehicle" if "vehicle" in data.tags else "death")
+	if "vehicle" in data.tags:   # техника взрывается: огонь, обломки, чёрный дым
+		Vfx.spawn(_world_parent(), "vehicle_explode", global_position, data.sprite_scale * EFFECT_SCALE)
 	status_effects.clear()
 	_sync_status_vfx()
 	queue_redraw()   # убрать тень, кольцо и точки статусов
@@ -1123,8 +1189,7 @@ func _tick_status_effects(delta: float) -> void:
 func _sync_status_vfx() -> void:
 	for effect in _status_vfx.keys():
 		if not status_effects.has(effect):
-			if is_instance_valid(_status_vfx[effect]):
-				_status_vfx[effect].queue_free()
+			Vfx.dismiss(_status_vfx[effect])   # тает, а не пропадает
 			_status_vfx.erase(effect)
 	for effect in status_effects:
 		if not _status_vfx.has(effect) and StatusEffects.VFX.has(effect):
@@ -1161,6 +1226,7 @@ func _try_battle_cry() -> bool:
 		return false
 	battle_cry_used = true
 	AudioManager.play("battle_cry")
+	Vfx.spawn(_world_parent(), "chaplain_warcry", global_position, data.battle_cry_radius)   # кольцо по радиусу клича
 	var r2 = data.battle_cry_radius * data.battle_cry_radius
 	for ally in SoldierRegistry.get_alive_soldiers_of_team(team):
 		if global_position.distance_squared_to(ally.global_position) <= r2:
@@ -1240,8 +1306,7 @@ func transition_to(new_state: State) -> void:
 
 func _on_state_enter(state: State) -> void:
 	# Оглушение и каст видны, пока боец в этом состоянии
-	if is_instance_valid(_state_vfx):
-		_state_vfx.queue_free()
+	Vfx.dismiss(_state_vfx)
 	_state_vfx = null
 	if state in [State.STUNNED, State.KNOCKBACK, State.DEAD]:
 		_hit_timer = 0.0   # замах сорван
@@ -1255,6 +1320,8 @@ func _on_state_enter(state: State) -> void:
 			_play_animation("idle")
 		State.MOVE, State.CHASE, State.RETREATING:
 			_play_animation("walk")
+			if state == State.RETREATING:   # пыль из-под ног — боец бросился назад
+				Vfx.spawn(_world_parent(), "retreat_dust", global_position, data.sprite_scale * EFFECT_SCALE)
 		State.ATTACK:
 			# Первый удар — со сдвигом бойца (отряд бьёт вразнобой); до него — стойка
 			attack_timer = attack_stagger * ATTACK_STAGGER / maxf(current_attack_speed * get_attack_speed_mult(), 0.01)

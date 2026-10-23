@@ -43,26 +43,20 @@
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": ExtResource("idle_0")
-}, {
-"duration": 1.0,
 "texture": ExtResource("idle_1")
 }, {
 "duration": 1.0,
 "texture": ExtResource("idle_2")
 }, {
 "duration": 1.0,
-"texture": ExtResource("idle_3")
+"texture": ExtResource("idle_5")
 }, {
 "duration": 1.0,
 "texture": ExtResource("idle_4")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_5")
 }],
 "loop": true,
 "name": &"idle",
-"speed": 8.0
+"speed": 5.0
 }, {
 "frames": [{
 "duration": 1.0,

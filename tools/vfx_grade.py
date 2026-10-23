@@ -67,6 +67,39 @@ GRADES = {
 LOW, HIGH = 2.0, 99.5   # перцентили яркости плотных пикселей → начало и конец градиента
 DENSE_ALPHA = 40
 
+# Пакет художника (assets/effects после tools/fx_fix.py; решение пользователя 22.10.2026 «стилизуй эффекты»):
+# листы многоцветные (знаки улучшений, черепа, золото) — градиент их бы сплющил, поэтому мягкий цветокор
+# SOFT: неон глуше (насыщенность сжимается к SOFT_SAT_CAP), розовый и фиолетовый — к малиновому бордо
+# палитры (MAGENTA_PULL), электрический синий — к стали (BLUE_SAT), средние тона темнее (SOFT_GAMMA),
+# белое ядро и блики (яркость выше SOFT_KEEP) — как были: свечение читается на тёмном поле
+SOFT = "soft"
+SOFT_SAT = 0.92         # насыщенность × (всё)
+SOFT_SAT_CAP = 0.85     # выше — сжимается: s → cap + (s − cap) × 0.35
+BLUE_SAT = 0.88         # синий (тон 0.53–0.70) — ещё глуше, к стали
+MAGENTA_PULL = 0.7      # доля сдвига тона розового / фиолетового (0.72–0.97) к малиновому MAGENTA_TARGET
+MAGENTA_TARGET = 0.985
+MAGENTA_VAL = 0.85      # розовый темнее — бордо, а не неон
+SOFT_GAMMA = 1.25       # яркость средних тонов: v^gamma
+SOFT_KEEP = 0.9         # яркость выше — без затемнения (ядро, блики)
+SOFT_SHEETS = [
+    "upgrades/upgrade_blessed_armour.png", "upgrades/upgrade_daemonic_armour.png",
+    "upgrades/upgrade_battle_fury.png", "upgrades/upgrade_blood_rage.png",
+    "upgrades/upgrade_iron_halo.png", "upgrades/upgrade_warp_ward.png",
+    "upgrades/upgrade_combat_stimms.png", "upgrades/upgrade_combat_drugs.png",
+    "upgrades/upgrade_chapter_banner.png", "upgrades/upgrade_icon_of_chaos.png",
+    "banner_aura/spritesheet.png", "banner_aura/banner_aura_chaos.png",
+    "orbital_strike/spritesheet.png", "warp_strike/spritesheet.png",
+    "buildings/aura_plague.png", "buildings/aura_pleasure.png",
+    "buildings/forge_repair.png", "buildings/skull_add.png",
+    "chaplain_warcry/spritesheet.png", "jump_trail/spritesheet.png", "jump_land/spritesheet.png",
+    "retreat_dust/spritesheet.png", "vehicle_explode/spritesheet.png", "squad_lost/spritesheet.png",
+    "ricochet/spritesheet.png", "hellfire_blast/spritesheet.png", "hellfire_shell/spritesheet.png",
+    "siege_alarm/spritesheet.png", "sonic_wave/spritesheet.png", "entrench/spritesheet.png",
+    "card_burn/spritesheet.png",
+]
+for _rel in SOFT_SHEETS:
+    GRADES["effects/" + _rel] = SOFT
+
 
 def ramp_lut(stops):
     """Таблица 256 цветов градиента."""
@@ -89,6 +122,24 @@ def grade(img: Image.Image, ramp: str) -> Image.Image:
     return Image.fromarray(out.round().astype(np.uint8))
 
 
+def soft_grade(img: Image.Image) -> Image.Image:
+    """Мягкий цветокор многоцветного листа (SOFT): тон и форма те же, неон глуше, розовый — к бордо."""
+    rgba = img.convert("RGBA")
+    a = np.array(rgba).astype(float) / 255.0
+    hsv = np.array(rgba.convert("RGB").convert("HSV")).astype(float) / 255.0
+    h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    s = s * SOFT_SAT
+    s = np.where(s > SOFT_SAT_CAP, SOFT_SAT_CAP + (s - SOFT_SAT_CAP) * 0.35, s)
+    s = np.where((h > 0.53) & (h < 0.70), s * BLUE_SAT, s)
+    magenta = (h > 0.72) & (h < 0.97)
+    h = np.where(magenta, h + (MAGENTA_TARGET - h) * MAGENTA_PULL, h)
+    v = np.where(v < SOFT_KEEP, np.power(v, SOFT_GAMMA), v)
+    v = np.where(magenta & (v < SOFT_KEEP), v * MAGENTA_VAL, v)
+    hsv = (np.stack([h, np.clip(s, 0, 1), v], axis=2) * 255).round().astype(np.uint8)
+    rgb = np.array(Image.frombytes("HSV", img.size, hsv.tobytes()).convert("RGB"))
+    return Image.fromarray(np.concatenate([rgb, (a[..., 3:4] * 255).round().astype(np.uint8)], axis=2))
+
+
 def main(args):
     only = args[0] if args else ""
     for rel, ramp in GRADES.items():
@@ -100,7 +151,8 @@ def main(args):
             continue
         dst = OUT / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
-        grade(Image.open(src), ramp).save(dst)
+        img = Image.open(src)
+        (soft_grade(img) if ramp == SOFT else grade(img, ramp)).save(dst)
         print(f"{rel} -> graded ({ramp})")
 
 

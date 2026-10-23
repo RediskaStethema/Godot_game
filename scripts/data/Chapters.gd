@@ -34,8 +34,8 @@ const CHAPTERS = [
 		"unit_card": "sanguinary_guard", "building_card": "blood_chalice",
 		"armor": {"hue": 0.97, "sat": 0.95, "val": 0.55}},   # тёмный бордовый — не путать с рыже-красным Хаосом (решение пользователя 16.10.2026)
 	{"id": "imperial_fists", "name": "Imperial Fists", "faction": "space_marines",
-		"desc": "Здания: +50% щита стен, +20% урона",
-		"building": {"shield": 1.5, "damage": 1.2},
+		"desc": "Здания: стены крепче и щит +50%, +20% урона",
+		"building": {"shield": 1.5, "damage": 1.2, "wall_hp": 1.5},
 		"malus": {"move_speed_mult": 0.9}, "malus_desc": "−10% скорости бега всем",
 		"unit_card": "centurion_devastators", "building_card": "fists_bastion",
 		"armor": {"hue": 0.12, "sat": 1.0, "val": 0.85}},   # золото: темнее — уходит в оливковый

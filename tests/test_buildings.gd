@@ -34,8 +34,8 @@ func _main() -> void:
 	var battle = current_scene
 
 	var tower = battle._get_player_building_at(Vector2i(0, 0))
-	var wall = battle._get_player_building_at(Vector2i(1, 1))
-	_check("здания на поле, 1-й уровень", tower != null and wall != null \
+	var wall = bm.kingdom_wall   # стена владений (KingdomWall): клетку не занимает
+	_check("здания на поле, 1-й уровень; стена — вокруг владений", tower != null and wall != null \
 		and tower.card.building_level == 1 and wall.card.building_level == 1)
 
 	# Турель: такая же карта на неё — уровень +1, статы растут
@@ -50,14 +50,14 @@ func _main() -> void:
 		and tower.card.building_level == 3 and is_equal_approx(tower.stats["damage"], dmg1 * 1.25 * 1.25))
 	_check("база карты не меняется", is_equal_approx(tower.card.building_stats["damage"], dmg1))
 
-	# Стена: щит и радиус замедления; чужая карта здания на неё — «занято»
+	# Стена: щит и HP звеньев; клетку (1,1) из старого сохранения она не держит, карта стены — на любую клетку
 	var shield1: float = wall.get_citadel_shield()
-	var radius1: float = wall.stats["slow_radius"]
-	_check("турель на стену — не улучшение", not battle._play_building_card(CardFactory.bolter_turret(), Vector2i(1, 1)) \
-		and wall.card.building_level == 1)
-	battle._play_building_card(CardFactory.fortress_wall(), Vector2i(1, 1))
-	_check("стена → ур.2: щит +50%, радиус +20%", wall.card.building_level == 2 \
-		and is_equal_approx(wall.get_citadel_shield(), shield1 * 1.5) and is_equal_approx(wall.stats["slow_radius"], radius1 * 1.2))
+	var hp1: float = wall.stats["wall_hp"]
+	_check("клетка стены из сохранения свободна, здания-узла стены нет", battle._get_player_building_at(Vector2i(1, 1)) == null \
+		and bm.player_buildings.values().has(bm.WALL_TILE))
+	battle._play_building_card(CardFactory.fortress_wall(), Vector2i(2, 2))
+	_check("стена → ур.2: щит +50%, звенья +50%", wall.card.building_level == 2 \
+		and is_equal_approx(wall.get_citadel_shield(), shield1 * 1.5) and is_equal_approx(wall.stats["wall_hp"], hp1 * 1.5))
 	_check("уровень на карте в забеге (сохранится)", bm.player_buildings.keys().any(
 		func(c): return c.id == "fortress_wall" and c.building_level == 2))
 

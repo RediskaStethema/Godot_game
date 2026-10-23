@@ -217,12 +217,14 @@ func merge_upgrade() -> bool:
 	data.apply_merge_upgrade()
 	for soldier in soldiers:
 		soldier.refresh_stats_from_data()
-		Vfx.attach(soldier, "level_up", soldier.data.sprite_scale * Soldier.EFFECT_SCALE)
 	# Уровень пехоты добавляет бойцов (UnitData.squad_growth) — новички с полным HP
 	for i in range(data.squad_growth):
 		_add_soldier(Vector2.ZERO, 1.0)
 	if data.squad_growth > 0:
 		_reform()
+	# Свет уровня на каждом бойце (и на новичках) — волной по строю
+	for i in soldiers.size():
+		LevelUpGlow.play(soldiers[i], data.squad_level, float(i) / maxf(soldiers.size() - 1, 1.0))
 	return true
 
 # Карта того же отряда → лечение: каждому живому бойцу доля его максимального HP,
@@ -262,6 +264,7 @@ func _on_soldier_died(soldier: Soldier) -> void:
 		if team == GameConstants.TEAM_PLAYER and BattleManager.is_battle_running():
 			FloatingText.spawn(get_parent(), soldier.global_position + Vector2(0.0, -Soldier.TARGET_SPRITE_HEIGHT * 1.5),
 				"%s пал" % data.unit_name, Soldier.FLOAT_HIT_TO_PLAYER, 0.9, true)
+			Vfx.spawn(get_parent(), "squad_lost", soldier.global_position)   # сломанное знамя и черепа
 		emit_signal("squad_wiped", self)
 
 # -------------------------------------------------------

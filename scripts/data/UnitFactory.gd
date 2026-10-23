@@ -762,6 +762,7 @@ static func noise_marines() -> UnitData:
 	d.attack_range = 200.0
 	d.move_speed = 85.0
 	d.on_hit_stun = 0.25
+	d.projectile = "sonic_wave"   # звуковая волна (пакет эффектов), не болт Chaos Marine
 	d.cost = 14
 	d.rarity = GameConstants.RARITY_EPIC
 	d.sprite_path = "res://assets/sprites/chaos_noise_marines"  # лист assets/source_sheets/noise_marines_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)

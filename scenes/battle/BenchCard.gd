@@ -4,7 +4,7 @@ extends Control
 # игральная карта (UITheme.make_card_face) внизу поверх поля, видна верхняя часть (Bench.PEEK), под курсором
 # поднимается целиком, над ней — описание. Положение в ряду задаёт Bench (set_rest)
 
-const CARD_WIDTH: float = 150.0
+const CARD_WIDTH: float = 112.0   # решение пользователя 22.10.2026: было 150 — велики, неудобно ставить на клетку
 const RAISE_LIFT: float = 10.0      # поднятая карта — выше нижнего края экрана на столько
 const RAISE_TIME: float = 0.12
 const DESC_WIDTH: float = 200.0

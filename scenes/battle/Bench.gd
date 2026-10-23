@@ -17,13 +17,14 @@ var drag_preview: Control = null
 var empty_hint: Label = null
 var _dragged_node: Control = null
 var _grab: Vector2 = Vector2.ZERO        # точка карты под курсором (в px карты)
+var _grab_hand: Vector2 = Vector2.ZERO   # за какую точку карту взяли в руке (над рукой — снова она)
 var _drag_from: Vector2 = Vector2.ZERO   # где карта лежала на руке (экран) — сюда возвращается
 var _last_mouse_x: float = 0.0           # курсор в прошлом кадре — наклон карты по ходу
 
 # Тащим саму карту (решение пользователя 21.10.2026: игрок кладёт карту на поле, моделька появляется на клетке):
 # лицо карты под курсором за ту же точку, за которую взяли; над полем — мельче и чуть наклонена по ходу
-const DRAG_CARD_WIDTH: float = 120.0
-const DRAG_FIELD_SCALE: float = 0.75   # над полем карта мельче — видна клетка под ней
+const DRAG_CARD_WIDTH: float = 96.0
+const DRAG_FIELD_SCALE: float = 0.55   # над полем карта мельче — видна клетка под ней
 const DRAG_TILT: float = 0.0012        # наклон (рад) на px/сек горизонтального хода
 const DRAG_TILT_MAX: float = 0.22
 const DROP_TIME: float = 0.16          # сыграна — сжимается в клетку
@@ -142,6 +143,7 @@ func _on_drag_started(card: CardData, from_pos: Vector2) -> void:
 	drag_preview = face
 	add_child(drag_preview)
 	_grab = (mouse - from_pos) * k
+	_grab_hand = _grab
 	drag_preview.pivot_offset = _grab
 	drag_preview.global_position = mouse - _grab
 	_drag_from = from_pos
@@ -163,6 +165,13 @@ func _process(delta: float) -> void:
 	var over_field := mouse.y < get_viewport().get_visible_rect().size.y - PEEK
 	var want := DRAG_FIELD_SCALE if over_field else 1.0
 	drag_preview.scale = drag_preview.scale.lerp(Vector2(want, want), minf(1.0, 14.0 * delta))
+	# Курсор скрыт — указатель сама карта: над полем она встаёт центром на курсор, и клетка под картой — та,
+	# куда она ляжет (решение пользователя 22.10.2026: взятая за край карта висела над одной клеткой, а
+	# подсвечивалась другая); над рукой — снова за ту точку, за которую взяли
+	var grab_want: Vector2 = drag_preview.size / 2.0 if over_field else _grab_hand
+	_grab = _grab.lerp(grab_want, minf(1.0, 14.0 * delta))
+	drag_preview.pivot_offset = _grab
+	drag_preview.global_position = mouse - _grab
 
 func _input(event: InputEvent) -> void:
 	if not dragging_card:
@@ -207,7 +216,9 @@ func _on_drop(screen_pos: Vector2) -> void:
 	tw.chain().tween_callback(preview.queue_free)
 	tw.tween_callback(_restore_hand_card.bind(hand_node))   # карта на руке проявляется, когда долетела
 
-func _restore_hand_card(node: Control) -> void:
+# Без типа: карта сыграна — её узел в руке освобождается раньше колбэка твина, а освобождённый объект в
+# типизированный аргумент не передать («Cannot convert argument 1 from Object to Object»)
+func _restore_hand_card(node) -> void:
 	if is_instance_valid(node):
 		node.set_dragged(false)
 
