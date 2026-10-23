@@ -50,8 +50,8 @@ func get_citadel_shield() -> float:
 
 # Контур: рамка королевства 4×4 и ряд цитадели, с отступом MARGIN
 func _build_segments(container: Node, rising: bool) -> void:
-	_u0 = -0.5 - MARGIN
-	_v0 = -0.5 - MARGIN
+	_u0 = IsoGrid.KINGDOM_FRAME_MIN.x - 0.5 - MARGIN
+	_v0 = IsoGrid.KINGDOM_FRAME_MIN.y - 0.5 - MARGIN
 	_u1 = grid.grid_width - 0.5 + MARGIN
 	_v1 = maxf(grid.grid_height, grid.citadel_tile.y + 1) - 0.5 + MARGIN
 	var corners := [Vector2(_u0, _v0), Vector2(_u1, _v0), Vector2(_u1, _v1), Vector2(_u0, _v1)]

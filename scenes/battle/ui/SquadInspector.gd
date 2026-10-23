@@ -4,14 +4,18 @@ extends Control
 # Подсказки по отрядам на поле боя (UI поверх камеры, в CanvasLayer):
 #   * наведение на бойца дольше HOVER_NAME_DELAY — подпись «имя ×бойцов · ур.N»
 #     (свои золотом, враги красным; скрытые до боя враги не подписываются);
-#   * клик по своему отряду — справка: уровень, бойцы, HP, бонусы, улучшения,
-#     синергии; обновляется на лету, повторный клик или клик мимо — закрыть.
+#   * клик по своему отряду на расстановке — справка-карточка InfoCard (решение пользователя 23.10.2026, образец
+#     9 Kings): портрет, имя, бойцы, описание карты, статы бойца, способность, бонусы, улучшения, ряд; синергий
+#     в ней нет — они в справке цитадели (клик по цитадели); в бою справки нет (только подпись при наведении);
+#     повторный клик или клик мимо — закрыть.
 # Опрос мыши и обновление текста — REFRESH_INTERVAL раз в секунду, не каждый кадр.
 
 const HOVER_NAME_DELAY: float = 0.5
 const HOVER_HALF_WIDTH: float = 20.0   # полуширина бойца для попадания курсором, px мира
 const REFRESH_INTERVAL: float = 0.1
 const INFO_WIDTH: float = 220.0
+const CELL_PX: float = 78.25   # шаг клетки вдоль оси наступления, px (√(70² + 35²)) — скорость и дальность в клетках
+const PORTRAIT_CROP = Rect2(50, 40, 260, 260)   # лицо иллюстрации карты (арт 360×504) — портрет справки
 
 # Выключается в конце забега (shutdown)
 var enabled: bool = true
@@ -19,12 +23,11 @@ var enabled: bool = true
 # Справка получает клик раньше сцены, поэтому спрашивает её заранее
 var click_blocker: Callable
 var info_squad: Squad = null
+var info_citadel: bool = false   # открыта справка цитадели
 
 var _hover_panel: PanelContainer
 var _hover_text: Label
-var _info_panel: PanelContainer
-var _info_title: Label
-var _info_text: Label
+var _card: InfoCard
 var _building_panel: PanelContainer   # подсказка по зданию под курсором (BattleScene)
 var _building_text: Label
 var _hover_squad: Squad = null
@@ -37,19 +40,9 @@ func _ready() -> void:
 	_build()
 
 func _build() -> void:
-	_info_panel = UITheme.make_panel("HudPanel", true)
-	_info_panel.custom_minimum_size = Vector2(INFO_WIDTH, 0)
-	_info_panel.hide()
-	add_child(_info_panel)
-	var col = VBoxContainer.new()
-	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_info_panel.add_child(col)
-	_info_title = UITheme.make_label("", "HeaderLabel")
-	col.add_child(_info_title)
-	_info_text = UITheme.make_label("", "SmallLabel")
-	_info_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_info_text.custom_minimum_size = Vector2(INFO_WIDTH, 0)
-	col.add_child(_info_text)
+	_card = InfoCard.new()
+	_card.hide()
+	add_child(_card)
 
 	_hover_panel = UITheme.make_panel("HudPanel", true)
 	_hover_panel.hide()
@@ -100,12 +93,25 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if click_blocker.is_valid() and click_blocker.call():
 		return
-	var squad = squad_at(_screen_to_world(event.position))
-	if squad == null or squad.team != GameConstants.TEAM_PLAYER or squad == info_squad:
+	if BattleManager.is_battle_running():   # справка — только на расстановке
 		close_info()
 		return
-	info_squad = squad
-	_update_info()
+	var world := _screen_to_world(event.position)
+	var squad = squad_at(world)
+	if squad != null and squad.team == GameConstants.TEAM_PLAYER:
+		var same: bool = squad == info_squad
+		close_info()
+		if not same:
+			info_squad = squad
+			_update_info()
+		return
+	if citadel_at(world):
+		var was := info_citadel
+		close_info()
+		info_citadel = not was
+		_update_info()
+		return
+	close_info()
 
 # -------------------------------------------------------
 # API
@@ -113,9 +119,17 @@ func _unhandled_input(event: InputEvent) -> void:
 func squad_at(world_pos: Vector2) -> Squad:
 	return SquadRegistry.find_squad_at(world_pos, HOVER_HALF_WIDTH)
 
+# Цитадель игрока под точкой мира (её спрайт или блоки — get_occlusion_rect)
+func citadel_at(world_pos: Vector2) -> bool:
+	return BattleManager.has_citadel() and BattleManager.citadel.get_occlusion_rect().has_point(world_pos)
+
 func close_info() -> void:
 	info_squad = null
-	_info_panel.hide()
+	info_citadel = false
+	_card.hide()
+
+func is_info_visible() -> bool:
+	return _card.visible
 
 # Подсказка по зданию (Building.describe) у точки экрана; пустой текст — скрыть
 func show_building_hover(text: String, screen_pos: Vector2) -> void:
@@ -156,19 +170,69 @@ func show_hover(squad: Squad, screen_pos: Vector2) -> void:
 # СПРАВКА
 # -------------------------------------------------------
 func _update_info() -> void:
-	if info_squad == null:
+	if info_squad == null and not info_citadel:
 		return
-	if not is_instance_valid(info_squad) or not info_squad.is_alive():
+	if BattleManager.is_battle_running():
 		close_info()
 		return
-	_info_title.text = info_squad.data.unit_name
-	_info_text.text = describe(info_squad)
-	_info_panel.reset_size()
-	_info_panel.show()
-	# Рядом с первым живым бойцом (в бою отряд движется), в пределах экрана
-	var anchor = _world_to_screen(info_squad.soldiers[0].global_position)
-	var pos = anchor + Vector2(24, -_info_panel.size.y / 2.0)
-	_info_panel.position = pos.clamp(Vector2(0, UITheme.HUD_HEIGHT), get_viewport_rect().size - _info_panel.size)
+	var anchor: Vector2
+	if info_citadel:
+		if not BattleManager.has_citadel():
+			close_info()
+			return
+		_show_citadel_card()
+		anchor = _world_to_screen(BattleManager.citadel.global_position)
+	else:
+		if not is_instance_valid(info_squad) or not info_squad.is_alive() or info_squad.soldiers.is_empty():
+			close_info()
+			return
+		_show_squad_card(info_squad)
+		anchor = _world_to_screen(info_squad.soldiers[0].global_position)
+	_card.reset_size()
+	_card.show()
+	# Справа от отряда / цитадели, в пределах экрана
+	var pos = anchor + Vector2(30, -_card.size.y / 2.0)
+	_card.position = pos.clamp(Vector2(0, UITheme.HUD_HEIGHT), get_viewport_rect().size - _card.size)
+
+func _show_squad_card(squad: Squad) -> void:
+	var d = squad.data
+	var card := CardFactory.squad_card_for(d.factory_id)
+	var alive := squad.soldiers.size()
+	var full := maxi(d.squad_size, alive)
+	_card.setup(squad_portrait(card), d.unit_name, "×%d" % alive if alive >= full else "×%d/%d" % [alive, full],
+		describe(squad), d.squad_level, UnitFactory.MAX_SQUAD_LEVEL,
+		UITheme.rarity_color(card.rarity) if card else Palette.GOLD)
+
+func _show_citadel_card() -> void:
+	var tex: Texture2D = BattleManager.citadel.get_portrait()
+	if tex == null:
+		tex = UITheme.ui_icon("hud", "citadel_hp")
+	_card.setup(tex, "Цитадель", "%d/%d" % [ceili(BattleManager.citadel_hp), roundi(BattleManager.CITADEL_MAX_HP)],
+		describe_citadel(), 0, 0, Palette.GOLD)
+
+# Портрет справки: лицо иллюстрации карты; арта нет — кадр бойца по силуэту
+static func squad_portrait(card: CardData) -> Texture2D:
+	if card == null:
+		return null
+	var art: Texture2D = UITheme.card_art(card)
+	if art:
+		var a := AtlasTexture.new()
+		a.atlas = art
+		a.region = PORTRAIT_CROP
+		return a
+	return UITheme.card_portrait(card)
+
+# Текст справки цитадели (BBCode): прочность, щит стен, синергии армии
+static func describe_citadel() -> String:
+	var lines: Array[String] = []
+	lines.append(InfoCard.stat("Прочность", "%d/%d" % [ceili(BattleManager.citadel_hp), roundi(BattleManager.CITADEL_MAX_HP)]))
+	if BattleManager.has_kingdom_wall():
+		lines.append(InfoCard.stat("Щит стен в начале боя", "+%d" % roundi(BattleManager.kingdom_wall.get_citadel_shield())))
+	lines.append("")
+	lines.append("[color=#%s]Синергии армии[/color]" % Palette.GOLD.to_html(false))
+	for l in BattleHud.synergy_lines():
+		lines.append(InfoCard.color_numbers(l, Palette.AMBER_LIGHT))
+	return "\n".join(lines)
 
 # Способность отряда из данных UnitData ("" — нет)
 static func ability_text(d: UnitData) -> String:
@@ -182,19 +246,35 @@ static func ability_text(d: UnitData) -> String:
 		return "стрельба на ходу"
 	return ""
 
-# Текст справки: уровень, бойцы, HP, бонусы множителей UnitData, улучшения, синергии
+# Число для справки: целое — без дробной части, иначе одна цифра после запятой
+static func _num(v: float) -> String:
+	if absf(v - roundf(v)) < 0.05:
+		return str(roundi(v))
+	return ("%.1f" % v).replace(".", ",")
+
+# Текст справки (BBCode): описание карты, статы бойца, HP отряда, бонусы множителей UnitData, способность,
+# улучшения, ряд. Синергий нет — они в справке цитадели
 static func describe(squad: Squad) -> String:
 	var d = squad.data
 	var lines: Array[String] = []
-	lines.append("Уровень %d/%d" % [d.squad_level, UnitFactory.MAX_SQUAD_LEVEL])
-	var alive = squad.soldiers.size()
-	lines.append("Бойцы: %d/%d" % [alive, maxi(d.squad_size, alive)])
+	var card := CardFactory.squad_card_for(d.factory_id)
+	if card and card.description != "":
+		lines.append(InfoCard.color_numbers(card.description, Palette.AMBER_LIGHT))
+		lines.append("")
+	if not squad.soldiers.is_empty():
+		var s = squad.soldiers[0]
+		lines.append(InfoCard.stat("Здоровье", _num(s.max_hp)))
+		lines.append(InfoCard.stat("Урон", _num(s.current_damage)))
+		lines.append(InfoCard.stat("Атаки/с", _num(s.current_attack_speed)))
+		lines.append(InfoCard.stat("Движение", _num(s.current_move_speed / CELL_PX) + " кл/с"))
+		lines.append(InfoCard.stat("Дальность", "вплотную" if s.current_attack_range <= UnitFactory.MELEE_RANGE * 1.5
+			else _num(s.current_attack_range / CELL_PX) + " кл"))
 	var hp := 0.0
 	var max_hp := 0.0
 	for soldier in squad.soldiers:
 		hp += soldier.current_hp
 		max_hp += soldier.max_hp
-	lines.append("HP: %d/%d" % [ceili(hp), ceili(max_hp)])
+	lines.append(InfoCard.stat("HP отряда", "%d/%d" % [ceili(hp), ceili(max_hp)]))
 	var bonuses: Array[String] = []
 	for b in [[d.hp_multiplier, "HP"], [d.damage_multiplier, "урона"], [d.attack_speed_multiplier, "скорострельности"]]:
 		if b[0] > 1.001:
@@ -205,19 +285,17 @@ static func describe(squad: Squad) -> String:
 		bonuses.append("щит %d%% HP" % roundi(d.shield_ratio * 100.0))
 	if d.banner_aura_bonus > 0.0:
 		bonuses.append("знамя: +%d%% урона рядом" % roundi(d.banner_aura_bonus * 100.0))
-	lines.append("Бонусы: " + (", ".join(bonuses) if not bonuses.is_empty() else "нет"))
+	if not bonuses.is_empty():
+		lines.append("Бонусы: " + InfoCard.color_numbers(", ".join(bonuses), Palette.AMBER_LIGHT))
 	var ability := ability_text(d)
 	if ability != "":
-		lines.append("Способность: " + ability)
+		lines.append("Способность: " + InfoCard.color_numbers(ability, Palette.AMBER_LIGHT))
 	if not d.applied_upgrades.is_empty():
 		lines.append("Улучшения: " + ", ".join(d.applied_upgrades))
-	var syn = SynergyManager.get_soldier_synergy_names(d.tags)
-	if not syn.is_empty():
-		lines.append("Синергии: " + ", ".join(syn))
 	var pos = SynergyManager.get_squad_position_bonus(squad)
 	if pos != "":
 		var p: Dictionary = SynergyManager.POSITION_BONUSES[pos]
-		lines.append("%s: %s" % [p["name"], p["desc"]])
+		lines.append("%s: %s" % [p["name"], InfoCard.color_numbers(p["desc"], Palette.AMBER_LIGHT)])
 	return "\n".join(lines)
 
 # -------------------------------------------------------

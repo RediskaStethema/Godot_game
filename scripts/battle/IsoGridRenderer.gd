@@ -49,7 +49,7 @@ const CITADEL_CLEAR: int = 1
 const FLAG_DECOR_RARITY: int = 3
 
 var grid_overlay: bool = true   # подсветка клеток королевства (в бою выключена)
-var hovered_tile: Vector2i = Vector2i(-1, -1)
+var hovered_tile: Vector2i = IsoGrid.NO_TILE
 var occupied_tiles_player: Dictionary = {}
 var occupied_tiles_enemy: Dictionary = {}
 # Клетки отрядов карты под курсором на скамейке (BattleScene._on_bench_card_hovered)
@@ -606,11 +606,9 @@ func decoration_for(c: Vector2i, rivers: Dictionary, terrain: Dictionary) -> Var
 # -------------------------------------------------------
 func _draw_kingdom() -> void:
 	# Закрытые клетки рамки — едва заметный контур: видно, куда можно расти
-	for row in range(grid.grid_height):
-		for col in range(grid.grid_width):
-			var t = Vector2i(col, row)
-			if not grid.is_valid_tile(t) and not expansion_tiles.has(t):
-				_draw_diamond(grid.tile_to_screen(t, false), Color(0, 0, 0, 0), LINE_LOCKED)
+	for t in grid.get_frame_tiles():
+		if not grid.is_valid_tile(t) and not expansion_tiles.has(t):
+			_draw_diamond(grid.tile_to_screen(t, false), Color(0, 0, 0, 0), LINE_LOCKED)
 
 	for tile in grid.get_all_tiles():
 		var color = COLOR_NORMAL

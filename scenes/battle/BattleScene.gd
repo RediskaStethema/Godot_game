@@ -227,7 +227,7 @@ func _place_player_squads() -> void:
 		var count = unit_data.saved_hp.size()
 		if count == 0:
 			continue
-		var tile: Vector2i = BattleManager.player_placements.get(unit_data, Vector2i(-1, -1))
+		var tile: Vector2i = BattleManager.player_placements.get(unit_data, IsoGrid.NO_TILE)
 		if not iso_grid.is_valid_tile(tile) or _is_tile_occupied(tile):
 			while tile_index < free_tiles.size() and _is_tile_occupied(free_tiles[tile_index]):
 				tile_index += 1

@@ -181,6 +181,12 @@ func _top_y() -> float:
 		return _sprite.position.y
 	return _block_top(0, 0, KEEP_LEVELS).y - IsoGrid.TILE_HEIGHT * BLOCK_SCALE / 2.0
 
+# Портрет для справки (SquadInspector): кадр стойки листа темы; блоки без листа — null
+func get_portrait() -> Texture2D:
+	if _sprite and _sprite.sprite_frames.has_animation("idle"):
+		return _sprite.sprite_frames.get_frame_texture("idle", 0)
+	return null
+
 # Область экрана (мировые координаты), которую закрывают блоки цитадели
 func get_occlusion_rect() -> Rect2:
 	if _sprite:

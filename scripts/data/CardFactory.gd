@@ -586,6 +586,20 @@ static func create(id: String) -> CardData:
 	push_warning("CardFactory: неизвестная карта '%s'" % id)
 	return null
 
+# Карта отряда по юниту (UnitData.factory_id): справка по отряду на поле — описание, иллюстрация, редкость.
+# Пулы обеих рас и особые карты орденов / богов; нет — null
+static var _squad_cards: Dictionary = {}
+static func squad_card_for(unit_id: String) -> CardData:
+	if _squad_cards.is_empty():
+		var cards: Array = _space_marine_pool() + _chaos_pool()
+		for ch in Chapters.CHAPTERS:
+			if ch.has("unit_card"):
+				cards.append(special_card(ch["unit_card"]))
+		for c in cards:
+			if c and c.card_type == "squad" and not _squad_cards.has(c.unit_factory_id):
+				_squad_cards[c.unit_factory_id] = c
+	return _squad_cards.get(unit_id)
+
 # Случайная карта отряда нужной редкости из пула расы забега (веса копий) — Emergency Reinforcements
 static func random_squad_card(rarity: String, rng: RandomNumberGenerator) -> CardData:
 	var squads = build_pool().filter(func(c): return c.card_type == "squad" and c.rarity == rarity)

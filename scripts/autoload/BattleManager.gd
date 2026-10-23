@@ -533,7 +533,7 @@ func get_tile_cost() -> int:
 
 # Списывает Requisition и открывает клетку. Соседство и рамку проверяет вызывающий.
 func try_buy_tile(tile: Vector2i) -> bool:
-	if not can_expand_kingdom() or kingdom_tiles.has(tile):
+	if not can_expand_kingdom() or kingdom_tiles.has(tile) or kingdom_tiles.size() >= IsoGrid.MAX_KINGDOM_TILES:
 		return false
 	if not EconomyManager.try_spend(get_tile_cost()):
 		return false

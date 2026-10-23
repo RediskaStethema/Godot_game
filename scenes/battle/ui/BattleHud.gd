@@ -172,6 +172,12 @@ func set_battle_mode() -> void:
 
 # Список активных синергий SynergyManager (после calculate_synergies)
 func show_synergies() -> void:
+	_synergy_label.text = "\n".join(synergy_lines())
+	_refresh_synergy_icons(Chapters.get_chapter(RunManager.player_chapter),
+		SynergyManager.count_position_bonuses(SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER)))
+
+# Строки синергий армии (после calculate_synergies): панель синергий и справка цитадели (SquadInspector)
+static func synergy_lines() -> Array[String]:
 	var lines: Array[String] = []
 	for s in SynergyManager.active_synergies:
 		lines.append("• %s — %s" % [s["name"], s["desc"]])
@@ -191,8 +197,7 @@ func show_synergies() -> void:
 		lines.append("• %s (%d отр.) — %s" % [p["name"], rows[pos], p["desc"]])
 	lines.append("%s: %d · доход синергии +%d Req" % [tag.capitalize(), SynergyManager.tag_counts.get(tag, 0),
 		SynergyManager.income_bonus])
-	_synergy_label.text = "\n".join(lines)
-	_refresh_synergy_icons(chapter, rows)
+	return lines
 
 # Значки в заголовке панели: синергии (высший уровень тега), орден / бог, ряды с отрядами
 const SYNERGY_ICON_SIZE: float = 26.0
