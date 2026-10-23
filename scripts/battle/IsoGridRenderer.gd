@@ -304,6 +304,10 @@ func _terrain_cells(cells: Array[Vector2i], rivers: Dictionary) -> Dictionary:
 					var next: Vector2i = from + NEIGHBOURS[rng.randi() % NEIGHBOURS.size()]
 					if spot_set.has(next) and not cluster.has(next) and _cluster_cell_ok(next, f["tiles"], taken, kind):
 						cluster.append(next)
+				# "center" — своя плитка в середине группы (больше всего соседей из группы): красные глаза Хаоса
+				# посреди светящихся кристаллов. Случайных чисел не берёт — раскладка карты прежняя
+				if f.has("center"):
+					_put_feature(result, taken, _cluster_middle(cluster), f["center"])
 				for c in cluster:
 					_put_feature(result, taken, c, f["tiles"])
 					kind[c] = true
@@ -316,7 +320,37 @@ func _terrain_cells(cells: Array[Vector2i], rivers: Dictionary) -> Dictionary:
 			and not taken.has(c))
 		for i in mini(theme["flags"]["count"], player_side.size()):
 			_put_feature(result, taken, player_side.pop_at(rng.randi() % player_side.size()), theme["flags"]["tiles"])
+	# Полоса стены владений — грунт (после раскладки: остальная карта не сдвигается)
+	for c in taken:
+		if _on_wall_line(c):
+			result[c] = [TerrainTiles.pick_any(theme["ground"], c), TerrainTiles.hash_cell(c, 53) % 2 == 1]
 	return result
+
+# Полоса вдоль контура стены владений (KingdomWall.contour): клетка ближе WALL_CLEAR к линии стены.
+# Решение пользователя 23.10.2026 (Screenshot 2026-10-23 195638.png): стена шла по руинам, кристаллам и яме с
+# глазами — карта одна на все забеги, а стену можно купить в любом, поэтому полоса всегда пустая: только грунт,
+# без деталей, декора и ориентиров
+const WALL_CLEAR: float = 0.6
+func _on_wall_line(c: Vector2i) -> bool:
+	var r := KingdomWall.contour(grid)
+	var in_v := c.y > r.position.y - WALL_CLEAR and c.y < r.end.y + WALL_CLEAR
+	var in_u := c.x > r.position.x - WALL_CLEAR and c.x < r.end.x + WALL_CLEAR
+	return (in_v and (absf(c.x - r.position.x) < WALL_CLEAR or absf(c.x - r.end.x) < WALL_CLEAR)) \
+		or (in_u and (absf(c.y - r.position.y) < WALL_CLEAR or absf(c.y - r.end.y) < WALL_CLEAR))
+
+# Клетка группы с наибольшим числом соседей из группы (при равенстве — ближе к началу), не на полосе стены
+func _cluster_middle(cluster: Array[Vector2i]) -> Vector2i:
+	var best: Vector2i = cluster[0]
+	var best_n := -1
+	for c in cluster:
+		var n := 0 if not _on_wall_line(c) else -100
+		for d in NEIGHBOURS:
+			if cluster.has(c + d):
+				n += 1
+		if n > best_n:
+			best = c
+			best_n = n
+	return best
 
 # Высокие руины ("tall" — постройки выше бойца) — не в боевой полосе: там бойцы ходят перед ними
 # и за ними, а пол рисуется под бойцами. В полосе — только низкие варианты (нет таких — клетка пуста)
@@ -442,7 +476,7 @@ func _landmark_cells(cells: Array[Vector2i], rivers: Dictionary, terrain: Dictio
 		all[c] = true
 	var free = func(c: Vector2i) -> bool:
 		return all.has(c) and not out.has(c) and not grid.is_in_bounds(c) and not _near_citadel(c) \
-			and not rivers.has(c) and not _is_floor_edge(c) and not _is_enemy_cell(c) \
+			and not rivers.has(c) and not _is_floor_edge(c) and not _is_enemy_cell(c) and not _on_wall_line(c) \
 			and not (terrain.has(c) and terrain[c][0] is Dictionary and (terrain[c][0].has("prop") \
 				or terrain[c][0].get("no_decor", false) or terrain[c][0].get("flag", false)))
 	# Костёр у базы
@@ -501,7 +535,8 @@ func _glow_sources() -> Array:
 			# _draw_cell_decoration (решение пользователя 20.10.2026: свет был на клетку ниже огня)
 			var center := grid.lattice_to_screen(c.x, c.y)
 			if not _layout["landmarks"].has(c):
-				center += Vector2(0.0, IsoGrid.TILE_HEIGHT / 2.0)
+				# "glow_offset" — свет из своей точки клетки (красные глаза Хаоса — из ямы в середине грани)
+				center += e.get("glow_offset", Vector2(0.0, IsoGrid.TILE_HEIGHT / 2.0))
 			out.append([center, e["glow"], e.get("glow_radius", 60.0), TerrainTiles.hash_cell(c, 53) % 100 / 100.0 * TAU])
 	return out
 
@@ -585,7 +620,7 @@ func _cell_decoration(c: Vector2i, top: Vector2, rivers: Dictionary, terrain: Di
 # королевство, цитадель и клетки вокруг, реки, край поля, руины, туман и большие кратеры ("no_decor").
 # В боевой полосе — только плоский; знамёна — только на стороне игрока и реже прочего
 func decoration_for(c: Vector2i, rivers: Dictionary, terrain: Dictionary) -> Variant:
-	if grid.is_in_bounds(c) or _near_citadel(c) or rivers.has(c) or _is_floor_edge(c):
+	if grid.is_in_bounds(c) or _near_citadel(c) or rivers.has(c) or _is_floor_edge(c) or _on_wall_line(c):
 		return null
 	if terrain.has(c) and terrain[c][0] is Dictionary:
 		var tile: Dictionary = terrain[c][0]

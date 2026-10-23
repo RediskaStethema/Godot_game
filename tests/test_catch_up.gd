@@ -55,7 +55,7 @@ func _main() -> void:
 	bm.citadel_hp = 530.0
 	change_scene_to_file("res://scenes/battle/BattleScene.tscn")
 	await _frames(3)
-	current_scene._on_start_pressed()
+	current_scene._on_start_pressed(false)
 	var t = 0
 	while bm.is_battle_running() and t < 4000:
 		await process_frame

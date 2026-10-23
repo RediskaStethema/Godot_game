@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent / "assets"
 OUT = ROOT / "graded"
@@ -87,18 +87,92 @@ SOFT_SHEETS = [
     "upgrades/upgrade_iron_halo.png", "upgrades/upgrade_warp_ward.png",
     "upgrades/upgrade_combat_stimms.png", "upgrades/upgrade_combat_drugs.png",
     "upgrades/upgrade_chapter_banner.png", "upgrades/upgrade_icon_of_chaos.png",
-    "banner_aura/spritesheet.png", "banner_aura/banner_aura_chaos.png",
-    "orbital_strike/spritesheet.png", "warp_strike/spritesheet.png",
+    "banner_aura/spritesheet.png", "banner_aura/banner_aura_chaos.png",
+
+    "orbital_strike/spritesheet.png", "warp_strike/spritesheet.png",
+
     "buildings/aura_plague.png", "buildings/aura_pleasure.png",
-    "buildings/forge_repair.png", "buildings/skull_add.png",
+    "buildings/forge_repair.png", "buildings/skull_add.png",
+
     "chaplain_warcry/spritesheet.png", "jump_trail/spritesheet.png", "jump_land/spritesheet.png",
     "retreat_dust/spritesheet.png", "vehicle_explode/spritesheet.png", "squad_lost/spritesheet.png",
-    "ricochet/spritesheet.png", "hellfire_blast/spritesheet.png", "hellfire_shell/spritesheet.png",
+    "ricochet/spritesheet.png", "hellfire_blast/spritesheet.png", "hellfire_shell/spritesheet.png",
+
     "siege_alarm/spritesheet.png", "sonic_wave/spritesheet.png", "entrench/spritesheet.png",
     "card_burn/spritesheet.png",
 ]
 for _rel in SOFT_SHEETS:
     GRADES["effects/" + _rel] = SOFT
+# Неон, который SOFT не гасит (23.10.2026, «стилизуй эффекты под сеттинг»): розово-фиолетовые варп-листы —
+# насыщенность ещё × DEEP_SAT, средние тона темнее (DEEP_GAMMA), розовый — целиком в бордо
+DEEP = "deep"
+DEEP_SAT = 0.7
+DEEP_GAMMA = 1.45
+for _rel in ["upgrades/upgrade_warp_ward.png", "upgrades/upgrade_combat_drugs.png", "warp_strike/spritesheet.png"]:
+    GRADES["effects/" + _rel] = DEEP
+
+
+# Пак Pixel — «живописный» вид (решение пользователя 23.10.2026 «стилизуй эффекты под сеттинг»: искра, росчерк,
+# пыль, молния, значки статусов — плоский мультяшный пиксель-арт 32 px, растянутый квадратами, а бойцы и пакет
+# художника — рисованные). Каждый кадр PAINT_FRAME: ×PAINT_UP со сглаживанием → край альфы снова чёткий, но
+# скруглённый (ступеньки пикселей ушли), зерно мазка (PAINT_GRAIN), объём — край темнее середины (PAINT_EDGE_DARK),
+# мягкий ореол (PAINT_HALO), затем — градиент палитры, как раньше. Лист выходит в PAINT_UP раз больше исходного:
+# Vfx берёт масштаб из отношения ширины листов (Vfx._get_frames) — размеры и точки в Vfx.EFFECTS прежние
+PAINT_PREFIX = PIXEL
+PAINT_FRAME = 32
+PAINT_UP = 4
+PAINT_GRAIN = 0.22        # ± доля яркости: зерно мазка
+PAINT_EDGE_DARK = 0.35    # край силуэта темнее на эту долю — объём, а не плоская заливка
+PAINT_HALO = 0.35         # непрозрачность мягкого ореола вокруг силуэта
+
+
+def paint(img: Image.Image, seed: int) -> Image.Image:
+    src = img.convert("RGBA")
+    f, up = PAINT_FRAME, PAINT_UP
+    cols, rows = src.width // f, src.height // f
+    out = Image.new("RGBA", (cols * f * up, rows * f * up), (0, 0, 0, 0))
+    rng = np.random.default_rng(seed)
+    for r in range(rows):
+        for c in range(cols):
+            cell = src.crop((c * f, r * f, c * f + f, r * f + f))
+            if cell.getbbox() is None:
+                continue
+            # поле с запасом под ореол, без утечки в соседний кадр
+            big = cell.convert("RGBa").resize((f * up, f * up), Image.BICUBIC).convert("RGBA")
+            a = np.array(big).astype(float) / 255.0
+            alpha = a[..., 3]
+            # край снова чёткий, но скруглённый: альфа через плавный порог
+            alpha = np.clip((alpha - 0.3) / 0.4, 0.0, 1.0)
+            alpha = alpha * alpha * (3.0 - 2.0 * alpha)
+            # объём: глубже в силуэте — светлее
+            inner = np.array(Image.fromarray((alpha * 255).astype(np.uint8)).filter(
+                ImageFilter.GaussianBlur(up * 1.2))).astype(float) / 255.0
+            shade = 1.0 - PAINT_EDGE_DARK * (1.0 - inner)
+            # зерно мазка: крупное + мелкое
+            n1 = np.array(Image.fromarray((rng.random((f, f)) * 255).astype(np.uint8)).resize(
+                (f * up, f * up), Image.BICUBIC)).astype(float) / 255.0
+            n2 = rng.random((f * up, f * up))
+            grain = 1.0 + PAINT_GRAIN * ((n1 - 0.5) * 1.2 + (n2 - 0.5) * 0.6)
+            rgb = np.clip(a[..., :3] * (shade * grain)[..., None], 0.0, 1.0)
+            # ореол: размытый силуэт под фигурой, цвета соседних пикселей
+            halo_src = Image.fromarray((np.dstack([rgb, alpha]) * 255).astype(np.uint8)).convert("RGBa")
+            halo = np.array(halo_src.filter(ImageFilter.GaussianBlur(up * 2.0)).convert("RGBA")).astype(float) / 255.0
+            ha = halo[..., 3] * PAINT_HALO
+            oa = alpha + ha * (1.0 - alpha)
+            orgb = np.where(oa[..., None] > 0, (rgb * alpha[..., None] + halo[..., :3] * (ha * (1.0 - alpha))[..., None])
+                            / np.maximum(oa, 1e-6)[..., None], 0.0)
+            tile = Image.fromarray((np.dstack([orgb, oa]) * 255).round().astype(np.uint8))
+            out.paste(tile, (c * f * up, r * f * up))
+    return out
+
+
+def enable_mipmaps(png: Path) -> None:
+    """Лист ×PAINT_UP уменьшается в игре в 3–5 раз — без мип-уровней рябит. .import появится после первого
+    `godot --headless --import`: тогда прогнать скрипт ещё раз (и импорт)."""
+    imp = png.with_name(png.name + ".import")
+    if imp.exists():
+        text = imp.read_text(encoding="utf8")
+        imp.write_text(text.replace("mipmaps/generate=false", "mipmaps/generate=true"), encoding="utf8")
 
 
 def ramp_lut(stops):
@@ -122,18 +196,19 @@ def grade(img: Image.Image, ramp: str) -> Image.Image:
     return Image.fromarray(out.round().astype(np.uint8))
 
 
-def soft_grade(img: Image.Image) -> Image.Image:
-    """Мягкий цветокор многоцветного листа (SOFT): тон и форма те же, неон глуше, розовый — к бордо."""
+def soft_grade(img: Image.Image, deep: bool = False) -> Image.Image:
+    """Мягкий цветокор многоцветного листа (SOFT): тон и форма те же, неон глуше, розовый — к бордо.
+    deep (DEEP) — сильнее: насыщенность ниже, средние тона темнее, розовый целиком в бордо."""
     rgba = img.convert("RGBA")
     a = np.array(rgba).astype(float) / 255.0
     hsv = np.array(rgba.convert("RGB").convert("HSV")).astype(float) / 255.0
     h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
-    s = s * SOFT_SAT
+    s = s * SOFT_SAT * (DEEP_SAT if deep else 1.0)
     s = np.where(s > SOFT_SAT_CAP, SOFT_SAT_CAP + (s - SOFT_SAT_CAP) * 0.35, s)
     s = np.where((h > 0.53) & (h < 0.70), s * BLUE_SAT, s)
     magenta = (h > 0.72) & (h < 0.97)
-    h = np.where(magenta, h + (MAGENTA_TARGET - h) * MAGENTA_PULL, h)
-    v = np.where(v < SOFT_KEEP, np.power(v, SOFT_GAMMA), v)
+    h = np.where(magenta, h + (MAGENTA_TARGET - h) * (1.0 if deep else MAGENTA_PULL), h)
+    v = np.where(v < SOFT_KEEP, np.power(v, DEEP_GAMMA if deep else SOFT_GAMMA), v)
     v = np.where(magenta & (v < SOFT_KEEP), v * MAGENTA_VAL, v)
     hsv = (np.stack([h, np.clip(s, 0, 1), v], axis=2) * 255).round().astype(np.uint8)
     rgb = np.array(Image.frombytes("HSV", img.size, hsv.tobytes()).convert("RGB"))
@@ -152,7 +227,11 @@ def main(args):
         dst = OUT / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         img = Image.open(src)
-        (soft_grade(img) if ramp == SOFT else grade(img, ramp)).save(dst)
+        if rel.startswith(PAINT_PREFIX):
+            img = paint(img, sum(map(ord, rel)))
+        (soft_grade(img, ramp == DEEP) if ramp in (SOFT, DEEP) else grade(img, ramp)).save(dst)
+        if rel.startswith(PAINT_PREFIX):
+            enable_mipmaps(dst)
         print(f"{rel} -> graded ({ramp})")
 
 

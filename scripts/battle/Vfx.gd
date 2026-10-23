@@ -251,6 +251,7 @@ static func spawn_blood(parent: Node, at: Vector2, victim: UnitData, shot: bool,
 		spawn(parent, "ricochet", at, size * 0.5)   # рикошет по броне; мельче брызг — масло под ним видно
 
 static var _add: CanvasItemMaterial
+static var _sheet_scale: Dictionary = {}   # вид → во сколько раз лист крупнее исходного (_get_frames)
 # Фильтрация листов эффектов и снарядов (пиксель-арт — NEAREST; сравнение стилей — tests/capture_style.gd)
 static var filter: CanvasItem.TextureFilter = CanvasItem.TEXTURE_FILTER_NEAREST
 
@@ -304,9 +305,11 @@ static func _make(kind: String, size: float) -> Vfx:
 	var e: Dictionary = EFFECTS[kind]
 	var v := Vfx.new()
 	v.sprite_frames = _get_frames(kind)
-	v.texture_filter = filter
-	v.offset = Vector2(e["size"]) / 2.0 - e["pivot"]
-	var s: float = e["scale"] * size
+	var k: float = _sheet_scale.get(kind, 1.0)
+	# Лист «живописный» (крупнее исходного, tools/vfx_grade.py paint) — сглаженный, не пиксели
+	v.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS if k > 1.0 else filter
+	v.offset = (Vector2(e["size"]) / 2.0 - e["pivot"]) * k
+	var s: float = e["scale"] * size / k
 	v.scale = Vector2(s, s * (FLAT_Y if e.get("flat", false) else 1.0))
 	v.modulate = e.get("modulate", Color.WHITE)
 	v._base_alpha = v.modulate.a
@@ -371,8 +374,15 @@ static func _get_frames(kind: String) -> SpriteFrames:
 		return _frames_cache[kind]
 	var e: Dictionary = EFFECTS[kind]
 	var path: String = e["sheet"]
-	var sheet: Texture2D = load(graded_path(path if path.begins_with("res://") else SHEETS_DIR + path))
-	var size: Vector2i = e["size"]
+	var src_path: String = path if path.begins_with("res://") else SHEETS_DIR + path
+	var sheet: Texture2D = load(graded_path(src_path))
+	# Перекрашенный лист бывает крупнее исходного (пак Pixel — ×4, tools/vfx_grade.py paint): кадр, точка и масштаб
+	# в EFFECTS — в пикселях исходного, множитель — отношение ширины листов
+	var k := 1
+	if sheet.resource_path != src_path and ResourceLoader.exists(src_path):
+		k = maxi(1, roundi(float(sheet.get_width()) / load(src_path).get_width()))
+	_sheet_scale[kind] = float(k)
+	var size: Vector2i = e["size"] * k
 	var cols: int = sheet.get_width() / size.x
 	var frames := SpriteFrames.new()
 	frames.rename_animation("default", "play")

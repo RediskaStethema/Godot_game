@@ -80,7 +80,7 @@ func _main() -> void:
 		and wall.blocking_segment(front_out, s.iso_grid.lattice_to_screen(4.2, 2.5)) == null)
 
 	# 4. Бой: враг у стены упирается и ломает звено; звено разбито — проходит
-	s._on_start_pressed()
+	s._on_start_pressed(false)
 	await _frames(2)
 	_check("щит цитадели от стены (%.0f) — вспышкой по стене" % bm.citadel_shield,
 		bm.citadel_shield >= card.get_building_stats()["shield"] and segs.all(func(x): return x.flash_left > 0.0))
@@ -107,9 +107,13 @@ func _main() -> void:
 		and enemy.global_position != pos0)
 
 	# 4б. Цель снаружи, а прямой путь срезает владения — враг обходит вдоль стены, не стоит и не ломает её
-	var side_from: Vector2 = s.iso_grid.lattice_to_screen(4.2, 3.2)
-	var side_goal: Vector2 = s.iso_grid.lattice_to_screen(-2.0, 3.2)
-	var side_seg = wall.blocking_segment(side_from, s.iso_grid.lattice_to_screen(3.6, 3.2))
+	# Точки — от отступа стены (MARGIN): снаружи у передней стороны и снаружи у задней
+	var m: float = wall.MARGIN
+	var u_front: float = s.iso_grid.grid_width - 0.5 + m
+	var u_back: float = -1.5 - m
+	var side_from: Vector2 = s.iso_grid.lattice_to_screen(u_front + 0.3, 3.2)
+	var side_goal: Vector2 = s.iso_grid.lattice_to_screen(u_back - 0.4, 3.2)
+	var side_seg = wall.blocking_segment(side_from, s.iso_grid.lattice_to_screen(u_front - 0.3, 3.2))
 	var hp_before: float = side_seg.hp if side_seg else 0.0
 	enemy.global_position = side_from
 	var entered := false

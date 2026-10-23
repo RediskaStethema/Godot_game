@@ -104,7 +104,7 @@ func _main() -> void:
 	var portrait = load(UI_THEME).card_portrait(turret)
 	_check("уровень 2 — вид idle_2; портрет карты — кадр листа", t.sprite.animation == "idle_2"
 		and portrait == tower_frames.get_frame_texture("idle", 0))
-	current_scene._on_start_pressed()
+	current_scene._on_start_pressed(false)
 	bm.set_process(false)
 	var enemy = reg.get_alive_soldiers_of_team(1)[0]
 	t.attack_timer = 0.0
@@ -163,8 +163,10 @@ func _main() -> void:
 	var t0 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t0 < 300:
 		await process_frame
-	_check("Blood Angels: броня красная, враг как нарисован; вспышка — с перекраской, после — снова цвет ордена",
-		red_ok and foe.sprite.material == null and flashing and marine.sprite.material == mat)
+	var foe_mat = foe.sprite.material
+	var foe_ok: bool = foe_mat is ShaderMaterial and not foe_mat.get_shader_parameter("armor") 		and foe_mat.get_shader_parameter("outline_px") > 0.0
+	_check("Blood Angels: броня красная, враг как нарисован (только контур); вспышка — с перекраской, после — снова цвет ордена",
+		red_ok and foe_ok and flashing and marine.sprite.material == mat)
 	rm.player_chapter = "ultramarines"
 	await _battle([_squad_unit("tactical_marine", 3)] as Array[UnitData])
 	var um_mat = reg.get_alive_soldiers_of_team(0)[0].sprite.material
@@ -264,7 +266,7 @@ func _effects_pack() -> void:
 	_check("ромб «нельзя» там, где карта не ляжет: отряд ур.%d здоров, генератор ур.%d (%s)" % [mine.data.squad_level,
 		s._get_player_building_at(Vector2i(0, 2)).card.building_level, maxed],
 		maxed == ["invalid", "invalid"] and not s._merge_squad(tactical, mine))
-	s._on_start_pressed()
+	s._on_start_pressed(false)
 	await _frames(1)   # метка снята queue_free — уходит из дерева в конце кадра
 	var w = bm.kingdom_wall
 	_check("начало боя: метка снята, щит стены — вспышкой по стене владений; вариант расы — _chaos, нет варианта — общий",

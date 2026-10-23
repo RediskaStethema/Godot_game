@@ -15,6 +15,11 @@ static var _texture: Texture2D
 
 func setup(units_container: Node2D) -> void:
 	units = units_container
+	# Позиции — после Soldier._process (плавный ход между тиками): слой стоит в дереве раньше отрядов, и в кадр
+	# тика брал логическую позицию на шаг впереди — кольцо скакало вперёд-назад 10 раз/с (23.10.2026)
+	process_priority = 1
+	# Текстура 128 px сжата до ~17: без мип-уровней тонкое кольцо рябило при сдвиге на доли пикселя
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	texture = _get_texture()
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_2D
@@ -79,5 +84,6 @@ static func _get_texture() -> Texture2D:
 			if ring > 0.0:
 				c = c.lerp(Color(1, 1, 1, Soldier.RING_ALPHA), ring)
 			img.set_pixel(x, y, c)
+	img.generate_mipmaps()
 	_texture = ImageTexture.create_from_image(img)
 	return _texture

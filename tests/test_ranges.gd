@@ -61,7 +61,7 @@ func _main() -> void:
 	await process_frame
 	await process_frame
 	var turret = bm.buildings[0]
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	await process_frame
 	var nearest = INF
 	for e in root.get_node("SoldierRegistry").get_alive_soldiers_of_team(1):

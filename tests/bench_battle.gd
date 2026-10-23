@@ -45,7 +45,7 @@ func _main() -> void:
 	await process_frame
 	var reg = root.get_node("SoldierRegistry")
 	var soldiers = reg.get_all_alive_soldiers().size()
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	bm.phase = bm.BattlePhase.IDLE   # тикаем вручную, а не из _process
 	var t1 = Time.get_ticks_usec()
 	var ticks = 0

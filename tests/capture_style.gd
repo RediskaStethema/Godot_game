@@ -97,7 +97,7 @@ func _battle(faction: String) -> void:
 		await create_timer(0.3).timeout
 		await _shot(faction + "_hand_hover")
 		cards[2].mouse_exited.emit()
-	current_scene._on_start_pressed()
+	current_scene._on_start_pressed(false)
 	await create_timer(BATTLE_SECONDS).timeout
 	await _shot(faction + "_battle")
 	if faction == "space_marines":

@@ -34,9 +34,10 @@ const WALL_STONE       = Color(0.11, 0.12, 0.16)
 const WALL_STONE_TOP   = Color(0.2, 0.22, 0.28)
 const WALL_STONE_DARK  = Color(0.045, 0.05, 0.07)
 const WALL_TRIM        = Color(0.66, 0.5, 0.26)    # латунные навершия столбов
-const CHAOS_WALL_STONE = Color(0.21, 0.08, 0.08)
-const CHAOS_WALL_TOP   = Color(0.36, 0.14, 0.12)
-const CHAOS_WALL_DARK  = Color(0.1, 0.035, 0.04)
+# Стена Хаоса — тёмный бордо поля (палитра «бордо + варп», 23.10.2026; было 0.21 / 0.36 — плоская яркая)
+const CHAOS_WALL_STONE = Color(0.13, 0.045, 0.055)
+const CHAOS_WALL_TOP   = Color(0.23, 0.08, 0.095)
+const CHAOS_WALL_DARK  = Color(0.06, 0.018, 0.026)
 const CHAOS_WALL_SPIKE = Color(0.64, 0.57, 0.48)   # кость шипов
 const FIRE         = Color(1.0, 0.55, 0.15)
 const POISON       = Color(0.55, 0.9, 0.3)

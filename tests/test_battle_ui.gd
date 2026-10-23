@@ -93,7 +93,7 @@ func _main() -> void:
 	var parent = dread._world_parent()
 	dread.take_damage(50.0)
 	var in_placement := _of_class(parent, "FloatingText").size()
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	bm.set_process(false)   # тикаем сами — бой не кончится сам собой
 	var before := _of_class(parent, "FloatingText").size()
 	dread.take_damage(5.0)
@@ -165,7 +165,7 @@ func _main() -> void:
 	var pm = scene.pause_menu
 	pm._input(space)
 	var no_pause_in_placement: bool = not paused
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	pm._input(space)
 	var quick_on: bool = paused and pm.is_quick_paused() and not pm.is_open()
 	pm.open()   # Esc поверх паузы пробелом — меню, подпись снята

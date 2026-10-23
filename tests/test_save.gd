@@ -153,7 +153,7 @@ func _main() -> void:
 	#    Заряженный в шаге 3 Orbital Strike снимаем: при хрупкой волне (seed забега случайный) он
 	#    добивал всех врагов в первый же кадр — бой кончался раньше проверки
 	bm.armed_events.clear()
-	battle._on_start_pressed()
+	battle._on_start_pressed(false)
 	await _frames(5)
 	bm.stop_battle()
 	bm.reset_run()

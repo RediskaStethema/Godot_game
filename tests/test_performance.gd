@@ -24,7 +24,9 @@ const LEAK_FRAMES: int = 300
 # Бюджеты (мс). Тик должен влезать в кадр 60 FPS (16.7 мс) — иначе рывок; логике кадра — не больше
 # 12 мс в 99% кадров, остальное — отрисовке. Самые долгие тики (≈ 11 мс) — сближение армий:
 # сотни бойцов на краю поля зрения друг друга, поиск по сетке просматривает соседей
-const TICK_AVG_MS: float = 4.0
+# 23.10.2026 (решение пользователя): 4.0 → 5.0 — после построения перед боем армии сходятся сразу, вся сшибка
+# 300 бойцов попадает в замер (код тика не медленнее: bench_battle на бойца — как до построения); тик раз в 3 кадра
+const TICK_AVG_MS: float = 5.0
 const TICK_MAX_MS: float = 16.0
 const LOGIC_FRAME_P99_MS: float = 12.0
 const SCENE_COLD_MS: float = 3000.0   # первый бой процесса: чтение ресурсов с диска (между магазином и боем)
@@ -201,7 +203,7 @@ func _test_battle() -> void:
 		_check("перерисовка пола дешевле %.1f мс: %.2f" % [FLOOR_REDRAW_MS, floor_ms], floor_ms < FLOOR_REDRAW_MS)
 
 	var t0 = Time.get_ticks_usec()
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	var start_ms = (Time.get_ticks_usec() - t0) / 1000.0
 	bm.set_process(false)   # тикает тест
 	Engine.time_scale = 1.0
@@ -246,7 +248,10 @@ func _test_battle() -> void:
 		prev = now
 		peak_nodes = maxi(peak_nodes, int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)))
 		peak_projectiles = maxi(peak_projectiles, bm.projectiles.size())
-		if is_instance_valid(walker) and walker.current_state == walker.State.MOVE and watched_frames < 60:
+		# Марш или преследование, и боец за этот тик сдвинулся по логике: после построения перед боем
+		# (BattleScene._deploy_slots) армия стоит ближе к врагу — MOVE длится пару кадров, дальше CHASE тем же
+		# плавным ходом; в CHASE боец, упёршийся в цель, стоит законно — такие кадры не в счёт
+		if is_instance_valid(walker) and walker.current_state in [walker.State.MOVE, walker.State.CHASE] 				and walker._tick_from.distance_to(walker._tick_to) > 0.5 and watched_frames < 60:
 			watched_frames += 1
 			if walker.sprite.global_position.distance_to(last_pos) > 0.01:
 				moved_frames += 1
@@ -381,7 +386,7 @@ func _test_leaks() -> void:
 		_setup_run()
 		var loaded = await _load_battle()
 		var scene = loaded[0]
-		scene._on_start_pressed()
+		scene._on_start_pressed(false)
 		bm.set_process(false)
 		Engine.time_scale = 1.0
 		_acc = 0.0

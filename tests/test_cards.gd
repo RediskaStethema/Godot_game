@@ -144,7 +144,7 @@ func _main() -> void:
 	for e in enemies:
 		hp_sum_before += e.current_hp
 	var enemy_count = enemies.size()
-	battle._on_start_pressed()
+	battle._on_start_pressed(false)
 	var hp_sum_after = 0.0
 	for e in root.get_node("SoldierRegistry").get_alive_soldiers_of_team(1):
 		hp_sum_after += e.current_hp

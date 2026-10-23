@@ -46,7 +46,7 @@ func _snapshot(chapter: String) -> Dictionary:
 	current_scene = scene
 	await process_frame
 	await process_frame
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	var out = {"shield": bm.citadel_shield, "chapter_line": "Орден" in "\n".join(load("res://scenes/battle/ui/BattleHud.gd").synergy_lines())}
 	for s in root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0):
 		if not out.has(s.data.factory_id):

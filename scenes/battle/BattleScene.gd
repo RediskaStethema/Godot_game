@@ -45,6 +45,23 @@ var enemy_elites_at_start: int = 0      # элитные враги (тег elit
 # Отряды игрока на старте боя — павшие целиком при победе возрождаются
 var player_squads_at_start: Array[Dictionary] = []
 var _battle_resolved: bool = false
+# Построение перед боем (решение пользователя 23.10.2026, ориентир — 9 Kings, Screenshot 2026-10-23 181716.png):
+# после «В БОЙ» армия выходит из королевства за переднюю стену и встаёт строем — ближний бой впереди, стрелки
+# и лекари сзади (_deploy_slots); бой стартует сам, когда встали. Клетка отряда (squad.tile) по-прежнему решает
+# бонус ряда и соседство со зданиями — строй только меняет, где отряд начинает бой. Враги в своей зоне — так же
+# (_place_enemy_squads: ближний бой в передние клетки)
+# Ход — бегом своей скоростью (решение пользователя 23.10.2026: было всем за 1.8 с с разгоном — до 300 px/с, отряды
+# «вылетали», ноги не успевали): скорость бега отряда × DEPLOY_PACE, медленные — быстрее, чтобы успеть за
+# DEPLOY_MAX_TIME; равномерно (без разгона — темп ног совпадает с ходом). С ×2 / ×3 скорости боя — быстрее
+const DEPLOY_PACE: float = 1.5
+const DEPLOY_MAX_TIME: float = 3.5      # сек — самый долгий ход
+const DEPLOY_HOLD: float = 0.5          # сек — армия стоит строем перед стартом
+const DEPLOY_BACK_LINE: float = 1.1     # клеток от переднего края рамки до задней линии (за стеной владений)
+const DEPLOY_LINE_STEP: float = 1.2     # клеток между линиями
+const DEPLOY_SLOTS: int = 4             # отрядов в линии
+const DEPLOY_SLOT_STEP: float = 1.3     # клеток между отрядами в линии
+const DEPLOY_BACK_RANGE: float = 80.0   # дальность атаки больше — отряд встаёт назад (лекари — тоже)
+var is_deploying: bool = false
 
 # Тип карты → розыгрыш на клетку (card, tile) → разыграна ли. Новый тип карты:
 # функция здесь + строка в словаре + подсказка в CardData.PLAY_HINTS
@@ -130,6 +147,7 @@ func _build_field() -> void:
 	renderer = IsoGridRenderer.new()
 	renderer.setup(iso_grid)
 	grid_renderer.add_child(renderer)
+	SideCritters.spawn(units_container, renderer, iso_grid)   # существа по краям поля (только вид)
 	AuraRing.layer = renderer   # кольца аур — на земле, под бойцами
 	# Здания и цитадель полупрозрачны, пока за ними стоят бойцы (только расстановка)
 	fader = OcclusionFader.new()
@@ -242,15 +260,24 @@ func _place_enemy_squads() -> void:
 	var specs = EnemyWaves.build(battle_wave, battle_type, tiles.size(), RunManager.rng.seed, RunManager.difficulty,
 		FactionTheme.enemy_of(RunManager.player_faction))
 	enemy_elites_at_start = 0
+	# Строй врага, как у игрока (построение перед боем): ближний бой — в передние клетки зоны, стрелки — в задние;
+	# внутри групп — порядок волны (EnemyWaves: босс и танки впереди)
+	var front: Array = []
+	var back: Array = []
 	for i in range(mini(specs.size(), tiles.size())):
 		var spec: Dictionary = specs[i]
 		var enemy_data = UnitFactory.create(spec["unit"])
 		enemy_data.attack_range = minf(enemy_data.attack_range, EnemyWaves.MAX_ENEMY_RANGE)
 		enemy_data.hp_multiplier = spec["mult"] * BattleManager.next_battle_enemy_hp   # событие забега
 		enemy_data.damage_multiplier = spec["mult"]
-		_spawn_squad(enemy_data, GameConstants.TEAM_ENEMY, tiles[i], spec["count"])
+		var is_back: bool = enemy_data.attack_range > DEPLOY_BACK_RANGE or enemy_data.heal_per_second > 0.0
+		(back if is_back else front).append([enemy_data, spec["count"]])
+	var placed: Array = front + back
+	for i in placed.size():
+		var enemy_data: UnitData = placed[i][0]
+		_spawn_squad(enemy_data, GameConstants.TEAM_ENEMY, tiles[i], placed[i][1])
 		if "elite" in enemy_data.tags:
-			enemy_elites_at_start += spec["count"]
+			enemy_elites_at_start += placed[i][1]
 
 func _spawn_squad(unit_data: UnitData, team: int, tile: Vector2i, count: int, hp_list: Array[float] = [],
 		kinds: Array[String] = []) -> Squad:
@@ -657,7 +684,8 @@ func get_same_card_tiles(card: CardData) -> Array[Vector2i]:
 					tiles.append(BattleManager.player_buildings[b])
 	return tiles
 
-func _on_start_pressed() -> void:
+# deploy = false — армия сразу на местах построения, бой без хода (тесты)
+func _on_start_pressed(deploy: bool = true) -> void:
 	for tw in _spawn_tweens:   # моделька ещё растёт из клетки — сразу в полный размер
 		if tw.is_valid():
 			tw.custom_step(SPAWN_TIME)
@@ -680,10 +708,76 @@ func _on_start_pressed() -> void:
 	# Бой: прячем скамейку, камера отъезжает на всё поле
 	bench.visible = false
 	_fit_camera(true)
-	hud.set_message("Бой идёт...")
 	_update_expansion()
 	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_ENEMY):
 		squad.visible = true
+	_base_time_scale = Engine.time_scale
+	_speed_applied = true
+	_apply_battle_speed()
+	var slots := _deploy_slots(SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
+	if not deploy:
+		for squad in slots:
+			squad.global_position = slots[squad]
+		_begin_battle()
+		return
+	_deploy_army(slots)
+
+# Места построения: линии поперёк оси наступления за передней стеной — впереди ближний бой, за ним стрелки
+# и лекари; в линии — по ряду клетки (отряды не перебегают друг другу дорогу)
+func _deploy_slots(squads: Array) -> Dictionary:
+	var front: Array = []
+	var back: Array = []
+	for squad in squads:
+		var d: UnitData = squad.data
+		(back if d.attack_range > DEPLOY_BACK_RANGE or d.heal_per_second > 0.0 else front).append(squad)
+	var by_row := func(a, b): return a.tile.y < b.tile.y or (a.tile.y == b.tile.y and a.tile.x > b.tile.x)
+	front.sort_custom(by_row)
+	back.sort_custom(by_row)
+	var lines: Array = []   # от передней к задней
+	for group in [front, back]:
+		for i in range(0, group.size(), DEPLOY_SLOTS):
+			lines.append(group.slice(i, i + DEPLOY_SLOTS))
+	var back_u: float = iso_grid.grid_width - 0.5 + DEPLOY_BACK_LINE
+	var center_v: float = (IsoGrid.KINGDOM_FRAME_MIN.y + iso_grid.grid_height - 1) / 2.0
+	var slots := {}
+	for k in lines.size():
+		var u: float = back_u + (lines.size() - 1 - k) * DEPLOY_LINE_STEP
+		var line: Array = lines[k]
+		for j in line.size():
+			var v: float = center_v + (j - (line.size() - 1) / 2.0) * DEPLOY_SLOT_STEP
+			slots[line[j]] = iso_grid.lattice_to_screen(u, v)
+	return slots
+
+# Ход на построение — только вид (бой не идёт: тиков нет); на паузе стоит, скорость боя ускоряет
+func _deploy_army(slots: Dictionary) -> void:
+	is_deploying = true
+	hud.set_message("Построение...")
+	var tw := create_tween().set_parallel(true)
+	for squad in slots:
+		var to: Vector2 = slots[squad]
+		var way: Vector2 = to - squad.global_position
+		var speed: float = maxf(squad.data.get_move_speed() * DEPLOY_PACE, way.length() / DEPLOY_MAX_TIME)
+		var time: float = way.length() / maxf(speed, 1.0)
+		tw.tween_property(squad, "global_position", to, time)
+		for s in squad.soldiers:
+			s.deploy_walk(speed, way)
+		# Дошёл — стойка лицом к врагу, пока остальные подходят
+		tw.tween_callback(_deploy_arrived.bind(squad)).set_delay(time)
+	# Пауза «стоят строем» — после последнего: параллельный шаг длится до него, дальше — по очереди
+	# (без set_parallel(false) пауза шла бы вместе с ходом и бой стартовал бы на бегу)
+	tw.set_parallel(false)
+	tw.tween_interval(DEPLOY_HOLD)
+	tw.tween_callback(_begin_battle)
+
+func _deploy_arrived(squad: Squad) -> void:
+	if is_instance_valid(squad):
+		for s in squad.soldiers:
+			s.deploy_stand()
+
+# Армия стоит строем — схватка: марш, синергии, бонусы, щиты, старт тиков
+func _begin_battle() -> void:
+	is_deploying = false
+	hud.set_message("Бой идёт...")
 	for squad in SquadRegistry.get_all_alive_squads():
 		squad.start_march()
 
@@ -706,9 +800,6 @@ func _on_start_pressed() -> void:
 	BattleManager.start_battle()
 	for hit in BattleManager.fire_armed_events():
 		_spawn_strike_flash(hit["pos"], hit["radius"])
-	_base_time_scale = Engine.time_scale
-	_speed_applied = true
-	_apply_battle_speed()
 
 # Щиты в начале боя (только вид): Iron Halo на бойцах, щит стен на цитадели
 func _show_shields(soldiers: Array) -> void:

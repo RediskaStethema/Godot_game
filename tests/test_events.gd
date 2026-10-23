@@ -151,7 +151,7 @@ func _main() -> void:
 	await _frames(3)
 	var enemies = root.get_node("SoldierRegistry").get_alive_soldiers_of_team(1)
 	var weaker = enemies.all(func(s): return is_equal_approx(s.data.hp_multiplier, EnemyWaves.get_stat_mult(1) * 0.8))
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	var t = 0
 	while bm.is_battle_running() and t < 5000:
 		await process_frame

@@ -92,7 +92,7 @@ func _main() -> void:
 
 	# 6. В бою подсветки нет: ни карты под курсором, ни клеток королевства; зона врага не подсвечивается вовсе
 	var overlay_before = renderer.grid_overlay
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	await process_frame
 	scene._on_bench_card_hovered(tac_card.card_data)
 	_check("в бою: подсветки нет (на расстановке клетки королевства подсвечены, в бою — нет; зона врага — никогда)",

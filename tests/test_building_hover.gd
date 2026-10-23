@@ -100,7 +100,7 @@ func _main() -> void:
 		and scene.renderer.effect_tiles.is_empty() and scene.fader.pinned == null)
 
 	# 4. В бою: подсказка есть, зона действия не рисуется (подсветка поля выключена)
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	await _frames(1)
 	await _move_mouse(scene.camera.world_to_screen(b_node.global_position))
 	_check("в бою — подсказка есть, подсветки поля нет",

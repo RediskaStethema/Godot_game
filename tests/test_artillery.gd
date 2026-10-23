@@ -77,7 +77,7 @@ func _main() -> void:
 		and root.get_node("BattleManager").projectiles.is_empty() and not scene.hud._artillery.visible)
 
 	# 3. Бой: клик — залп, сразу второй — нет (перезарядка), надпись в шапке
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	await process_frame
 	# Свой боец рядом с точкой взрыва — дружественного огня нет
 	var mine = root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0)[0]

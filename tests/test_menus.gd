@@ -72,7 +72,7 @@ func _main() -> void:
 	gs.set_battle_speed(2.0)
 	var battle = await _battle_scene()
 	_check("расстановка — скорость обычная", is_equal_approx(Engine.time_scale, 1.0))
-	battle._on_start_pressed()
+	battle._on_start_pressed(false)
 	_check("бой — скорость ×2", is_equal_approx(Engine.time_scale, 2.0))
 	gs.cycle_battle_speed()
 	var battle_three: bool = is_equal_approx(Engine.time_scale, 3.0)
@@ -202,7 +202,7 @@ func _main() -> void:
 	await _frames(2)
 	_check("расстановка: выход без вопроса", current_scene.name == "MainMenu")
 	battle = await _battle_scene()
-	battle._on_start_pressed()
+	battle._on_start_pressed(false)
 	await _frames(10)
 	battle.pause_menu.open()
 	battle.pause_menu._leave(battle.pause_menu._to_main_menu)
@@ -242,7 +242,7 @@ func _main() -> void:
 
 	# 9. «Сдаться» в паузе посреди схватки — экран итога боя, сцена не меняется
 	battle = await _battle_scene()
-	battle._on_start_pressed()
+	battle._on_start_pressed(false)
 	await _frames(10)
 	battle.pause_menu.open()
 	battle.pause_menu._confirm_surrender()

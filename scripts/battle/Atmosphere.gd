@@ -10,7 +10,8 @@ const KINDS = {
 	"ash": {"amount": 140, "lifetime": 10.0, "color": Color(0.72, 0.76, 0.84, 0.45), "scale": Vector2(1.0, 2.2),
 		"velocity": Vector2(6.0, 16.0), "direction": Vector2(0.4, 1.0), "gravity": Vector2(5.0, 4.0), "additive": false},
 	# угли: тлеющие искры поднимаются и гаснут
-	"embers": {"amount": 110, "lifetime": 7.0, "color": Color(1.0, 0.45, 0.15, 0.85), "scale": Vector2(1.0, 2.0),
+	# Хаос: искры варпа (палитра «бордо + варп», 23.10.2026; были оранжевые угли)
+	"embers": {"amount": 110, "lifetime": 7.0, "color": Color(1.0, 0.3, 0.62, 0.8), "scale": Vector2(1.0, 2.0),
 		"velocity": Vector2(8.0, 22.0), "direction": Vector2(0.3, -1.0), "gravity": Vector2(3.0, -6.0), "additive": true},
 }
 const Z_INDEX: int = 40   # над бойцами и постройками, под полосками отрядов и цифрами

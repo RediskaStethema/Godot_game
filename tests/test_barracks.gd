@@ -91,7 +91,7 @@ func _main() -> void:
 	current_scene = scene
 	await process_frame
 	await process_frame
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	await process_frame
 	var mine = root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0).duplicate()
 	for i in 3:

@@ -46,7 +46,7 @@ func _run_battle(label:String, type:String, wave:int, army:Array[UnitData], max_
 	for s in enemies: etypes[s.data.factory_id] = etypes.get(s.data.factory_id,0)+1
 	print("[%s] type=%s wave=%d enemy squads=%s player squads=%d" % [label, scene.battle_type, scene.battle_wave, etypes, root.get_node("SquadRegistry").get_alive_squads_of_team(0).size()])
 	bm.battle_ended.connect(_on_end)
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	var frames := 0
 	while ended_count == 0 and frames < max_ticks:
 		await process_frame

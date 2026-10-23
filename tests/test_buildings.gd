@@ -64,7 +64,7 @@ func _main() -> void:
 	# Прозрачность: на расстановке включена, после «В БОЙ» — выключена, постройки непрозрачны
 	_check("расстановка: прозрачность включена", battle.fader.enabled)
 	tower.self_modulate.a = 0.35
-	battle._on_start_pressed()
+	battle._on_start_pressed(false)
 	await _frames(30)
 	_check("бой: прозрачность выключена, постройки непрозрачны", not battle.fader.enabled \
 		and is_equal_approx(tower.self_modulate.a, 1.0))

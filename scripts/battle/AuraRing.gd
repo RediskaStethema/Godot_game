@@ -3,7 +3,7 @@ extends Node2D
 
 # Аура на земле в бою — тонкое кольцо по радиусу действия, кодом (решение пользователя 23.10.2026: кольца листов
 # пакета banner_aura / aura_plague / aura_pleasure — тусклые, мутные от растяжки, срезаны краем кадра, символы
-# прыгали по кругу). Линия в пиксель с мягким ореолом, по кругу медленно бегут огоньки; дышит. Радиус — ровно
+# прыгали по кругу). Линия в пиксель с мягким ореолом, по кругу медленно бегут огоньки. Радиус — ровно
 # радиус механики (расстояние в px мира — круг, как круг зоны здания на расстановке). Только вид.
 #   follow_squad(отряд, радиус, вид) — аура знамени: идёт за центром живых бойцов, отряд пал — гаснет
 #   at(точка, радиус, вид) — аура здания на его месте
@@ -12,7 +12,10 @@ extends Node2D
 
 const FADE_IN: float = 0.5
 const FADE_OUT: float = 0.4
-const BREATH: float = 2.6          # период «дыхания», сек
+# Мигание (решение пользователя 23.10.2026: «знамя мигает»): «дыхание» яркостью убрано, огоньки — без округления
+# до пикселя (прыгали), кольцо знамени идёт за центром отряда плавно (FOLLOW_RATE) и после хода бойцов
+# (process_priority: в кадр тика бойцы стоят в логической позиции на шаг впереди — кольцо скакало)
+const FOLLOW_RATE: float = 8.0     # 1/с — догоняет центр отряда (боец пал — центр сдвигается скачком)
 const RUN_PERIOD: float = 9.0      # огонёк обходит кольцо, сек
 const SEGMENTS: int = 72
 const LINE_ALPHA: float = 0.75
@@ -60,6 +63,7 @@ static func _make(r: float, kind: String, target: Node2D) -> AuraRing:
 		_add = CanvasItemMaterial.new()
 		_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	a.material = _add
+	a.process_priority = 1
 	parent.add_child(a)
 	return a
 
@@ -78,7 +82,7 @@ func _process(delta: float) -> void:
 			squad = null
 			dismiss()
 		else:
-			global_position = _squad_center()
+			global_position = global_position.lerp(_squad_center(), 1.0 - exp(-FOLLOW_RATE * delta))
 	if _dismiss_left >= 0.0:
 		_dismiss_left -= delta
 		if _dismiss_left <= 0.0:
@@ -100,7 +104,7 @@ func _alpha() -> float:
 	var a := minf(_t / FADE_IN, 1.0)
 	if _dismiss_left >= 0.0:
 		a *= _dismiss_left / FADE_OUT
-	return a * lerpf(0.75, 1.0, 0.5 + 0.5 * sin(_t * TAU / BREATH))
+	return a
 
 func _draw() -> void:
 	var l: Dictionary = LOOKS[look]
@@ -112,13 +116,13 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, radius, Color(edge, FILL_ALPHA * a))
 	for g in GLOW:
 		draw_arc(Vector2.ZERO, radius, 0.0, TAU, SEGMENTS, Color(edge, g[1] * a), g[0])
-	draw_arc(Vector2.ZERO, radius, 0.0, TAU, SEGMENTS, Color(edge, LINE_ALPHA * a), 1.0)
+	draw_arc(Vector2.ZERO, radius, 0.0, TAU, SEGMENTS, Color(edge, LINE_ALPHA * a), 1.0, true)
 	# Огоньки бегут по кругу с коротким хвостом
 	var n: int = l["motes"]
 	for i in n:
 		var base := TAU * (float(i) / n + _t / RUN_PERIOD)
 		for k in 4:
 			var ang := base - k * 0.035
-			var p := (Vector2(cos(ang), sin(ang)) * radius).round()
+			var p := Vector2(cos(ang), sin(ang)) * radius
 			var s := 3.0 if k == 0 else 2.0
-			draw_rect(Rect2(p - Vector2(s, s) * 0.5, Vector2(s, s)), Color(core if k == 0 else edge, a * (1.0 - k * 0.25)))
+			draw_circle(p, s * 0.5, Color(core if k == 0 else edge, a * (1.0 - k * 0.25)), true, -1.0, true)

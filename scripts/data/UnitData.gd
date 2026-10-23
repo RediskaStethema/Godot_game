@@ -106,7 +106,7 @@ extends Resource
 @export var shield_ratio: float = 0.0
 @export var move_speed_multiplier: float = 1.0
 @export var banner_aura_bonus: float = 0.0
-const BANNER_RADIUS: float = 160.0
+const BANNER_RADIUS: float = 107.0   # 23.10.2026 (решение пользователя): было 160 — круг на пол-поля
 # Полный состав отряда (CardData.unit_count) — до него лечение возвращает павших
 @export var squad_size: int = 0
 # Уровень отряда: сколько раз его улучшили картой того же отряда (0..MAX_SQUAD_LEVEL)

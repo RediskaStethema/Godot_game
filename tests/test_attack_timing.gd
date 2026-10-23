@@ -291,9 +291,15 @@ func _main() -> void:
 				cells[c] = true
 		var sizes = _group_sizes(cells)
 		groups_text.append(str(sizes))
-		groups_ok = groups_ok and sizes.size() == f["clusters"] 			and sizes.all(func(n): return n >= f["size"][0] and n <= f["size"][1])
-	_check("карта одна при другом seed забега; группы как в теме: %s" % ", ".join(groups_text),
-		same_map and groups_ok)
+		# Полоса стены владений (IsoGridRenderer._on_wall_line) — грунт: задетая ею группа меньше или пропала
+		var full := sizes.filter(func(n): return n >= f["size"][0])
+		groups_ok = groups_ok and sizes.size() <= f["clusters"] and full.size() >= f["clusters"] - 2 			and sizes.all(func(n): return n <= f["size"][1])
+	var band_clear := true
+	for c in terrain:
+		if r._on_wall_line(c) and terrain[c][0] is Dictionary and terrain[c][0].has("prop"):
+			band_clear = false
+	_check("карта одна при другом seed забега; группы как в теме (полоса стены — грунт): %s" % ", ".join(groups_text),
+		same_map and groups_ok and band_clear)
 
 	# 5. Руины готики: высокие — только вне боевой полосы (бойцы не ходят «сквозь» здания)
 	var tall_total = 0

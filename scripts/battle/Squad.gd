@@ -73,8 +73,9 @@ func _reform() -> void:
 # Шеренга (до FORMATION_MAX_RANK бойцов) — вдоль оси row, ряды уходят в тыл
 # вдоль оси наступления. Первый ряд — ближе к противнику.
 const FORMATION_MAX_RANK: int = 5   # 15 бойцов — 3 ряда по 5
-const RANK_SPACING: float = 14.0   # между бойцами в шеренге, px
-const FILE_SPACING: float = 12.0   # между рядами, px
+# 23.10.2026 (решение пользователя: бойцы сливались в одно пятно) — было 14 / 12
+const RANK_SPACING: float = 18.0   # между бойцами в шеренге, px
+const FILE_SPACING: float = 15.0   # между рядами, px
 
 func _get_formation_offsets(count: int) -> Array[Vector2]:
 	var offsets: Array[Vector2] = []

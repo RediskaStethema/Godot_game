@@ -124,7 +124,7 @@ func _main() -> void:
 	_check("справка: отряд %s, цитадель %s, повторный клик — закрыта %s" % [squad_ok, cit_ok, closed],
 		squad_ok and cit_ok and closed)
 
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	_click(insp, front_sq.soldiers[0].global_position)
 	_check("в бою клик по отряду справку не открывает", not insp.is_info_visible())
 	var tac_front = _squad_at(squads, Vector2i(2, 0)).soldiers[0]

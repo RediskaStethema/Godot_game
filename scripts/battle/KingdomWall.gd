@@ -11,7 +11,9 @@ extends Node2D
 # уровень такой же картой и события «здание +1 уровень» — как у зданий.
 #   KingdomWall.build(контейнер, сетка, карта) — звенья в y-sort контейнере бойцов
 
-const MARGIN: float = 0.4        # клетки: от края рамки до стены
+# Клетки: от края рамки до стены. 23.10.2026 (решение пользователя: «стена задевает здания») — было 0.4: основание
+# здания на крайней клетке шире клетки, переднее звено со столбами ложилось на него
+const MARGIN: float = 0.65
 const SEG_LEN: float = 0.5       # клетки: длина звена
 const HEIGHT: float = 16.0       # px: высота стены
 const POST_HEIGHT: float = 22.0  # px: столб на стыке звеньев
@@ -48,12 +50,21 @@ func refresh_stats() -> void:
 func get_citadel_shield() -> float:
 	return stats.get("shield", 0.0)
 
-# Контур: рамка королевства 4×4 и ряд цитадели, с отступом MARGIN
+# Контур стены в координатах сетки (u — колонка, v — ряд): рамка королевства и ряд цитадели, с отступом MARGIN.
+# Карта поля держит полосу вдоль него свободной (IsoGridRenderer._on_wall_line): стену можно купить в любом забеге
+static func contour(g: IsoGrid) -> Rect2:
+	var u0 := IsoGrid.KINGDOM_FRAME_MIN.x - 0.5 - MARGIN
+	var v0 := IsoGrid.KINGDOM_FRAME_MIN.y - 0.5 - MARGIN
+	var u1 := g.grid_width - 0.5 + MARGIN
+	var v1 := maxf(g.grid_height, g.citadel_tile.y + 1) - 0.5 + MARGIN
+	return Rect2(u0, v0, u1 - u0, v1 - v0)
+
 func _build_segments(container: Node, rising: bool) -> void:
-	_u0 = IsoGrid.KINGDOM_FRAME_MIN.x - 0.5 - MARGIN
-	_v0 = IsoGrid.KINGDOM_FRAME_MIN.y - 0.5 - MARGIN
-	_u1 = grid.grid_width - 0.5 + MARGIN
-	_v1 = maxf(grid.grid_height, grid.citadel_tile.y + 1) - 0.5 + MARGIN
+	var r := contour(grid)
+	_u0 = r.position.x
+	_v0 = r.position.y
+	_u1 = r.end.x
+	_v1 = r.end.y
 	var corners := [Vector2(_u0, _v0), Vector2(_u1, _v0), Vector2(_u1, _v1), Vector2(_u0, _v1)]
 	var total := 0
 	for e in 4:

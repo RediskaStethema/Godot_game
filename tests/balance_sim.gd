@@ -242,7 +242,7 @@ func _battle(wave: int, units: Array[UnitData], bought: int) -> Dictionary:
 	var e_squads = sr.get_alive_squads_of_team(GameConstants.TEAM_ENEMY).size()
 	var e_info = "%d/%d/%.2f" % [e_squads, enemies.size(), EnemyWaves.get_stat_mult(wave)]
 	bm.battle_ended.connect(_on_end)
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	var p_start = scene.player_soldiers_at_start
 	var t0 = game_time
 	while not ended and game_time - t0 < MAX_GAME_SECONDS:
@@ -527,7 +527,7 @@ func _campaign_battle() -> int:
 	current_scene = scene
 	await process_frame
 	bm.battle_ended.connect(_on_end)
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	var t0 = game_time
 	var so = root.get_node("SoldierRegistry")
 	while not ended and game_time - t0 < MAX_GAME_SECONDS:

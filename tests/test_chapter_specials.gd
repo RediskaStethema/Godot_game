@@ -59,7 +59,7 @@ func _battle(faction: String, chapter: String, units: Dictionary, buildings: Dic
 	current_scene = scene
 	await process_frame
 	await process_frame
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	await process_frame
 	return scene
 

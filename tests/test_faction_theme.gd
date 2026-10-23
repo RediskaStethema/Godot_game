@@ -111,7 +111,9 @@ func _main() -> void:
 	await _frames(2)
 	_check("пол из картинок-ромбов перерисован", true)
 
-	# 3б. Тема Хаоса: все плиты на месте, поле (анимированное) рисуется; извержение — плита темы, не эффект удара
+	# 3б. Тема Хаоса: все плиты на месте, поле (анимированное — обелиски) рисуется; кристаллов, знамён-плит, окопов
+	#     и извержений нет (решение пользователя 23.10.2026): на местах извержений — красные глаза (10 кадров), на местах
+	#     кристаллов — туман; взрыва клетки при ударе нет
 	var chaos: Dictionary = load("res://scripts/data/FactionTheme.gd").THEMES["chaos"]
 	var paths: Array = []
 	_collect_textures(chaos, paths)
@@ -123,13 +125,15 @@ func _main() -> void:
 	battle.renderer.theme = chaos
 	battle.renderer.refresh_floor()
 	await _frames(2)
-	var blast_tiles = unique.filter(func(p): return "blast_" in p)
+	var removed = unique.filter(func(p): return "blast_" in p or "trench_" in p or "flag_" in p or "/terrain_" in p)
+	var eyes = unique.filter(func(p): return "red_eyes_" in p)
+	var mist_cells: int = battle.renderer._layout.get("mist", []).size()
 	var no_blast_vfx = not load("res://scripts/battle/Vfx.gd").EFFECTS.has("tile_blast")
 	var chaos_citadel: Dictionary = chaos.get("citadel", {})
-	_check("Хаос: %d плит на месте, цитадель — крепость из листа, пол анимирован, извержение — 7 кадров плиты, взрыва клетки при ударе нет, реки нет" % unique.size(),
-		unique.size() == 71 and ResourceLoader.exists(chaos_citadel.get("sheet", "")) and missing.is_empty() and battle.renderer._animated \
+	_check("Хаос: %d плит на месте, цитадель — крепость из листа, пол анимирован, кристаллов / знамён-плит / окопов / извержений нет, глаза — %d кадров, туман на %d клетках, взрыва клетки при ударе нет, реки нет" % [unique.size(), eyes.size(), mist_cells],
+		unique.size() == 45 and eyes.size() == 10 and mist_cells > 0 and ResourceLoader.exists(chaos_citadel.get("sheet", "")) and missing.is_empty() and battle.renderer._animated \
 		and not chaos.has("river") and battle.renderer._layout["rivers"].is_empty() \
-		and blast_tiles.size() == 7 and no_blast_vfx)
+		and removed.is_empty() and no_blast_vfx)
 
 	# 3б. Цитадель Космодесанта — лист citadel_spacemarine_spritesheet: все ряды, снаряд — на кадре вспышки из ствола
 	var sm_cit: Dictionary = theme["citadel"]   # раса без темы → тема Космодесанта
@@ -187,6 +191,23 @@ func _main() -> void:
 	var fallen = citadel.get_sprite_animation()
 	citadel.play_state("hit")
 	_check("0 HP → fall, дальше не меняется", fallen == "fall" and citadel.get_sprite_animation() == "fall")
+
+	# Существа по краям поля (SideCritters, тема "critters"): сколько в теме, все за контуром стены владений и вне
+	# боевой полосы, ходят
+	var critters: Array = battle.units_container.get_children().filter(func(n): return n.get("area") != null)
+	var wall_rect: Rect2 = load("res://scripts/battle/KingdomWall.gd").contour(battle.iso_grid)
+	var outside := critters.all(func(c): return c.area.all(func(cell): return not wall_rect.has_point(Vector2(cell)) \
+		and not battle.renderer._is_battle_strip(cell)))
+	var start_pos: Array = critters.map(func(c): return c.position)
+	var t_walk := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t_walk < 6000:
+		await process_frame
+	var walked := 0
+	for i in critters.size():
+		if critters[i].position != start_pos[i]:
+			walked += 1
+	_check("существа по краям поля: %d, за стеной владений и вне боевой полосы, ходят %d" % [critters.size(), walked],
+		critters.size() == battle.renderer.theme.get("critters", {}).get("count", -1) and outside and walked > 0)
 
 	bm.stop_battle()
 	rm.player_faction = "space_marines"

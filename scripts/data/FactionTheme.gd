@@ -107,8 +107,6 @@ const ANIM_DECOR_SCALE: float = 1.0     # пиксельные знамёна и
 # средняя яркость 0.17 — чуть светлее грунта 0.145), оттенка в теме у неё нет
 # Свет на поле (IsoGridRenderer, слой свечения с ADD-смешением): ключ "glow" у плиты или объекта темы
 const FIRE_GLOW = Color(1.0, 0.55, 0.2, 0.55)
-const LAVA_GLOW = Color(1.0, 0.35, 0.1, 0.6)
-const WARP_GLOW = Color(1.0, 0.18, 0.25, 0.45)
 const GOTHIC_TINT = Color(0.62, 0.70, 0.85)
 # Руины — объект на плите осыпи; "tall" — выше бойца, только вне боевой полосы (IsoGridRenderer._put_feature)
 const SM_GOTHIC_RUINS = [
@@ -188,65 +186,64 @@ const CH_DEBRIS_WALL = [{"texture": CH_TILES + "red_wall.png", "top": 67, "axis"
 const CH_RUINS = [{"texture": CH_TILES + "red_ruins_bunker.png", "top": 48}]
 const CH_CRATER = [{"texture": CH_TILES + "red_crater.png", "top": 20, "no_decor": true}]
 const CH_SMALL_CRATERS = [{"texture": CH_TILES + "red_terrain_craters.png", "top": 10}]
-# Осыпь с кристаллами варпа — редкие одиночные клетки. Кристаллы — лист terrain_sheet_assets.png (решение пользователя 17.10.2026, вместо прежних 12 кадров):
-# 5 кадров, свечение разгорается; tools/tile_frames_from_sheet.py (одно окно по плите — top общий),
-# палитра — tools/palette_match.py --group. Кадры 0→4→1 по кругу: разгорается и гаснет без скачка
-const CH_CRYSTALS = [{"fps": 1.5, "glow": WARP_GLOW, "glow_radius": 55.0, "frames": [
-	{"texture": CH_TILES + "terrain_0.png", "top": 214},
-	{"texture": CH_TILES + "terrain_1.png", "top": 214},
-	{"texture": CH_TILES + "terrain_2.png", "top": 214},
-	{"texture": CH_TILES + "terrain_3.png", "top": 214},
-	{"texture": CH_TILES + "terrain_4.png", "top": 214},
-	{"texture": CH_TILES + "terrain_3.png", "top": 214},
-	{"texture": CH_TILES + "terrain_2.png", "top": 214},
-	{"texture": CH_TILES + "terrain_1.png", "top": 214},
-]}]
-# Обломки и знамя Хаоса — только на стороне игрока; знамя колышется (12 кадров листа)
-const CH_FLAG = [{"fps": 1.0, "flag": true, "frames": [
-	{"texture": CH_TILES + "flag_0.png", "top": 35},
-	{"texture": CH_TILES + "flag_1.png", "top": 38},
-	{"texture": CH_TILES + "flag_2.png", "top": 38},
-	{"texture": CH_TILES + "flag_3.png", "top": 34},
-	{"texture": CH_TILES + "flag_4.png", "top": 41},
-	{"texture": CH_TILES + "flag_5.png", "top": 39},
-	{"texture": CH_TILES + "flag_6.png", "top": 34},
-	{"texture": CH_TILES + "flag_7.png", "top": 21},
-	{"texture": CH_TILES + "flag_8.png", "top": 28},
-	{"texture": CH_TILES + "flag_9.png", "top": 26},
-	{"texture": CH_TILES + "flag_10.png", "top": 27},
-	{"texture": CH_TILES + "flag_11.png", "top": 25},
-]}]
-const CH_TRENCH = [  # окопы
-	{"texture": CH_TILES + "trench_0.png", "top": 13},
-	{"texture": CH_TILES + "trench_1.png", "top": 17},
-	{"texture": CH_TILES + "trench_2.png", "top": 18},
-	{"texture": CH_TILES + "trench_3.png", "top": 27},
-	{"texture": CH_TILES + "trench_4.png", "top": 23},
-	{"texture": CH_TILES + "trench_5.png", "top": 35},
-	{"texture": CH_TILES + "trench_6.png", "top": 37},
-	{"texture": CH_TILES + "trench_7.png", "top": 32},
-	{"texture": CH_TILES + "trench_8.png", "top": 41},
-	{"texture": CH_TILES + "trench_9.png", "top": 35},
-	{"texture": CH_TILES + "trench_10.png", "top": 37},
-	{"texture": CH_TILES + "trench_11.png", "top": 48},
-]
+# Кристаллы (terrain_*), знамёна (flag_*), окопы (trench_*) и извержения (blast_*) убраны — решение пользователя
+# 23.10.2026: «не нравится поле Хаоса, замени на просто красный грунт». Их клетки — красный грунт; списки той же
+# длины, что были (окопы 12 вариантов, остальные — по одному), и стоят на прежних местах в CH_FEATURES / "flags":
+# выбор клеток и плиток идёт одной цепочкой случайных чисел, иначе съехали бы руины, обелиски и кратеры.
+# Файлы прежних плит остались в assets/sprites/tiles/chaos
+const CH_PLAIN = {"texture": CH_TILES + "red_terrain.png", "top": 10, "no_decor": true}
+# На клетках бывших кристаллов — туман (решение пользователя 23.10.2026): дымка в тон поля, как туман Космодесанта
+const CH_MIST = {"color": Color(0.62, 0.3, 0.27, 0.2), "radius": 90.0}   # гуще тумана Космодесанта: клетки одиночные
+const CH_CRYSTALS = [{"texture": CH_TILES + "red_terrain.png", "top": 10, "no_decor": true, "mist": CH_MIST}]
+const CH_FLAG = [{"texture": CH_TILES + "red_terrain.png", "top": 10, "no_decor": true, "flag": true}]
+const CH_TRENCH = [CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN,
+	CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN]
 const CH_OBELISK = [{"fps": 1.2, "no_decor": true, "frames": [   # кристаллы разгораются
 	{"texture": CH_TILES + "obelisk_0.png", "top": 53},
 	{"texture": CH_TILES + "obelisk_1.png", "top": 53},
 	{"texture": CH_TILES + "obelisk_2.png", "top": 53},
 	{"texture": CH_TILES + "obelisk_3.png", "top": 53},
 ]}]
-# Извержение (решение пользователя 17.10.2026: была вспышка при ударах игрока — стала обычной анимированной
-# клеткой): лист assets/Spritesheets/Chaos Tile Blast-Sheet.png, 7 кадров по кругу — трещины → выброс камней →
-# выжженная земля; кадр — ширина грани 232 по центру 127, палитра — tools/palette_match.py --group
-const CH_BLAST = [{"fps": 2.0, "no_decor": true, "glow": LAVA_GLOW, "glow_radius": 85.0, "frames": [
-	{"texture": CH_TILES + "blast_0.png", "top": 92},
-	{"texture": CH_TILES + "blast_1.png", "top": 92},
-	{"texture": CH_TILES + "blast_2.png", "top": 92},
-	{"texture": CH_TILES + "blast_3.png", "top": 92},
-	{"texture": CH_TILES + "blast_4.png", "top": 92},
-	{"texture": CH_TILES + "blast_5.png", "top": 92},
-	{"texture": CH_TILES + "blast_6.png", "top": 92},
+# Места бывших извержений — грунт (сначала там были глаза — решение пользователя 23.10.2026: глаза — посреди кристаллов)
+const CH_BLAST = [CH_PLAIN]
+# Красные глаза в яме — в середине групп светящихся кристаллов (CH_OBELISK "center"; решение пользователя 23.10.2026, кадры пользователя
+# assets/source_sheets/red_eyes → tools/tile_frames_cutout.py --ref red_terrain.png: фон вырезан, одна ширина, цвет — к грунту):
+# red_eyes_0–5 — глаза моргают, 6–9 — щупальца смыкаются, яма затягивается. Цикл: моргнули трижды, яма закрылась,
+# постояла, раскрылась (кадры перетекают — TerrainTiles.draw_theme_tile; у клеток свой сдвиг времени)
+const EYES_GLOW = Color(1.0, 0.18, 0.5, 0.25)   # малиновый варп
+# Порядок кадров: 0–5 ×3 (моргание), 6–9 (закрывается), 9 ×6 (закрыта), 8–6 (раскрывается); 4 к/с — цикл 7.5 с
+const CH_EYES = [{"fps": 4.0, "no_decor": true, "glow": EYES_GLOW, "glow_radius": 45.0, "glow_offset": Vector2(0.0, -6.0),
+		"frames": [
+	{"texture": CH_TILES + "red_eyes_0.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_1.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_2.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_3.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_4.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_5.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_0.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_1.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_2.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_3.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_4.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_5.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_0.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_1.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_2.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_3.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_4.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_5.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_6.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_7.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_8.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_9.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_9.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_9.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_9.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_9.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_9.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_8.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_7.png", "top": 19},
+	{"texture": CH_TILES + "red_eyes_6.png", "top": 19},
 ]}]
 # Руины и декор Хаоса — объекты листа assets/source_sheets/Изометрический набор демонической крепости.png (белый фон вырезан,
 # нарезка tools/props_from_sheet.py, номер объекта — в имени; base — с нарезки), как готика у Космодесанта:
@@ -287,14 +284,15 @@ const CH_WAR_BANNERS = [
 	{"texture": CH_PROPS + "war_banner_3.png", "base": Vector2(41, 246), "scale": WAR_BANNER_SCALE},
 ]
 # Меньше шума (решение пользователя 19.10.2026: глазу негде отдохнуть — между ориентирами нужен ровный
-# грунт, как у Космодесанта): группы руин мельче, обелисков и кристаллов меньше, декора — "decor_chance"
+# грунт, как у Космодесанта): группы руин мельче, обелисков меньше, декора — "decor_chance";
+# окопы, кристаллы и извержения — ровный грунт (CH_PLAIN, 23.10.2026)
 const CH_FEATURES = [
 	{"tiles": CH_CHAOS_RUINS + CH_TRENCH, "clusters": 5, "size": [2, 3]},
 	{"tiles": CH_CRATER, "scatter": 0.04},
 	{"tiles": CH_SMALL_CRATERS, "scatter": 0.06},
 	{"tiles": CH_CRYSTALS, "scatter": 0.02},
-	{"tiles": CH_OBELISK, "clusters": 2, "size": [3, 5]},
-	{"tiles": CH_BLAST, "scatter": 0.03},   # последней — раскладка остальных деталей карты не меняется
+	{"tiles": CH_OBELISK, "clusters": 2, "size": [3, 5], "center": CH_EYES},   # глаза — посреди кристаллов
+	{"tiles": CH_BLAST, "scatter": 0.03},   # грунт (было извержение; последней — раскладка остальных не менялась)
 ]
 
 const THEMES = {
@@ -314,6 +312,7 @@ const THEMES = {
 		"decorations": SM_GOTHIC_DECOR,
 		"grade": {},   # WorldGrade.DEFAULT — сталь в тенях, янтарь в светах
 		"atmosphere": "ash",
+		"critters": {"count": 6},   # существа по краям поля (SideCritters)
 		"building_tint": Color(0.5, 0.56, 0.68),   # блоки зданий без спрайта — готическая сталь
 		"landmarks": {"campfire": SM_CAMPFIRE, "banners": SM_BANNERS, "random_banners": 2,
 			"war_banners": SM_WAR_BANNERS, "war_banner_count": 3},
@@ -341,9 +340,11 @@ const THEMES = {
 		"decor_chance": 6,   # % клеток вне боевой полосы с декором (по умолчанию IsoGridRenderer.DECOR_CHANCE)
 		# Подсветки края силуэта ("unit_rim", Soldier.RIM_SHADER) нет — решение пользователя 20.10.2026:
 		# оранжевый контур на хаоситах лишний, поле и так темнее и глуше
-		# Красное поле: насыщенность выше, тени — в бордо, света — в огонь
-		"grade": {"saturation": 0.86, "shadow_tone": Color(0.028, 0.006, 0.01), "highlights": Color(1.08, 0.96, 0.86)},
+		# Красное поле: тени — в бордо, света — в малиновый варп (палитра «бордо + варп», 23.10.2026; было — в огонь
+		# 1.08 / 0.96 / 0.86); ассеты поля — tools/chaos_warp_grade.py
+		"grade": {"saturation": 0.86, "shadow_tone": Color(0.028, 0.006, 0.01), "highlights": Color(1.06, 0.92, 1.0)},
 		"atmosphere": "embers",
+		"critters": {"count": 6},   # существа по краям поля (SideCritters)
 		"building_tint": Color(0.58, 0.38, 0.36),  # блоки зданий без спрайта — ржаво-бордовый камень
 		"landmarks": {"war_banners": CH_WAR_BANNERS, "war_banner_count": 4},   # костров и знамён-GIF нет
 		# Крепость с черепом — лист assets/source_sheets/Изометрический набор демонической крепости.png (решение

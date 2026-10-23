@@ -38,11 +38,6 @@ const BATTLE_CRY_TIME: float = 0.6
 # Вспышка попадания: боец, получивший урон, на мгновение белеет (общий шейдер на всех)
 const HIT_FLASH_TIME: float = 0.1
 const HIT_FLASH_STRENGTH: float = 0.85   # доля белого поверх цвета спрайта (с тинтом)
-const HIT_FLASH_SHADER = """shader_type canvas_item;
-void fragment() {
-	vec4 c = COLOR;   // уже текстура × modulate — texture() ещё раз дал бы цвет в квадрат
-	COLOR = vec4(mix(c.rgb, vec3(1.0), %.2f), c.a);
-}"""
 # Таймеры уменьшаются на 0.1 — из-за погрешности float 1.0 - 10*0.1 != 0
 const TIMER_EPSILON: float = 0.001
 # Темп бега — по скорости бойца, чтобы ноги не скользили: за цикл анимации бега боец проходит
@@ -52,6 +47,11 @@ const TIMER_EPSILON: float = 0.001
 # 1 рост и ×3: ноги вдвое быстрее, самые быстрые (Scout, Raptor) упираются в ×3 и чуть скользят
 const WALK_CYCLE_HEIGHTS: float = 1.0
 const WALK_SCALE_LIMITS = Vector2(0.5, 3.0)
+# Шаг кодом (решение пользователя 23.10.2026, Screenshot 2026-10-23 172747.png: «бегут по воздуху в одной позе»):
+# в листах бега ступни ходят на 2–4 px при росте бойца на поле ~40 px — шага не видно, строй скользит.
+# На каждом шаге корпус проседает (scale.y от ног — ступни на земле): STEP_DIP роста, STEPS_PER_CYCLE шагов за цикл
+const STEP_DIP: float = 0.06
+const STEPS_PER_CYCLE: float = 2.0
 # Бойцы отряда бьют вразнобой, а не залпом: первый удар после входа в ATTACK — со сдвигом
 # до этой доли перезарядки (доля бойца — по номеру в отряде, золотое сечение: без случайности)
 const ATTACK_STAGGER: float = 0.5
@@ -204,15 +204,28 @@ const ANIMATION_FPS: float = 8.0
 # Набор кадров на папку спрайтов собирается один раз и общий для всех бойцов
 # этого вида (раньше — заново на каждого бойца, с проверкой файлов на диске)
 static var _frames_cache: Dictionary = {}   # sprite_path → SpriteFrames
-static var _hit_flash_material: ShaderMaterial
-# Цвет брони ордена (Chapters "armor"): шейдер сдвигает синие насыщенные пиксели листа в тон ордена;
-# вспышка попадания — в том же шейдере (иначе вспышка снимала бы перекраску). Материалы общие:
-# на орден — обычный и со вспышкой. _base_material — материал спрайта вне вспышки (null — без шейдера)
-const ARMOR_SHADER = """shader_type canvas_item;
+# Один шейдер бойца (материалы общие по ключу "орден|подсветка|контур|вспышка"; _base_material — вне вспышки):
+# - броня ордена (Chapters "armor"): синие насыщенные пиксели листа → тон ордена; только своим Космодесантникам;
+# - подсветка края силуэта (тема "unit_rim" {color, strength}, решение пользователя 19.10.2026): пиксели у границы
+#   фигуры — к тёплому свету, толщина RIM_SCREEN_PX; только бойцам расы игрока не в цветах ордена;
+# - тёмный контур снаружи силуэта (решение пользователя 23.10.2026: бойцы отряда сливались в одно пятно) —
+#   OUTLINE_WORLD_PX px мира у всех бойцов, цвет Palette.OUTLINE; передний боец отделён от заднего линией;
+# - вспышка попадания (HIT_FLASH_STRENGTH белого) — поверх всего, кроме контура.
+# Прозрачность узла (modulate) действует и на контур — она берётся из цвета вершины
+const RIM_SCREEN_PX: float = 1.3
+const OUTLINE_WORLD_PX: float = 0.9
+const UNIT_SHADER = """shader_type canvas_item;
+uniform float armor = 0.0;
 uniform float target_hue = 0.0;
 uniform float sat_mult = 1.0;
 uniform float val_mult = 1.0;
+uniform float rim_px = 0.0;
+uniform vec3 rim_color = vec3(1.0);
+uniform float rim_strength = 0.5;
+uniform float outline_px = 0.0;
+uniform vec4 outline_color : source_color = vec4(0.0, 0.0, 0.0, 0.85);
 uniform float flash = 0.0;
+varying vec4 tint;
 vec3 rgb2hsv(vec3 c) {
 	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
 	vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
@@ -224,38 +237,49 @@ vec3 hsv2rgb(vec3 c) {
 	vec3 p = abs(fract(c.xxx + vec3(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
 	return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
 }
+void vertex() {
+	tint = COLOR;   // modulate узла
+}
 void fragment() {
 	vec4 c = COLOR;   // уже текстура × modulate — texture() ещё раз дал бы цвет в квадрат
-	vec3 hsv = rgb2hsv(c.rgb);
-	float blue = smoothstep(0.50, 0.55, hsv.x) * (1.0 - smoothstep(0.72, 0.77, hsv.x)) * smoothstep(0.2, 0.35, hsv.y);
-	vec3 armor = hsv2rgb(vec3(target_hue, clamp(hsv.y * sat_mult, 0.0, 1.0), clamp(hsv.z * val_mult, 0.0, 1.0)));
-	c.rgb = mix(c.rgb, armor, blue);
-	COLOR = vec4(mix(c.rgb, vec3(1.0), flash), c.a);
+	if (armor > 0.5) {
+		vec3 hsv = rgb2hsv(c.rgb);
+		float blue = smoothstep(0.50, 0.55, hsv.x) * (1.0 - smoothstep(0.72, 0.77, hsv.x)) * smoothstep(0.2, 0.35, hsv.y);
+		vec3 col = hsv2rgb(vec3(target_hue, clamp(hsv.y * sat_mult, 0.0, 1.0), clamp(hsv.z * val_mult, 0.0, 1.0)));
+		c.rgb = mix(c.rgb, col, blue);
+	}
+	if (rim_px > 0.0) {
+		vec2 d = TEXTURE_PIXEL_SIZE * rim_px;
+		float around = min(min(texture(TEXTURE, UV + vec2(d.x, 0.0)).a, texture(TEXTURE, UV - vec2(d.x, 0.0)).a),
+			min(texture(TEXTURE, UV + vec2(0.0, d.y)).a, texture(TEXTURE, UV - vec2(0.0, d.y)).a));
+		c.rgb = mix(c.rgb, rim_color, (1.0 - around) * step(0.5, c.a) * rim_strength);
+	}
+	c.rgb = mix(c.rgb, vec3(1.0), flash);
+	// Выборки — в ветке по параметру материала (одинаков для всех пикселей): в ветке по прозрачности пикселя
+	// производные для мип-уровней не определены — на части видеокарт рябь по краю силуэта
+	float near = 0.0;
+	if (outline_px > 0.0) {
+		vec2 d = TEXTURE_PIXEL_SIZE * outline_px;
+		vec2 e = d * 0.7071;
+		near = max(max(max(texture(TEXTURE, UV + vec2(d.x, 0.0)).a, texture(TEXTURE, UV - vec2(d.x, 0.0)).a),
+			max(texture(TEXTURE, UV + vec2(0.0, d.y)).a, texture(TEXTURE, UV - vec2(0.0, d.y)).a)),
+			max(max(texture(TEXTURE, UV + e).a, texture(TEXTURE, UV - e).a),
+			max(texture(TEXTURE, UV + vec2(e.x, -e.y)).a, texture(TEXTURE, UV + vec2(-e.x, e.y)).a)));
+	}
+	if (outline_px > 0.0 && c.a < 0.99) {
+		float oa = outline_color.a * smoothstep(0.15, 0.6, near) * tint.a;
+		// контур под фигурой: полупрозрачный край спрайта ложится на него
+		float a = c.a + oa * (1.0 - c.a);
+		c.rgb = a > 0.0 ? (c.rgb * c.a + outline_color.rgb * oa * (1.0 - c.a)) / a : c.rgb;
+		c.a = a;
+	}
+	COLOR = c;
 }"""
-static var _armor_materials: Dictionary = {}   # "орден:вспышка" → ShaderMaterial
-# Подсветка края силуэта (решение пользователя 19.10.2026: тёмно-красные бойцы Хаоса терялись на красном поле):
-# пиксели у границы фигуры (сосед на rim_px пикселей текстуры прозрачен) — к тёплому свету; толщина —
-# RIM_SCREEN_PX экранных пикселей при любом размере листа. Тема расы — ключ "unit_rim" {color, strength},
-# только бойцам этой расы. Вспышка попадания — в том же шейдере (иначе на вспышку подсветка пропадала бы)
-const RIM_SCREEN_PX: float = 1.3
-const RIM_SHADER = """shader_type canvas_item;
-uniform float rim_px = 6.0;
-uniform vec3 rim_color = vec3(1.0);
-uniform float strength = 0.5;
-uniform float flash = 0.0;
-void fragment() {
-	vec4 c = COLOR;   // уже текстура × modulate
-	vec2 d = TEXTURE_PIXEL_SIZE * rim_px;
-	float around = min(min(texture(TEXTURE, UV + vec2(d.x, 0.0)).a, texture(TEXTURE, UV - vec2(d.x, 0.0)).a),
-		min(texture(TEXTURE, UV + vec2(0.0, d.y)).a, texture(TEXTURE, UV - vec2(0.0, d.y)).a));
-	float edge = (1.0 - around) * step(0.5, c.a);
-	c.rgb = mix(c.rgb, rim_color, edge * strength);
-	COLOR = vec4(mix(c.rgb, vec3(1.0), flash), c.a);
-}"""
-static var _rim_materials: Dictionary = {}   # "толщина:вспышка" → ShaderMaterial
-static var _rim_shader: Shader = null
+static var _unit_materials: Dictionary = {}   # ключ "орден|подсветка|контур|вспышка" → ShaderMaterial
+static var _unit_shader: Shader = null        # один на все: в Compatibility шейдер компилируется при первом показе
 var _rim_px: int = 0   # толщина подсветки края в пикселях текстуры (0 — без подсветки)
-static var _armor_shader: Shader = null        # один на все: в Compatibility шейдер компилируется при первом показе
+var _outline_px: int = 0   # толщина контура в пикселях текстуры
+var _rim: Dictionary = {}
 var _base_material: Material = null
 var _armor_chapter: String = ""   # орден, в цвет которого перекрашен боец ("" — нет)
 var _flash_left: float = 0.0   # сек до конца вспышки попадания (_process: время дерева, на паузе стоит)
@@ -290,6 +314,11 @@ func _process(delta: float) -> void:
 		_flash_left -= delta
 		if _flash_left <= 0.0:
 			sprite.material = _base_material
+	if sprite.animation == &"walk" and _leap_prev >= 1.0:
+		# Шаг: плавная волна — ниже всего на ступне, выпрямился к середине шага (резкая посадка дёргала);
+		# и в бою, и на построении (BattleScene._deploy_army — бой ещё не идёт)
+		var phase := (sprite.frame + sprite.frame_progress) / sprite.sprite_frames.get_frame_count(&"walk")
+		sprite.scale.y = sprite.scale.x * (1.0 - STEP_DIP * 0.5 * (1.0 + cos(TAU * STEPS_PER_CYCLE * phase)))
 	if not _has_tick_from or current_state == State.DEAD or not BattleManager.is_battle_running():
 		return
 	if not _drawn_between:
@@ -315,6 +344,7 @@ func restore_tick_position() -> void:
 # темп бега ставит _move_towards / _strafe_around сразу после смены (walk_anim_scale)
 func _on_animation_changed() -> void:
 	sprite.speed_scale = 1.0
+	sprite.scale.y = sprite.scale.x   # шаг (STEP_DIP) — только у бега
 
 # Множитель скорости анимации бега при скорости speed (px/с): цикл листа — за WALK_CYCLE_HEIGHTS ростов
 # (зовётся каждый тик у каждого идущего — длина цикла посчитана в _load_animations)
@@ -361,6 +391,17 @@ func _load_animations() -> void:
 	sprite.modulate = data.tint
 	queue_redraw()
 	sprite.play("idle")
+
+# Построение перед боем (BattleScene._deploy_army, только вид: бой ещё не идёт, отряд двигает твин узла отряда):
+# идёт со скоростью speed px/с в сторону direction; встал — стойка лицом к врагу
+func deploy_walk(speed: float, direction: Vector2) -> void:
+	_play_animation("walk")
+	sprite.speed_scale = walk_anim_scale(speed)
+	_face(direction)
+
+func deploy_stand() -> void:
+	_play_animation("idle")
+	sprite.flip_h = team == GameConstants.TEAM_ENEMY
 
 # Бег и стойка — с кадра по номеру бойца в отряде (attack_stagger): отряд шагал в ногу, все бойцы на одном
 # кадре, и строй из 9–15 одинаковых фигурок читался как замерший спрайт (23.10.2026). Только вид
@@ -940,11 +981,11 @@ func _shoot_projectile(to: Node2D, aim_offset: Vector2) -> Projectile:
 # Ствол в мире (metadata/muzzle листа — от центра низа кадра; нет — у груди)
 func _muzzle_point() -> Vector2:
 	var frames := sprite.sprite_frames
-	var base_h := TARGET_SPRITE_HEIGHT / sprite.scale.y   # высота кадра idle
+	var base_h := TARGET_SPRITE_HEIGHT / sprite.scale.x   # высота кадра idle (scale.y проседает на шаге)
 	var muzzle: Vector2 = frames.get_meta("muzzle", Vector2(base_h * 0.3, -base_h * 0.5))
 	if sprite.flip_h:
 		muzzle.x = -muzzle.x
-	return global_position + muzzle * sprite.scale
+	return global_position + muzzle * sprite.scale.x
 
 # Урон одного удара: аура союзников + разброс damage_variance
 func _roll_damage() -> float:
@@ -1015,54 +1056,46 @@ func take_damage(amount: float, flash: bool = true) -> void:
 		retreat_timer = data.retreat_duration
 		transition_to(State.RETREATING)
 
-# Броня в цвет ордена игрока — только своим Космодесантникам (у врагов и Ultramarines — как нарисовано)
+# Материал бойца: броня ордена (только своим Космодесантникам; у врагов и Ultramarines без "armor" — как нарисовано),
+# подсветка края (тема "unit_rim"), контур — у всех
 func _apply_chapter_colors() -> void:
 	_armor_chapter = ""
-	_base_material = null
 	if team == GameConstants.TEAM_PLAYER and data.faction == Chapters.FACTION and data.chapter_armor:
 		if Chapters.get_chapter(RunManager.player_chapter).has("armor"):
 			_armor_chapter = RunManager.player_chapter
-			_base_material = _armor_material(_armor_chapter, false)
-			_armor_material(_armor_chapter, true)   # вспышка — заранее, не на первом попадании в бою
 	_rim_px = 0
-	var rim: Dictionary = FactionTheme.current().get("unit_rim", {})
-	if _armor_chapter == "" and not rim.is_empty() and data.faction == RunManager.player_faction:
+	_rim = FactionTheme.current().get("unit_rim", {})
+	if _armor_chapter == "" and not _rim.is_empty() and data.faction == RunManager.player_faction:
 		_rim_px = maxi(1, roundi(RIM_SCREEN_PX / maxf(sprite.scale.x, 0.01)))
-		_base_material = _rim_material(_rim_px, false, rim)
-		_rim_material(_rim_px, true, rim)
+	_outline_px = maxi(1, roundi(OUTLINE_WORLD_PX / maxf(sprite.scale.x, 0.01)))
+	_base_material = _unit_material(false)
+	_unit_material(true)   # вспышка — заранее, не на первом попадании в бою
 	sprite.material = _base_material
 
-static func _rim_material(px: int, flashing: bool, rim: Dictionary = {}) -> ShaderMaterial:
-	var key := "%d:%s" % [px, flashing]
-	if not _rim_materials.has(key):
-		if _rim_shader == null:
-			_rim_shader = Shader.new()
-			_rim_shader.code = RIM_SHADER
+func _unit_material(flashing: bool) -> ShaderMaterial:
+	var key := "%s|%d|%d|%s" % [_armor_chapter, _rim_px, _outline_px, flashing]
+	if not _unit_materials.has(key):
+		if _unit_shader == null:
+			_unit_shader = Shader.new()
+			_unit_shader.code = UNIT_SHADER
 		var m := ShaderMaterial.new()
-		m.shader = _rim_shader
-		var col: Color = rim.get("color", Color.WHITE)
-		m.set_shader_parameter("rim_px", float(px))
-		m.set_shader_parameter("rim_color", Vector3(col.r, col.g, col.b))
-		m.set_shader_parameter("strength", rim.get("strength", 0.5))
+		m.shader = _unit_shader
+		if _armor_chapter != "":
+			var armor: Dictionary = Chapters.get_chapter(_armor_chapter).get("armor", {})
+			m.set_shader_parameter("armor", 1.0)
+			m.set_shader_parameter("target_hue", armor.get("hue", 0.6))
+			m.set_shader_parameter("sat_mult", armor.get("sat", 1.0))
+			m.set_shader_parameter("val_mult", armor.get("val", 1.0))
+		if _rim_px > 0:
+			var col: Color = _rim.get("color", Color.WHITE)
+			m.set_shader_parameter("rim_px", float(_rim_px))
+			m.set_shader_parameter("rim_color", Vector3(col.r, col.g, col.b))
+			m.set_shader_parameter("rim_strength", _rim.get("strength", 0.5))
+		m.set_shader_parameter("outline_px", float(_outline_px))
+		m.set_shader_parameter("outline_color", Palette.OUTLINE)
 		m.set_shader_parameter("flash", HIT_FLASH_STRENGTH if flashing else 0.0)
-		_rim_materials[key] = m
-	return _rim_materials[key]
-
-static func _armor_material(chapter_id: String, flashing: bool) -> ShaderMaterial:
-	var key := "%s:%s" % [chapter_id, flashing]
-	if not _armor_materials.has(key):
-		var armor: Dictionary = Chapters.get_chapter(chapter_id).get("armor", {})
-		if _armor_shader == null:
-			_armor_shader = Shader.new()
-			_armor_shader.code = ARMOR_SHADER
-		var m := ShaderMaterial.new()
-		m.shader = _armor_shader
-		m.set_shader_parameter("target_hue", armor.get("hue", 0.6))
-		m.set_shader_parameter("sat_mult", armor.get("sat", 1.0))
-		m.set_shader_parameter("val_mult", armor.get("val", 1.0))
-		m.set_shader_parameter("flash", HIT_FLASH_STRENGTH if flashing else 0.0)
-		_armor_materials[key] = m
-	return _armor_materials[key]
+		_unit_materials[key] = m
+	return _unit_materials[key]
 
 # Только визуал: гаснет по времени дерева в _process (на паузе стоит, ×2 ускоряет), а не по тику боя —
 # иначе вспышка последнего тика осталась бы гореть после конца боя. Повторный урон продлевает.
@@ -1070,17 +1103,7 @@ static func _armor_material(chapter_id: String, flashing: bool) -> ShaderMateria
 func _flash_hit() -> void:
 	if not is_inside_tree():
 		return
-	if _hit_flash_material == null:
-		var shader := Shader.new()
-		shader.code = HIT_FLASH_SHADER % HIT_FLASH_STRENGTH
-		_hit_flash_material = ShaderMaterial.new()
-		_hit_flash_material.shader = shader
-	if _armor_chapter != "":
-		sprite.material = _armor_material(_armor_chapter, true)
-	elif _rim_px > 0:
-		sprite.material = _rim_material(_rim_px, true)
-	else:
-		sprite.material = _hit_flash_material
+	sprite.material = _unit_material(true)
 	_flash_left = HIT_FLASH_TIME
 
 # Apothecarion рядом: шанс встать с долей HP (один раз за бой, только игрок)

@@ -49,7 +49,7 @@ func _battle(god: String, wave: int = 1, type: String = BATTLE) -> Dictionary:
 	current_scene = scene
 	await process_frame
 	await process_frame
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	var reg = root.get_node("SoldierRegistry")
 	var enemies: Array = []
 	for e in reg.get_alive_soldiers_of_team(1):
