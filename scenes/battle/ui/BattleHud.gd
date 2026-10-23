@@ -2,15 +2,13 @@ class_name BattleHud
 extends Control
 
 # Интерфейс боя поверх поля (в CanvasLayer): шапка (волна, Req, цитадель,
-# сообщение, кнопка «В БОЙ») и панель синергий справа снизу рядом со скамейкой.
+# сообщение, кнопка «В БОЙ»). Панели синергий нет (решение пользователя 23.10.2026): синергии армии — в справке
+# цитадели (SquadInspector, клик по цитадели на расстановке), строки — synergy_lines().
 # Кнопка и строка сообщения — ноды из BattleScene.tscn, переставляются сюда.
 
 var _message: Label
 var _requisition: Label
 var _citadel: Label
-var _synergy_panel: PanelContainer
-var _synergy_label: Label
-var _synergy_icons: HBoxContainer   # значки активных синергий, ордена / бога и рядов (пакет интерфейса)
 var _shield_icon: Control           # щит цитадели в шапке — только пока щит есть
 var _artillery_icon: TextureRect    # орудие: готово / перезарядка
 var _speed_button: Button   # скорость боя ×1/×2 (GameSettings.battle_speed)
@@ -26,11 +24,10 @@ var result_banner: Control = null
 const RESULT_PLATE_WIDTH: float = 820.0
 const RESULT_PLATE_FONT_SIZE: int = 44
 
-func setup(wave_text: String, message_label: Label, start_button: Button, synergy_width: float) -> void:
+func setup(wave_text: String, message_label: Label, start_button: Button) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build_header(wave_text, message_label, start_button)
-	_build_synergy_panel(synergy_width)
 	EconomyManager.requisition_changed.connect(_on_requisition_changed)
 	BattleManager.citadel_hp_changed.connect(_on_citadel_changed)
 	_on_requisition_changed(EconomyManager.requisition)
@@ -86,33 +83,6 @@ func _build_header(wave_text: String, message_label: Label, start_button: Button
 	start_button.text = "В БОЙ"
 	start_button.custom_minimum_size = Vector2(180, 0)
 
-func _build_synergy_panel(width: float) -> void:
-	_synergy_panel = UITheme.make_panel()
-	_synergy_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_synergy_panel.offset_left = -width
-	_synergy_panel.offset_top = -UITheme.BENCH_HEIGHT
-	_synergy_panel.offset_right = 0
-	_synergy_panel.offset_bottom = 0
-	add_child(_synergy_panel)
-	var col = VBoxContainer.new()
-	_synergy_panel.add_child(col)
-	var head = HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
-	col.add_child(head)
-	head.add_child(UITheme.make_label("СИНЕРГИИ", "HeaderLabel"))
-	_synergy_icons = HBoxContainer.new()
-	_synergy_icons.add_theme_constant_override("separation", 4)
-	head.add_child(_synergy_icons)
-	_synergy_label = UITheme.make_label("", "SmallLabel")
-	_synergy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_synergy_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# Длинный список (ордены, ряды, доход) прокручивается — иначе уходит за низ экрана
-	var scroll = ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(scroll)
-	scroll.add_child(_synergy_label)
-
 # -------------------------------------------------------
 # API
 # -------------------------------------------------------
@@ -166,17 +136,7 @@ func show_result(title: String, subtitle: String, victory: bool) -> void:
 	tween.tween_property(banner, "modulate:a", 0.0, RESULT_FADE_OUT)
 	tween.tween_callback(banner.queue_free)
 
-# Бой: панель синергий прячется, чтобы было видно всё поле
-func set_battle_mode() -> void:
-	_synergy_panel.visible = false
-
-# Список активных синергий SynergyManager (после calculate_synergies)
-func show_synergies() -> void:
-	_synergy_label.text = "\n".join(synergy_lines())
-	_refresh_synergy_icons(Chapters.get_chapter(RunManager.player_chapter),
-		SynergyManager.count_position_bonuses(SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER)))
-
-# Строки синергий армии (после calculate_synergies): панель синергий и справка цитадели (SquadInspector)
+# Строки синергий армии (после calculate_synergies): справка цитадели (SquadInspector)
 static func synergy_lines() -> Array[String]:
 	var lines: Array[String] = []
 	for s in SynergyManager.active_synergies:
@@ -198,30 +158,6 @@ static func synergy_lines() -> Array[String]:
 	lines.append("%s: %d · доход синергии +%d Req" % [tag.capitalize(), SynergyManager.tag_counts.get(tag, 0),
 		SynergyManager.income_bonus])
 	return lines
-
-# Значки в заголовке панели: синергии (высший уровень тега), орден / бог, ряды с отрядами
-const SYNERGY_ICON_SIZE: float = 26.0
-func _refresh_synergy_icons(chapter: Dictionary, rows: Dictionary) -> void:
-	for c in _synergy_icons.get_children():
-		c.queue_free()
-	var best := {}
-	for s in SynergyManager.active_synergies:
-		best[s["tag"]] = maxi(best.get(s["tag"], 0), s["threshold"])
-	var icons: Array = []
-	for tag in best:
-		icons.append(["synergy", "%s_%d" % [tag, best[tag]], "%s ×%d" % [tag.capitalize(), best[tag]]])
-	if not chapter.is_empty():
-		icons.append(["emblems", chapter["id"], chapter["name"]])
-	for pos in [SynergyManager.FRONT, SynergyManager.BACK]:
-		if rows[pos] > 0:
-			icons.append(["synergy", "front_row" if pos == SynergyManager.FRONT else "rear_row",
-				SynergyManager.POSITION_BONUSES[pos]["name"]])
-	for i in icons:
-		var icon := UITheme.make_icon(i[0], i[1], SYNERGY_ICON_SIZE)
-		if icon:
-			icon.tooltip_text = i[2]
-			icon.mouse_filter = Control.MOUSE_FILTER_PASS
-			_synergy_icons.add_child(icon)
 
 # Орудия игрока: опрос раз в кадр — только надпись, на бой не влияет
 func _process(_delta: float) -> void:

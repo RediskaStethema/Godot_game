@@ -42,7 +42,7 @@ func _ready() -> void:
 	cards_container.offset_top = -PEEK
 	cards_container.offset_bottom = 0
 	cards_container.offset_left = SIDE_MARGIN
-	cards_container.offset_right = -BENCH_RIGHT_RESERVE - SIDE_MARGIN
+	cards_container.offset_right = -SIDE_MARGIN
 	cards_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cards_container.resized.connect(_layout_cards)
 	empty_hint = UITheme.make_label("Рука пуста — карты покупаются в магазине", "DimLabel")
@@ -57,9 +57,6 @@ func _exit_tree() -> void:
 	# Подсказка может быть вне дерева — освобождаем вручную
 	if empty_hint and not empty_hint.is_inside_tree():
 		empty_hint.free()
-
-# Ширина справа, которую занимает панель синергий BattleScene
-const BENCH_RIGHT_RESERVE: float = 380.0
 
 signal card_dropped_on_tile(card: CardData, screen_pos: Vector2)
 # Карта под курсором или в руке (тащим), null — ни одной: BattleScene подсвечивает её отряды на поле

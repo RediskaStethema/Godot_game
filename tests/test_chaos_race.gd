@@ -54,7 +54,7 @@ func _battle(god: String, wave: int = 1, type: String = BATTLE) -> Dictionary:
 	var enemies: Array = []
 	for e in reg.get_alive_soldiers_of_team(1):
 		enemies.append({"faction": e.data.faction, "range": e.current_attack_range, "id": e.data.factory_id})
-	var out = {"enemies": enemies, "panel": scene.hud._synergy_label.text,
+	var out = {"enemies": enemies, "panel": "\n".join(load("res://scenes/battle/ui/BattleHud.gd").synergy_lines()),
 		"income": root.get_node("SynergyManager").income_bonus}
 	for s in reg.get_alive_soldiers_of_team(0):
 		if not out.has(s.data.factory_id):

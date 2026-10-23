@@ -101,7 +101,7 @@ func _build_ui() -> void:
 	if battle_type != RunMapNode.BATTLE:
 		wave_text += " · " + UITheme.NODE_NAMES.get(battle_type, battle_type)
 	wave_text += " · " + Difficulty.level_name(RunManager.difficulty)
-	hud.setup(wave_text, result_label, start_button, bench.BENCH_RIGHT_RESERVE)
+	hud.setup(wave_text, result_label, start_button)
 	hud.set_message("Расставьте отряды")
 	start_button.pressed.connect(_on_start_pressed)
 
@@ -677,9 +677,8 @@ func _on_start_pressed() -> void:
 	# бойцов только на этот бой и исказили бы доли HP
 	BattleManager.battle_in_progress = true
 	_save_placement()
-	# Бой: прячем скамейку и синергии, камера отъезжает на всё поле
+	# Бой: прячем скамейку, камера отъезжает на всё поле
 	bench.visible = false
-	hud.set_battle_mode()
 	_fit_camera(true)
 	hud.set_message("Бой идёт...")
 	_update_expansion()
@@ -697,7 +696,6 @@ func _on_start_pressed() -> void:
 	SynergyManager.apply_meta_bonus(my_soldiers)
 	SynergyManager.apply_commander_bonus(my_soldiers)
 	Building.apply_battle_start()   # здания на соседние отряды: щит, клич, вампиризм, +урон
-	hud.show_synergies()
 
 	player_soldiers_at_start = my_soldiers.size()
 	player_squads_at_start.clear()
@@ -934,12 +932,9 @@ func _exit_tree() -> void:
 # -------------------------------------------------------
 # UI
 # -------------------------------------------------------
-# Во время расстановки — только предпросмотр синергий, бойцам ничего не применяем
+# Во время расстановки — только предпросмотр синергий (справка цитадели), бойцам ничего не применяем
 func _update_synergy_preview() -> void:
-	if hud == null:
-		return
 	SynergyManager.calculate_synergies(SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER))
-	hud.show_synergies()
 
 # Подсказка игроку в шапке + в консоль
 func _show_message(text: String) -> void:
