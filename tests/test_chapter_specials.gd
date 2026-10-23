@@ -165,6 +165,10 @@ func _main() -> void:
 	_check("алтарь: 5 убитых — урон %.2f → %.2f (+5%%); котёл: враг рядом отравлен (%d)" % [
 		dmg0, b0.current_damage, victim.get_status_stacks("poisoned")],
 		absf(b0.current_damage - dmg0 * 1.05) < EPS and victim.get_status_stacks("poisoned") == 1)
+	var ring = cauldron.get("_aura_ring")
+	_check("котёл: в бою — кольцо ауры яда на земле по радиусу %.0f" % cauldron.stats.get("poison_radius", 0.0),
+		ring != null and ring.look == "plague" and is_equal_approx(ring.radius, cauldron.stats.get("poison_radius", 0.0))
+		and ring.get_parent() == scene.renderer)
 
 	# 7. Кузня после боя чинит цитадель (ур.1 — 50 HP), павшая цитадель — нет
 	bm.stop_battle()

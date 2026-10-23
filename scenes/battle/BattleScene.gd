@@ -15,7 +15,6 @@ const SQUAD_SCENE = preload("res://scenes/battle/Squad.tscn")
 # Область экрана под поле: под HUD; при расстановке — до скамейки
 const PLAY_AREA_MARGIN: float = 8.0
 const UPGRADE_FX_RISE := Vector2(0, -48)   # знак карты-улучшения — над головами отряда
-const BANNER_VFX_RADIUS: float = 160.0      # кольцо "banner_aura" при масштабе 1 — такой радиус
 
 var iso_grid: IsoGrid = IsoGrid.new()
 var renderer: IsoGridRenderer = null
@@ -131,6 +130,7 @@ func _build_field() -> void:
 	renderer = IsoGridRenderer.new()
 	renderer.setup(iso_grid)
 	grid_renderer.add_child(renderer)
+	AuraRing.layer = renderer   # кольца аур — на земле, под бойцами
 	# Здания и цитадель полупрозрачны, пока за ними стоят бойцы (только расстановка)
 	fader = OcclusionFader.new()
 	add_child(fader)
@@ -714,13 +714,14 @@ func _on_start_pressed() -> void:
 
 # Щиты в начале боя (только вид): Iron Halo на бойцах, щит стен на цитадели
 func _show_shields(soldiers: Array) -> void:
-	var bannered := {}   # аура знамени — одно кольцо на отряд (знамя у всего отряда), у первого бойца
+	var bannered := {}   # аура знамени — одно кольцо на отряд (знамя у всего отряда), за центром отряда
 	for s in soldiers:
 		if s.shield > 0.0:
 			Vfx.attach(s, "shield", s.data.sprite_scale * Soldier.EFFECT_SCALE)
 		if s.data.banner_aura_bonus > 0.0 and not bannered.has(s.data):
 			bannered[s.data] = true
-			Vfx.attach(s, Vfx.race_kind("banner_aura", s.data.faction), UnitData.BANNER_RADIUS / BANNER_VFX_RADIUS)
+			AuraRing.follow_squad(s.parent_squad, UnitData.BANNER_RADIUS,
+				"banner_chaos" if s.data.faction == "chaos" else "banner")
 	# Щит стен — вспышка по стене владений (решение пользователя 22.10.2026: купол убран); без стены (пассивка
 	# «Освящённые стены») — щит на цитадели
 	if BattleManager.citadel_shield > 0.0 and BattleManager.has_kingdom_wall():
@@ -925,6 +926,8 @@ func _restore_time_scale() -> void:
 # Ушли со сцены посреди боя (в меню) — скорость не должна остаться ускоренной
 func _exit_tree() -> void:
 	BattleManager.kingdom_wall = null
+	if AuraRing.layer == renderer:   # новая сцена боя могла уже поставить свой слой
+		AuraRing.layer = null
 	_restore_time_scale()
 	_end_finale_slowmo()
 

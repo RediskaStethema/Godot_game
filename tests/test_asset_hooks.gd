@@ -269,5 +269,5 @@ func _effects_pack() -> void:
 	var w = bm.kingdom_wall
 	_check("начало боя: метка снята, щит стены — вспышкой по стене владений; вариант расы — _chaos, нет варианта — общий",
 		not _has_tile_glow(s.renderer, "strike") and w != null and w.segments.all(func(x): return x.flash_left > 0.0)
-		and V.race_kind("banner_aura", "chaos") == "banner_aura_chaos" and V.race_kind("squad_lost", "chaos") == "squad_lost")
+		and V.race_kind("orbital_strike", "chaos") == "orbital_strike_chaos" and V.race_kind("squad_lost", "chaos") == "squad_lost")
 	bm.stop_battle()

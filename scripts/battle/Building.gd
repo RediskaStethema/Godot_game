@@ -61,7 +61,7 @@ const HELLFIRE_IMPACT_VFX = ["explosion", "hellfire_blast"]
 # Аура в бою (Vfx, цикл; радиус — stats): замедление стены / шипов, яд котла, дымка Slaanesh
 const SKULL_RISE: float = 70.0          # px — череп алтаря встаёт над крышей
 const SKULL_SPREAD: float = 9.0         # px — черепа кладутся в стопку со сдвигом
-var _aura_vfx: Vfx = null
+var _aura_ring: AuraRing = null
 const RECOIL_DISTANCE: float = 12.0        # px — откат ствола при залпе
 const RECOIL_TIME: float = 0.35
 const EXPLOSION_SHAKE: float = 6.0         # px — тряска камеры от взрыва залпа
@@ -230,9 +230,10 @@ func _process(_delta: float) -> void:
 	if sprite:
 		sprite.modulate.a = self_modulate.a
 		hold_idle_outside_battle(sprite)
-	if _aura_vfx != null and not BattleManager.is_battle_running():
-		Vfx.dismiss(_aura_vfx)
-		_aura_vfx = null
+	if _aura_ring != null and not BattleManager.is_battle_running():
+		if is_instance_valid(_aura_ring):
+			_aura_ring.dismiss()
+		_aura_ring = null
 		queue_redraw()
 
 # Вне схватки (расстановка, итог) стойка здания — один кадр idle, в бою — анимация (решение пользователя
@@ -251,10 +252,10 @@ static func hold_idle_outside_battle(s: AnimatedSprite2D) -> void:
 # -------------------------------------------------------
 func _draw() -> void:
 	draw_ground_shadow(self, Vector2.ZERO, IsoGrid.TILE_WIDTH * GROUND_SHADOW_WIDTH)
-	if _aura_vfx == null and stats.get("slow_radius", 0.0) > 0.0:   # в бою — кольцо ауры (_show_aura)
+	if _aura_ring == null and stats.get("slow_radius", 0.0) > 0.0:   # в бою — кольцо ауры (_show_aura)
 		draw_circle(Vector2.ZERO, stats["slow_radius"], SLOW_AURA_COLOR)
 		draw_arc(Vector2.ZERO, stats["slow_radius"], 0.0, TAU, 48, SLOW_AURA_LINE, 1.5, true)
-	if _aura_vfx == null and stats.get("poison_radius", 0.0) > 0.0:
+	if _aura_ring == null and stats.get("poison_radius", 0.0) > 0.0:
 		draw_circle(Vector2.ZERO, stats["poison_radius"], POISON_AURA_COLOR)
 		draw_arc(Vector2.ZERO, stats["poison_radius"], 0.0, TAU, 48, POISON_AURA_LINE, 1.5, true)
 	if sprite:   # свой спрайт — блоков и нарисованных стволов нет
@@ -563,19 +564,19 @@ static func apply_battle_start() -> void:
 				for s in sq.soldiers:
 					b._apply_start_effect(s)
 
-# Аура здания в бою — кольцо листа вместо круга (только вид; снимает _process после боя)
+# Аура здания в бою — кольцо на земле вместо круга расстановки (AuraRing; только вид; снимает _process после боя)
 func _show_aura() -> void:
 	var kind := ""
 	var r: float = 0.0
 	if stats.get("poison_radius", 0.0) > 0.0:
-		kind = "aura_plague"
+		kind = "plague"
 		r = stats["poison_radius"]
 	elif stats.get("slow_radius", 0.0) > 0.0:
-		kind = "aura_pleasure"   # замедляет только Святилище Slaanesh: стена владений — преграда (KingdomWall)
+		kind = "pleasure"   # замедляет только Святилище Slaanesh: стена владений — преграда (KingdomWall)
 		r = stats["slow_radius"]
-	if kind == "" or _aura_vfx != null:
+	if kind == "" or _aura_ring != null:
 		return
-	_aura_vfx = Vfx.attach(self, kind, r)
+	_aura_ring = AuraRing.at(global_position, r, kind)
 	queue_redraw()
 
 func _apply_start_effect(s: Soldier) -> void:

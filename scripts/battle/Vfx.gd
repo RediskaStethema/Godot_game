@@ -125,27 +125,14 @@ const EFFECTS = {
 		"frames": 6, "fps": 8.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 96)},
 	"upgrade_icon_of_chaos":   {"sheet": FX_DIR + "upgrades/upgrade_icon_of_chaos.png", "size": Vector2i(128, 128),
 		"frames": 6, "fps": 8.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 64)},
-	# аура знамени на носителе весь бой (кольцо 165 px листа → радиус UnitData.BANNER_RADIUS)
-	"banner_aura":       {"sheet": FX_DIR + "banner_aura/spritesheet.png", "size": Vector2i(192, 128), "frames": 12,
-		"fps": 8.0, "add": true, "loop": true, "scale": 1.9, "pivot": Vector2(96, 64), "behind": true,
-		"modulate": Color(1, 1, 1, 0.35)},
-	"banner_aura_chaos": {"sheet": FX_DIR + "banner_aura/banner_aura_chaos.png", "size": Vector2i(192, 128), "frames": 12,
-		"fps": 8.0, "add": true, "loop": true, "scale": 1.9, "pivot": Vector2(96, 64), "behind": true,
-		"modulate": Color(1, 1, 1, 0.35)},
+	# ауры знамени и зданий в бою — AuraRing (кольцо кодом), не листы
 	# Orbital Strike: удар в начале боя (метка до боя — TileGlow "strike")
 	"orbital_strike": {"sheet": FX_DIR + "orbital_strike/spritesheet.png", "size": Vector2i(256, 384), "frames": 16,
 		"fps": 18.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(128, 340)},
 	# удар варпа: в пакете кадры 8+9 и 10+11 — половинки одной широкой картинки, fx_fix склеил (кадр 512)
 	"orbital_strike_chaos": {"sheet": FX_DIR + "warp_strike/spritesheet.png", "size": Vector2i(512, 384), "frames": 14,
 		"fps": 18.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(256, 340)},
-	# здания: ауры в бою (кольцо листа 190 px → радиус ауры; ауры стены нет — KingdomWall),
-	# ремонт цитадели, череп алтаря
-	"aura_plague":   {"sheet": FX_DIR + "buildings/aura_plague.png", "size": Vector2i(216, 144), "frames": 12,
-		"fps": 8.0, "add": true, "loop": true, "scale": 1.0 / 95.0, "pivot": Vector2(108, 72), "behind": true,
-		"modulate": Color(1, 1, 1, 0.6)},
-	"aura_pleasure": {"sheet": FX_DIR + "buildings/aura_pleasure.png", "size": Vector2i(216, 144), "frames": 12,
-		"fps": 8.0, "add": true, "loop": true, "scale": 1.0 / 95.0, "pivot": Vector2(108, 72), "behind": true,
-		"modulate": Color(1, 1, 1, 0.6)},
+	# здания: ремонт цитадели, череп алтаря
 	"forge_repair":  {"sheet": FX_DIR + "buildings/forge_repair.png", "size": Vector2i(256, 256), "frames": 10,
 		"fps": 14.0, "add": true, "loop": false, "scale": 0.45, "pivot": Vector2(128, 200),
 		"modulate": Color(1, 1, 1, 0.75)},

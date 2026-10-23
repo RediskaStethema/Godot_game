@@ -111,6 +111,16 @@ func _main() -> void:
 	var far_bonus = other.get_aura_damage_bonus()
 	_check("знамя: сосед +15%%, далеко — нет (%.2f / %.2f)" % [near_bonus, far_bonus], \
 		is_equal_approx(near_bonus, 0.15) and far_bonus < 0.15)
+	# Вид ауры — кольцо кодом на земле (AuraRing), одно на отряд, по радиусу знамени, за отрядом
+	# (показ щитов и аур — как при «В БОЙ»; бой не начинаем: дальше карты событий на расстановке)
+	battle._show_shields(root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0))
+	var rings = battle.renderer.get_children().filter(func(n): return n.get_script() != null \
+		and n.get_script().get_global_name() == "AuraRing")
+	_check("знамя: кольцо ауры на земле — %d, радиус %s, за отрядом знамени" % [rings.size(),
+		rings[0].radius if rings.size() > 0 else "-"],
+		rings.size() == 1 and is_equal_approx(rings[0].radius, UnitData.BANNER_RADIUS) and rings[0].squad == halo_squad)
+	for r in rings:
+		r.queue_free()
 
 	# 4. Emergency Reinforcements: случайный Common отряд на пустую клетку, на занятую — нет
 	var free_tile = Vector2i(2, 2)
