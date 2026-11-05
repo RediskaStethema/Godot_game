@@ -17,6 +17,7 @@ var continue_button: Button = null
 var info_label: Label = null
 
 func _ready() -> void:
+	AudioManager.play_music("menu")
 	_build_layout()
 	continue_button.visible = SaveManager.has_save()
 	if continue_button.visible:
@@ -45,6 +46,9 @@ func _build_layout() -> void:
 	var new_run = _make_button("НОВЫЙ ЗАБЕГ", "icon_eagle", _on_new_run_pressed)
 	new_run.name = "NewRunButton"
 	col.add_child(new_run)
+	var arsenal = _make_button("АРСЕНАЛ", "icon_eagle", _on_arsenal_pressed)
+	arsenal.name = "ArsenalButton"
+	col.add_child(arsenal)
 	col.add_child(_make_button("НАСТРОЙКИ", "icon_settings", _on_settings_pressed))
 	col.add_child(_make_button("ВЫХОД", "icon_quit", _on_quit_pressed))
 
@@ -177,15 +181,32 @@ func _open_difficulty_select(faction: String, chapter: String) -> void:
 	var dialog = DifficultySelectDialog.new()
 	add_child(dialog)
 	dialog.setup()
-	dialog.chosen.connect(func(level): _start_new_run(faction, chapter, level))
+	dialog.chosen.connect(func(level): _open_start_card_select(faction, chapter, level))
+
+# Открыты стартовые карты (мета-прогрессия) — выбор одной; нет — сразу забег
+func _open_start_card_select(faction: String, chapter: String, level: int) -> void:
+	if MetaProgress.available_start_cards().is_empty():
+		_start_new_run(faction, chapter, level)
+		return
+	var dialog = StartCardDialog.new()
+	add_child(dialog)
+	dialog.setup()
+	dialog.chosen.connect(func(card_id):
+		MetaProgress.select_start_card(card_id)
+		_start_new_run(faction, chapter, level))
 
 func _start_new_run(faction: String, chapter: String, level: int) -> void:
-	BattleManager.reset_run()
+	BattleManager.reset_run()   # + MetaProgress.apply_run_start: «Резервы», стартовая карта
 	RunManager.player_faction = faction
 	RunManager.player_chapter = chapter
 	RunManager.difficulty = level
 	SaveManager.delete_save()
 	RunManager.advance()
+
+func _on_arsenal_pressed() -> void:
+	var dialog = ArsenalDialog.new()
+	add_child(dialog)
+	dialog.setup()
 
 func _on_settings_pressed() -> void:
 	var panel = SettingsPanel.new()

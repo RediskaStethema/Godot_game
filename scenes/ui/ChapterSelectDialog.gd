@@ -24,7 +24,7 @@ func setup() -> void:
 	for c in Chapters.CHAPTERS:
 		var card = _make_card(c)
 		row.add_child(card)
-		if first == null:
+		if first == null and not card.disabled:
 			first = card
 	_focus_taken = true   # фокус — на первый орден, а не на «Отмена»
 	add_button("Отмена", close)
@@ -34,7 +34,9 @@ func _make_card(c: Dictionary) -> Control:
 	var card = Button.new()
 	card.name = "Chapter_" + c["id"]
 	card.custom_minimum_size = CARD_SIZE
-	card.theme_type_variation = "PrimaryButton"
+	var open := MetaProgress.is_chapter_unlocked(c["id"])
+	card.disabled = not open
+	card.theme_type_variation = "PrimaryButton" if open else ""
 	card.pressed.connect(choose.bind(c["id"]))
 	var box = VBoxContainer.new()
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -47,7 +49,8 @@ func _make_card(c: Dictionary) -> Control:
 	var name_label = UITheme.make_label(c["name"], "HeaderLabel")
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(name_label)
-	var desc = UITheme.make_label(c["desc"], "SmallLabel")
+	var desc = UITheme.make_label(c["desc"] if open else MetaProgress.unlock_text(MetaProgress.CHAPTER_UNLOCKS[c["id"]]),
+		"SmallLabel" if open else "DimLabel")
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.custom_minimum_size = Vector2(CARD_SIZE.x - CARD_PADDING * 2.0, 0)
@@ -57,7 +60,7 @@ func _make_card(c: Dictionary) -> Control:
 	return card
 
 func choose(chapter: String) -> void:
-	if _chosen or Chapters.get_chapter(chapter).is_empty():
+	if _chosen or Chapters.get_chapter(chapter).is_empty() or not MetaProgress.is_chapter_unlocked(chapter):
 		return
 	_chosen = true
 	emit_signal("chosen", chapter)

@@ -38,6 +38,21 @@ SPLIT_WINDOW = 0.3   # где искать границу слипшихся к�
 NARROW_PART = 0.35   # кусок уже этой доли шага кадров — не кадр, а хвост кадра слева
 
 
+# Имя анимации → папка и скорость. Варианты по уровню (здания: idle_2, attack_3) — как у базовой;
+# незнакомые (refill) — папка по имени, DEFAULT_FPS
+DEFAULT_FPS = 10.0
+
+
+def folder_of(anim):
+    base = anim.split("_")[0] if anim.split("_")[-1].isdigit() else anim
+    return FOLDERS.get(anim, FOLDERS.get(base, base) + anim[len(base):])
+
+
+def fps_of(anim):
+    base = anim.split("_")[0] if anim.split("_")[-1].isdigit() else anim
+    return FPS.get(anim, FPS.get(base, DEFAULT_FPS))
+
+
 def is_flash(p):
     r, g, b, a = p
     return a > ALPHA_MIN and r > 200 and g > 100 and b < 150 and r - b > 80
@@ -262,11 +277,11 @@ def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_o
         if anim in EXTRA_ROWS:   # один кадр на весь ряд — подпись ряда сотрёт clear_label
             frames = [img.crop((0, y0, img.width, y1))]
         else:
-            frames = [img.crop((c0, y0, c1, y1)) for c0, c1 in find_cells(img, y0, y1, pitch, anim != "death")]
+            frames = [img.crop((c0, y0, c1, y1)) for c0, c1 in find_cells(img, y0, y1, pitch, not anim.startswith("death"))]
         frames = [clear_label(f, anim in EXTRA_ROWS) for f in frames]
-        if anim == "attack":
+        if anim.startswith("attack"):
             frames = [clear_stray_flash(f) for f in frames]
-        elif anim != "death":
+        elif not anim.startswith("death"):
             frames = [clear_strays(f) for f in frames]
         ground = max(body_box(f)[3] for f in frames)
         if anim == "death":
@@ -293,7 +308,7 @@ def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_o
 
     ext, tres_anims, meta = [], [], ""
     for anim, (frames, anchors) in src.items():
-        out_dir = folder / FOLDERS[anim]
+        out_dir = folder / folder_of(anim)
         out_dir.mkdir(parents=True, exist_ok=True)
         for old in out_dir.iterdir():
             if old.name.endswith(".png") or old.name.endswith(".png.import"):
@@ -304,9 +319,9 @@ def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_o
             canvas.alpha_composite(f, (round(canvas_w / 2 - ax), round(canvas_h - ay)))
             canvas.save(out_dir / f"{i}.png")
             (out_dir / f"{i}.png.import").write_text(IMPORT_PARAMS, encoding="utf-8")
-            ext.append(f'[ext_resource type="Texture2D" path="{res_folder}/{FOLDERS[anim]}/{i}.png" id="{anim}_{i}"]')
+            ext.append(f'[ext_resource type="Texture2D" path="{res_folder}/{folder_of(anim)}/{i}.png" id="{anim}_{i}"]')
             refs.append(f'{{\n"duration": 1.0,\n"texture": ExtResource("{anim}_{i}")\n}}')
-            if anim == "attack" and not meta:
+            if anim.startswith("attack") and not meta:
                 flash = muzzle_flash(f)
                 if len(flash) > 10:
                     mx = min(x for x, _ in flash)
@@ -314,8 +329,8 @@ def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_o
                     meta = (f"metadata/muzzle = Vector2({mx - ax:.1f}, {my - ay:.1f})\n"
                             f"metadata/shot_frame = {i}\n")
         tres_anims.append(
-            f'{{\n"frames": [{", ".join(refs)}],\n"loop": {"true" if anim in LOOPING else "false"},\n'
-            f'"name": &"{anim}",\n"speed": {attack_fps if anim == "attack" and attack_fps else FPS[anim]}\n}}')
+            f'{{\n"frames": [{", ".join(refs)}],\n"loop": {"true" if anim.split("_")[0] in LOOPING else "false"},\n'
+            f'"name": &"{anim}",\n"speed": {attack_fps if anim.startswith("attack") and attack_fps else fps_of(anim)}\n}}')
         print(anim, len(frames), "кадров")
 
     if hit_frame is not None:
@@ -333,7 +348,9 @@ if __name__ == "__main__":
     # Ближний бой: --hit-frame N — кадр атаки, на котором удар доходит до цели (Soldier бьёт на нём),
     # --attack-fps F — своя скорость атаки (тяжёлый замах Дредноута),
     # --extra-anim NAME — имя анимации пятого ряда вместо battle_cry (Дредноут: victory),
-    # --rows a,b,c,d[,e] — порядок рядов листа (по умолчанию idle,walk,attack,death; пятое имя — ряд режется по кадрам),
+    # Здания (Building, assets/sprites/buildings/<тип>): --rows idle,attack,idle_2,attack_2,idle_3,attack_3 (или
+#   idle,refill — Казармы); ноги — основание здания, ствол — по оранжевой вспышке в рядах attack*,
+# --rows a,b,c,d[,e] — порядок рядов листа (по умолчанию idle,walk,attack,death; пятое имя — ряд режется по кадрам),
     # --shot-frame N — кадр выстрела, если вспышки на листе нет (Librarian: луч синий),
     # --drop anim:i,j[;anim:k] — убрать кадры анимации (номера после нарезки), выпадающие из цикла
     args = sys.argv[1:]

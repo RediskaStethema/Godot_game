@@ -16,6 +16,7 @@ var _req_label: Label
 var _citadel_label: Label
 
 func _ready() -> void:
+	AudioManager.play_music("shop")   # событие — передышка между боями, как магазин
 	theme = UITheme.get_theme()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_event = RunManager.get_current_event()

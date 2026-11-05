@@ -61,7 +61,7 @@ func reset() -> void:
 
 func refresh_shop() -> void:
 	current_offers.clear()
-	var pool = CardFactory.build_pool()
+	var pool = CardFactory.build_pool().filter(func(c): return MetaProgress.is_card_unlocked(c.id))
 	# Перемешивание Фишера–Йетса от RNG забега
 	var rng: RandomNumberGenerator = RunManager.rng
 	for i in range(pool.size() - 1, 0, -1):
@@ -99,6 +99,8 @@ func load_state(d: Dictionary) -> void:
 # ОБНОВЛЕНИЕ НАБОРА
 # -------------------------------------------------------
 func get_reroll_cost() -> int:
+	if rerolls_done == 0 and MetaProgress.passive_level("munitorum") > 0:
+		return 0   # пассивка «Связи в Муниторуме»: первое обновление за волну бесплатно
 	return roundi(REROLL_BASE_COST * pow(REROLL_COST_GROWTH, rerolls_done))
 
 func try_reroll() -> bool:
@@ -211,7 +213,8 @@ func has_catch_up() -> bool:
 func _roll_catch_up() -> void:
 	var previous = CardFactory.ids_of(catch_up_offers)
 	catch_up_offers.clear()
-	var commons: Array = CardFactory.build_pool().filter(func(c): return c.rarity == "common")
+	var commons: Array = CardFactory.build_pool().filter(func(c): return c.rarity == "common" \
+		and MetaProgress.is_card_unlocked(c.id))
 	var fresh: Array = commons.filter(func(c): return not previous.has(c.id))
 	var seen: Array = commons.filter(func(c): return previous.has(c.id))
 	for group in [fresh, seen]:

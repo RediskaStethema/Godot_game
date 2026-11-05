@@ -37,6 +37,7 @@ var _empty_army_warned: bool = false   # уход без армии — со в�
 func _ready() -> void:
 	# Магазин — главная сцена: при запуске игры он же первый шаг забега
 	RunManager.ensure_started()
+	AudioManager.play_music("shop")
 	_build_layout()
 	add_child(PauseMenu.new())
 	EconomyManager.requisition_changed.connect(_update_requisition_label)
@@ -90,7 +91,9 @@ func _on_purchase_requested(slot_index: int) -> void:
 	# Цену (бесплатная карта 1-й волны, скидка Epic) считает ShopManager
 	var card = ShopManager.try_purchase(slot_index)
 	if not card:
+		AudioManager.play("no_money")
 		return
+	AudioManager.play("buy")
 
 	# Все типы карт идут в руку: отряды и здания выкладываются на тайл,
 	# улучшения — бросаются на свой отряд в бою
@@ -112,6 +115,7 @@ func _sell_card(card: CardData) -> void:
 		return
 	purchased_cards.erase(card)
 	var refund = EconomyManager.sell_card(card)
+	AudioManager.play("sell")
 	_show_message("Продано: %s (+%d Req)" % [card.title, refund])
 	_refresh_catch_up_picker()
 	_refresh_hand()
@@ -255,8 +259,10 @@ func _on_catch_up_reroll() -> void:
 func _on_reroll_pressed() -> void:
 	var cost = ShopManager.get_reroll_cost()
 	if not ShopManager.try_reroll():
+		AudioManager.play("no_money")
 		_show_message("Не хватает Requisition: обновление стоит %d" % cost)
 		return
+	AudioManager.play("reroll")
 	_show_message("Набор обновлён (−%d Req), следующее обновление — %d Req" % [cost, ShopManager.get_reroll_cost()])
 	SaveManager.save_run()
 

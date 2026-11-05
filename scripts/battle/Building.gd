@@ -50,6 +50,14 @@ const SLOW_AURA_LINE = Color(0.45, 0.65, 0.95, 0.30)
 const LEVEL_PIP_SIZE: float = 5.0
 const LEVEL_PIP_GAP: float = 14.0
 const LEVEL_PIP_COLOR = Color(1.0, 0.82, 0.35)
+# Свой спрайт здания (готов к ассетам): <SPRITES_DIR>/<building_type>/frames.tres — лист кадров
+# (tools/sheet_to_frames.py, ноги — основание здания по центру низа кадра). Анимации: idle (цикл),
+# attack — выстрел (турель, орудие; muzzle / shot_frame по оранжевой вспышке), refill — Казармы
+# вернули бойцов; варианты по уровню — idle_2 / attack_3 / …, нет варианта — базовая. Нет листа —
+# здание из блоков тайлсета, как раньше. Ширина непрозрачной части idle — SPRITE_WIDTH клетки
+const SPRITES_DIR: String = "res://assets/sprites/buildings/"
+const SPRITE_WIDTH: float = 0.8
+static var _frames_cache: Dictionary = {}   # building_type → SpriteFrames или null (листа нет)
 
 var card: CardData
 var tile: Vector2i
@@ -62,18 +70,91 @@ var cooldown_left: float = 0.0            # орудие: сек до готов
 var _explosion_point: Vector2             # орудие: где показать вспышку взрыва
 var _explosion_id: int = 0
 var _recoil: float = 0.0                  # орудие: 1 — ствол откачен, гаснет к 0 (только вид)
+var sprite: AnimatedSprite2D = null         # свой спрайт (если есть лист), иначе null — блоки
 
 func setup(building_card: CardData, grid_tile: Vector2i) -> void:
 	card = building_card
 	tile = grid_tile
 	building_type = card.building_type
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_load_sprite()
 	refresh_stats()
 
 # Статы по уровню карты (после улучшения — пересчитать)
 func refresh_stats() -> void:
 	stats = Chapters.apply_building_stats(card.get_building_stats(), RunManager.player_chapter)
+	if sprite and sprite.animation.begins_with("idle"):
+		sprite.play(_level_anim("idle"))   # улучшили — вид нового уровня
 	queue_redraw()
+
+# -------------------------------------------------------
+# СВОЙ СПРАЙТ (если есть лист кадров)
+# -------------------------------------------------------
+static func get_frames(type: String) -> SpriteFrames:
+	if not _frames_cache.has(type):
+		var path := SPRITES_DIR + type + "/frames.tres"
+		_frames_cache[type] = load(path) if ResourceLoader.exists(path) else null
+	return _frames_cache[type]
+
+func _load_sprite() -> void:
+	var frames := get_frames(building_type)
+	if frames == null or not frames.has_animation("idle") or frames.get_frame_count("idle") == 0:
+		return
+	sprite = AnimatedSprite2D.new()
+	sprite.sprite_frames = frames
+	sprite.centered = false
+	var tex: Texture2D = frames.get_frame_texture("idle", 0)
+	var size := tex.get_size()
+	sprite.offset = Vector2(-size.x / 2.0, -size.y)   # основание — центр низа кадра, в точке здания
+	if not frames.has_meta("body_width"):   # непрозрачная ширина idle — один раз на лист
+		var img := tex.get_image()
+		var used: int = img.get_used_rect().size.x if img else 0
+		frames.set_meta("body_width", float(used) if used > 0 else size.x)
+	var k: float = IsoGrid.TILE_WIDTH * SPRITE_WIDTH / maxf(frames.get_meta("body_width"), 1.0)
+	sprite.scale = Vector2(k, k)
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	sprite.animation_finished.connect(func():
+		sprite.flip_h = false   # выстрел влево отразил спрайт — стойка снова как нарисована
+		sprite.play(_level_anim("idle")))
+	add_child(sprite)
+	sprite.play(_level_anim("idle"))
+
+# Анимация с учётом уровня: idle_3, нет такой — idle
+func _level_anim(base: String) -> String:
+	var leveled := "%s_%d" % [base, card.building_level]
+	return leveled if sprite.sprite_frames.has_animation(leveled) else base
+
+# Разовая анимация листа (выстрел, пополнение), потом снова idle. false — у листа такой нет
+func play_once(base: String) -> bool:
+	if sprite == null:
+		return false
+	var anim := _level_anim(base)
+	if not sprite.sprite_frames.has_animation(anim):
+		return false
+	sprite.flip_h = base == "attack" and aim.x < 0.0
+	sprite.stop()
+	sprite.play(anim)
+	return true
+
+# Точка ствола спрайта (мир): метаданные muzzle кадров, отражение — когда целится влево
+func _sprite_muzzle() -> Vector2:
+	var h: float = sprite.sprite_frames.get_frame_texture("idle", 0).get_size().y
+	var m: Vector2 = sprite.sprite_frames.get_meta("muzzle", Vector2(0, -h * 0.6))
+	if aim.x < 0.0:
+		m.x = -m.x
+	return to_global(m * sprite.scale)
+
+# Задержка снаряда до кадра выстрела листа (metadata shot_frame) — как у бойцов
+func _shot_delay() -> float:
+	var frames := sprite.sprite_frames
+	if not frames.has_meta("shot_frame"):
+		return 0.0
+	return frames.get_meta("shot_frame") / frames.get_animation_speed(sprite.animation)
+
+# Прозрачность OcclusionFader (self_modulate) — и на спрайт: дочерний узел self_modulate не наследует
+func _process(_delta: float) -> void:
+	if sprite:
+		sprite.modulate.a = self_modulate.a
 
 # -------------------------------------------------------
 # ВИД
@@ -82,6 +163,11 @@ func _draw() -> void:
 	if building_type == "wall" and stats.get("slow_radius", 0.0) > 0.0:
 		draw_circle(Vector2.ZERO, stats["slow_radius"], SLOW_AURA_COLOR)
 		draw_arc(Vector2.ZERO, stats["slow_radius"], 0.0, TAU, 48, SLOW_AURA_LINE, 1.5, true)
+	if sprite:   # свой спрайт — блоков и нарисованных стволов нет
+		if building_type == "artillery" and _explosion_id > 0:
+			draw_circle(to_local(_explosion_point), stats.get("splash_radius", 0.0), EXPLOSION_COLOR)
+		_draw_level_pips()
+		return
 	var tint: Color = BLOCK_TINT.get(building_type, Color.WHITE)
 	for b in BLOCKS.get(building_type, []):
 		TerrainTiles.draw_block(self, TerrainTiles.tile(b[0]), _block_top(b[1], b[2], b[3]), tint, BLOCK_SCALE)
@@ -149,6 +235,9 @@ func describe() -> String:
 # Область экрана (мировые координаты), которую закрывают блоки здания —
 # OcclusionFader делает здание полупрозрачным, если за ним стоит боец
 func get_occlusion_rect() -> Rect2:
+	if sprite:
+		var size: Vector2 = sprite.sprite_frames.get_frame_texture("idle", 0).get_size() * sprite.scale
+		return Rect2(global_position + Vector2(-size.x / 2.0, -size.y), size)
 	var rect = Rect2()
 	for b in BLOCKS.get(building_type, []):
 		var r = TerrainTiles.block_rect(_block_top(b[1], b[2], b[3]), BLOCK_SCALE)
@@ -178,7 +267,12 @@ func tick(delta: float) -> void:
 	aim = target.global_position + aim_offset - global_position
 	queue_redraw()
 	var barrel_end = to_global(_block_top(0.5, 0.5, TOWER_LEVELS) + aim.normalized() * BARREL_LENGTH)
-	var shot = Projectile.launch(get_parent(), SHOT_PROJECTILE, barrel_end, target, aim_offset)
+	var delay := 0.0
+	if sprite:   # свой спрайт: снаряд из его ствола (на кадре вспышки, если есть ряд attack)
+		barrel_end = _sprite_muzzle()
+		if play_once("attack"):
+			delay = _shot_delay()
+	var shot = Projectile.launch(get_parent(), SHOT_PROJECTILE, barrel_end, target, aim_offset, delay)
 	shot.damage = stats.get("damage", 0.0)
 
 func _find_target(attack_range: float) -> Soldier:
@@ -207,7 +301,12 @@ func fire_at(point: Vector2) -> bool:
 	queue_redraw()
 	var base = _block_top(0.5, 0.5, ARTILLERY_LEVELS)
 	var muzzle = to_global(base + aim.normalized() * ARTILLERY_BARREL_LENGTH)
-	var shot = Projectile.launch(get_parent(), ARTILLERY_PROJECTILE, muzzle, null, point)
+	var delay := 0.0
+	if sprite:
+		muzzle = _sprite_muzzle()
+		if play_once("attack"):
+			delay = _shot_delay()
+	var shot = Projectile.launch(get_parent(), ARTILLERY_PROJECTILE, muzzle, null, point, delay)
 	shot.damage = stats.get("damage", 0.0)
 	shot.splash_radius = stats.get("splash_radius", 0.0)
 	shot.splash_team = GameConstants.TEAM_ENEMY
@@ -221,7 +320,7 @@ func fire_at(point: Vector2) -> bool:
 func _play_fire_animation(muzzle: Vector2) -> void:
 	Vfx.spawn(get_parent(), "muzzle_flash", muzzle)
 	Vfx.spawn(get_parent(), "muzzle_smoke", muzzle)
-	if not is_inside_tree():
+	if not is_inside_tree() or sprite:   # у спрайта отдача — в его анимации
 		return
 	create_tween().tween_method(_set_recoil, 1.0, 0.0, RECOIL_TIME) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)

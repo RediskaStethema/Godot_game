@@ -11,6 +11,7 @@ func _initialize() -> void:
 	root.get_node("SaveManager").save_path = TEST_SAVE_PATH
 	root.get_node("SaveManager").profile_path = TEST_PROFILE_PATH   # открытые сложности игрока не трогаем
 	root.get_node("SaveManager").load_profile()
+	root.get_node("MetaProgress").load_profile()   # мета-прогрессия — из того же пустого профиля
 	root.get_node("GameSettings").config_path = TEST_CONFIG_PATH
 	_main()
 
@@ -148,7 +149,12 @@ func _main() -> void:
 			chapter_cards += 1
 	_check("выбрали десант → окно ордена (5 орденов), забег ещё не начат", chapter != null \
 		and chapter_cards == 5 and current_scene == menu)
-	chapter.choose("salamanders")
+	chapter.choose("salamanders")   # пустой профиль: орден ещё не открыт (мета-прогрессия) — ничего
+	await _frames(2)
+	_check("закрытый орден (Salamanders — «Выиграйте забег») не выбрать, Ultramarines открыт",
+		is_instance_valid(chapter) and chapter.find_child("Chapter_salamanders", true, false).disabled
+		and not chapter.find_child("Chapter_ultramarines", true, false).disabled)
+	chapter.choose("ultramarines")
 	await _frames(2)
 	var difficulty = null
 	for c in menu.get_children():
@@ -171,7 +177,7 @@ func _main() -> void:
 		current_scene.name == "ShopScene" \
 		and root.get_node("EconomyManager").round_number == 1 \
 		and root.get_node("RunManager").player_faction == "space_marines" \
-		and root.get_node("RunManager").player_chapter == "salamanders" \
+		and root.get_node("RunManager").player_chapter == "ultramarines" \
 		and root.get_node("RunManager").difficulty == 3 \
 		and current_scene.get_children().any(func(c): return _is(c, "PauseMenu")))
 
