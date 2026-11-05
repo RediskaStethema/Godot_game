@@ -80,8 +80,11 @@ func _main() -> void:
 	_check("полоска отряда: у каждого отряда; полный %.2f → после потерь %.2f, бойцов %d; скрытый враг — без полоски" % [
 		full_ratio, bar._ratio, bar._count], bars_ok and is_equal_approx(full_ratio, 1.0) and bar._count == 5 \
 		and bar._ratio < 5.0 / 6.0 and not enemy_bar.is_visible_in_tree())
+	# туман — слой дымки над полем (не залит в плиту — не «шахматка»), приглушён: полупрозрачный
 	var fog: Dictionary = load("res://scripts/data/FactionTheme.gd").SM_FOG_CRATERS[0]
-	_check("туман темы приглушён (tint темнее белого)", fog.has("tint") and fog["tint"].v < 0.9)
+	var mists: Array = scene.renderer._layout.get("mist", [])
+	_check("туман — дымка над полем (%d клеток), приглушена, плита без тумана" % mists.size(),
+		fog.has("mist") and fog["mist"]["color"].a < 0.3 and not fog.has("frames") and mists.size() > 0)
 
 	# 2. Всплывающие цифры: на расстановке нет; в схватке — крупный удар да, мелкий и яд нет
 	var dread = mine.filter(func(s): return s.data.factory_id == "dreadnought")[0].soldiers[0]
@@ -90,7 +93,7 @@ func _main() -> void:
 	var parent = dread._world_parent()
 	dread.take_damage(50.0)
 	var in_placement := _of_class(parent, "FloatingText").size()
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	bm.set_process(false)   # тикаем сами — бой не кончится сам собой
 	var before := _of_class(parent, "FloatingText").size()
 	dread.take_damage(5.0)
@@ -120,8 +123,9 @@ func _main() -> void:
 	var banner = scene.hud.result_banner
 	var slowed: bool = Engine.time_scale < 0.99
 	_check("итог боя: баннер «%s» с лучшим отрядом, мир на миг замедлен (%.2f)" % [
-		banner.get_child(0).text if banner else "", Engine.time_scale],
-		banner != null and banner.get_child(0).text == "ПОБЕДА" and "Лучший отряд" in banner.get_child(1).text and slowed)
+		banner.find_child("Title", true, false).text if banner else "", Engine.time_scale],
+		banner != null and banner.find_child("Title", true, false).text == "ПОБЕДА" \
+		and "Лучший отряд" in banner.find_child("Details", true, false).text and slowed)
 	var t0 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t0 < 900:
 		await process_frame
@@ -161,7 +165,7 @@ func _main() -> void:
 	var pm = scene.pause_menu
 	pm._input(space)
 	var no_pause_in_placement: bool = not paused
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	pm._input(space)
 	var quick_on: bool = paused and pm.is_quick_paused() and not pm.is_open()
 	pm.open()   # Esc поверх паузы пробелом — меню, подпись снята
@@ -237,7 +241,7 @@ func _main() -> void:
 	await _frames(2)
 	slot.show_owned_note()   # раскладка устоялась
 	var notes_rect: Rect2 = slot._notes.get_global_rect()
-	var portrait_bottom: float = slot.card_title.global_position.y
+	var portrait_bottom: float = slot.portrait_bottom()
 	_check("сноски карты — над кнопкой «Купить» (низ %.0f ≤ %.0f), не на портрете (верх %.0f ≥ %.0f)" % [
 		notes_rect.end.y, slot.buy_button.global_position.y, notes_rect.position.y, portrait_bottom],
 		slot.synergy_note.visible and notes_rect.end.y <= slot.buy_button.global_position.y + 0.5 and notes_rect.position.y >= portrait_bottom - 0.5)

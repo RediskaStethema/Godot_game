@@ -41,17 +41,19 @@ func _main() -> void:
 	await process_frame
 	var bm = root.get_node("BattleManager")
 
-	# 1. Пул: 22 карты игрока (17 прежних + 5 MVP), ~60/30/10, новые карты есть
+	# 1. Пул: 24 разные карты, 53 копии 27 / 22 / 4 (Rare-отряды по 2 — каждый не реже копии Epic), новые карты есть
 	var pool = CardFactory.build_pool()
 	var ids = {}
 	var by_rarity = {"common": 0, "rare": 0, "epic": 0}
+	var copies = {}
 	for c in pool:
 		ids[c.id] = true
 		by_rarity[c.rarity] += 1
-	var share = func(r): return float(by_rarity[r]) / pool.size()
-	_check("пул: %d разных карт (17 прежних + 5 MVP + 2 здания TDD), доли ~60/30/10 (%d / %d / %d копий)" % [ids.size(), by_rarity["common"], by_rarity["rare"], by_rarity["epic"]], ids.size() == 24 \
-		and absf(share.call("common") - 0.6) < 0.05 and absf(share.call("rare") - 0.3) < 0.05 \
-		and absf(share.call("epic") - 0.1) < 0.03)
+		copies[c.id] = copies.get(c.id, 0) + 1
+	var rare_squads_ok = pool.filter(func(c): return c.rarity == "rare" and c.card_type == "squad") \
+		.all(func(c): return copies[c.id] == 2)
+	_check("пул: %d разных карт (17 прежних + 5 MVP + 2 здания TDD), %d / %d / %d копий, Rare-отряды по 2" % [ids.size(), by_rarity["common"], by_rarity["rare"], by_rarity["epic"]],
+		ids.size() == 24 and by_rarity == {"common": 27, "rare": 22, "epic": 4} and rare_squads_ok)
 	_check("новые карты в пуле", ["iron_halo", "combat_stimms", "chapter_banner",
 		"emergency_reinforcements", "orbital_strike"].all(func(id): return ids.has(id)))
 
@@ -109,6 +111,16 @@ func _main() -> void:
 	var far_bonus = other.get_aura_damage_bonus()
 	_check("знамя: сосед +15%%, далеко — нет (%.2f / %.2f)" % [near_bonus, far_bonus], \
 		is_equal_approx(near_bonus, 0.15) and far_bonus < 0.15)
+	# Вид ауры — кольцо кодом на земле (AuraRing), одно на отряд, по радиусу знамени, за отрядом
+	# (показ щитов и аур — как при «В БОЙ»; бой не начинаем: дальше карты событий на расстановке)
+	battle._show_shields(root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0))
+	var rings = battle.renderer.get_children().filter(func(n): return n.get_script() != null \
+		and n.get_script().get_global_name() == "AuraRing")
+	_check("знамя: кольцо ауры на земле — %d, радиус %s, за отрядом знамени" % [rings.size(),
+		rings[0].radius if rings.size() > 0 else "-"],
+		rings.size() == 1 and is_equal_approx(rings[0].radius, UnitData.BANNER_RADIUS) and rings[0].squad == halo_squad)
+	for r in rings:
+		r.queue_free()
 
 	# 4. Emergency Reinforcements: случайный Common отряд на пустую клетку, на занятую — нет
 	var free_tile = Vector2i(2, 2)
@@ -132,7 +144,7 @@ func _main() -> void:
 	for e in enemies:
 		hp_sum_before += e.current_hp
 	var enemy_count = enemies.size()
-	battle._on_start_pressed()
+	battle._on_start_pressed(false)
 	var hp_sum_after = 0.0
 	for e in root.get_node("SoldierRegistry").get_alive_soldiers_of_team(1):
 		hp_sum_after += e.current_hp
@@ -140,4 +152,16 @@ func _main() -> void:
 		hp_sum_after < hp_sum_before - 150.0 and bm.armed_events.is_empty() and enemy_count > 0)
 
 	bm.stop_battle()
+
+	# Иллюстрации игральных карт (assets/ui/card_art): у каждой карты обеих рас и особых карт орденов и богов
+	var no_art: Array = []
+	var all_cards: Array = CardFactory.build_pool("space_marines") + CardFactory.build_pool("chaos")
+	for ch in Chapters.CHAPTERS:
+		for key in ["unit_card", "building_card"]:
+			if ch.has(key):
+				all_cards.append(CardFactory.special_card(ch[key]))
+	for c in all_cards:
+		if not ResourceLoader.exists("res://assets/ui/card_art/%s.png" % c.id) and not c.id in no_art:
+			no_art.append(c.id)
+	_check("иллюстрации карт: у всех %d карт (нет: %s)" % [all_cards.size(), no_art], no_art.is_empty())
 	quit()

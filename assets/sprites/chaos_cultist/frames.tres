@@ -52,6 +52,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/chaos_cultist/death/10.png" id="death_10"]
 
 [resource]
+metadata/muzzle_color = Color(1.000, 0.588, 0.039, 1)
 metadata/muzzle = Vector2(64.3, -88.1)
 metadata/shot_frame = 5
 animations = [{

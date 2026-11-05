@@ -16,6 +16,13 @@ const SYNERGY_DEFINITIONS = {
 		{"threshold": 6, "name": "For the Emperor", "bonus": {"damage_mult": 1.10},
 			"desc": "+10% урона всем Marine"},
 	],
+	# Хаос игрока (решение пользователя 16.10.2026): те же пороги, бонусы в обратном порядке
+	"chaos": [
+		{"threshold": 3, "name": "Path to Glory", "bonus": {"damage_mult": 1.10},
+			"desc": "+10% урона всем бойцам Хаоса"},
+		{"threshold": 6, "name": "Black Crusade", "bonus": {"hp_mult": 1.15},
+			"desc": "+15% HP всем бойцам Хаоса"},
+	],
 	"elite": [
 		{"threshold": 2, "name": "Veteran Command", "bonus": {"epic_discount": 1},
 			"desc": "-1 Req к следующей Epic карте"},
@@ -36,8 +43,13 @@ const POSITION_BONUSES = {
 		"desc": "+15% урона стрелкам дальнего от врага ряда"},
 }
 
-# Доход TDD: «Синергия-бонус (3+ юнита фракции) — +2 за каждые 3 юнита»
+# Доход TDD: «Синергия-бонус (3+ юнита фракции) — +2 за каждые 3 юнита»: тег расы забега
 const INCOME_TAG: String = "marine"
+const FACTION_TAGS = {"space_marines": "marine", "chaos": "chaos"}
+
+# Тег расы забега (синергия дохода, подсказки)
+func faction_tag() -> String:
+	return FACTION_TAGS.get(RunManager.player_faction, INCOME_TAG)
 const INCOME_PER_GROUP: int = 2
 const INCOME_GROUP_SIZE: int = 3
 
@@ -77,7 +89,7 @@ func calculate_synergies(soldiers: Array) -> void:
 					"threshold": level["threshold"],
 				})
 
-	income_bonus = (tag_counts.get(INCOME_TAG, 0) / INCOME_GROUP_SIZE) * INCOME_PER_GROUP
+	income_bonus = (tag_counts.get(faction_tag(), 0) / INCOME_GROUP_SIZE) * INCOME_PER_GROUP
 	emit_signal("synergies_changed", active_synergies)
 
 # Вызывается один раз при старте боя, после calculate_synergies.
@@ -99,6 +111,7 @@ const BONUS_MULT_FIELDS = {
 	"attack_speed_mult": "current_attack_speed",
 	"heal_mult": "current_heal_per_second",
 	"attack_range_mult": "current_attack_range",
+	"damage_taken_mult": "damage_taken_mult",   # получаемый урон (минус Slaanesh)
 }
 const BONUS_ADD_FIELDS = {
 	"attack_range_add": "current_attack_range",
@@ -170,6 +183,10 @@ func apply_chapter_bonus(soldiers: Array) -> void:
 	for s in soldiers:
 		if c.has("bonus") and (tag == "" or tag in s.data.tags):
 			_apply_bonus(s, c["bonus"])
+		# Минус ордена / бога (решение пользователя 18.10.2026: плата за бонус) — те же ключи, свой тег
+		var malus_tag: String = c.get("malus_tag", "")
+		if c.has("malus") and (malus_tag == "" or malus_tag in s.data.tags):
+			_apply_bonus(s, c["malus"])
 		if c.has("on_hit_status"):
 			s.extra_on_hit_status = c["on_hit_status"]
 			s.extra_on_hit_status_power = c["on_hit_status_power"]
@@ -218,15 +235,6 @@ func get_discounted_cost(card: CardData) -> int:
 func consume_discount(card: CardData) -> void:
 	if card.rarity == GameConstants.RARITY_EPIC:
 		epic_discount_pending = 0
-
-# -------------------------------------------------------
-# UI
-# -------------------------------------------------------
-func get_active_synergy_names() -> Array[String]:
-	var names: Array[String] = []
-	for s in active_synergies:
-		names.append("%s (%s %d/%d): %s" % [s["name"], s["tag"], s["count"], s["threshold"], s["desc"]])
-	return names
 
 # -------------------------------------------------------
 # СОХРАНЕНИЕ (SaveManager) — своё состояние забега

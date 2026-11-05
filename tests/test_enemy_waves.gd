@@ -124,7 +124,7 @@ func _main() -> void:
 	var raptors = root.get_node("SoldierRegistry").get_alive_soldiers_of_team(1) \
 		.filter(func(s): return s.data.factory_id == "chaos_raptor")
 	Engine.time_scale = 4.0
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	# Цель появляется, когда враг в поле зрения: запоминаем первую цель каждого раптора
 	var first_target = {}
 	var frames = 0

@@ -29,6 +29,8 @@
 /WH40K_TDD.docx
 /CLAUDE.md
 /ASSETS_NEEDED.txt
+/CARD_ART_NEEDED.txt
+/EFFECTS_NEEDED.txt
 /CLAUDE_CODE_PROMPT.md
 /.claude/
 /skills/
@@ -44,3 +46,21 @@ desktop.ini
 
 # Кэш Python инструментов tools/
 __pycache__/
+
+# Исходники арта: из них tools/ режут ассеты игры, сама игра их не грузит
+/assets/source_sheets/
+/assets/ui/assets/
+/assets/FightFleed/
+/assets/chaos_assets/
+/assets/citadel_sprite_list/
+/assets/citadel_marine.png*
+/assets/Готический набор руин*
+/assets/effects/FXpack13/Effect*/
+/assets/effects/Pixel/PNG_1x/
+/assets/effects/Pixel/PNG_2x/
+/buildings_png/
+/Screenshot*
+/assets_menu.png*
+
+# Справка Claude по картам и способностям (локальная)
+/CARD_ABILITIES.txt

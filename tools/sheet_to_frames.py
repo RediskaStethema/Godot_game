@@ -1,6 +1,6 @@
 """Лист анимаций PNG (ряды idle / бег / стрельба / смерть, необязательно — боевой клич) → кадры PNG + frames.tres для Soldier.gd.
 
-    python tools/sheet_to_frames.py assets/assetlist.png assets/sprites/space_marine_v2
+    python tools/sheet_to_frames.py assets/source_sheets/assetlist.png assets/sprites/space_marine_v2
 
 Лист: прозрачный фон, анимации — ряды сверху вниз в порядке ROW_ANIMS, кадры в ряду — слева
 направо с промежутками. Подписи (заголовки рядов, номера кадров) — низкие полосы, пропускаются
@@ -19,13 +19,14 @@ from pathlib import Path
 from PIL import Image
 
 from gif_to_frames import IMPORT_PARAMS, FILL
+from muzzle_color import flash_color
 
 ROW_ANIMS = ["idle", "walk", "attack", "death"]
 # Необязательный пятый ряд — боевой клич (Chaplain): кадр показывается, пока он кричит (Soldier.BATTLE_CRY_TIME)
 EXTRA_ROWS = ["battle_cry"]
 FOLDERS = {"idle": "idle", "walk": "run", "attack": "attack", "death": "death", "battle_cry": "battle_cry",
            "cast": "cast", "victory": "victory"}
-LOOPING = {"idle", "walk"}
+LOOPING = {"idle", "walk", "heal"}   # heal — пока Apothecary лечит (Soldier._show_heal_animation)
 # cast — замах псайкера (Librarian, пока идёт CASTING), victory — поза победы рядом кадров (Chapter Master)
 FPS = {"idle": 8.0, "walk": 14.0, "attack": 16.0, "death": 10.0, "battle_cry": 1.5, "cast": 12.0, "victory": 10.0}
 ALPHA_MIN = 128
@@ -36,6 +37,11 @@ LABEL_PART = 0.2     # отдельный кусок выше этой доли 
 STRAY_SIZE = 40      # меньше — крошка соседнего кадра
 SPLIT_WINDOW = 0.3   # где искать границу слипшихся кадров: ± доля шага
 NARROW_PART = 0.35   # кусок уже этой доли шага кадров — не кадр, а хвост кадра слева
+GRID_WIDTH = (0.5, 2.0)   # --counts: ширина кадра — доля средней
+GRID_SMOOTH = 7           # сглаживание плотности столбцов: граница — в середине просвета
+GRID_EVEN = 0.05          # штраф за неравные кадры (при равной пустоте — ровнее)
+SEAM_WINDOW = 0.35        # шов разреза гуляет в ± доле средней ширины кадра от прямой границы
+SEAM_PULL = 0.002         # цена шага шва в сторону от прямой границы (при равной пустоте — ближе к ней)
 
 
 # Имя анимации → папка и скорость. Варианты по уровню (здания: idle_2, attack_3) — как у базовой;
@@ -110,6 +116,91 @@ def find_cells(img, y0, y1, pitch=0.0, split=True):
             starts.append(min(win, key=lambda x: counts[x]))
     starts.append(w)
     return [(starts[i], starts[i + 1]) for i in range(len(starts) - 1)]
+
+
+def grid_cells(img, y0, y1, n):
+    """Ячейки ряда из n кадров, слипшихся свечением и оружием (листы 1536×1024, --counts): границы —
+    n − 1 самых пустых столбцов (сглаженная плотность), ширина кадра — GRID_WIDTH средней (лежащий
+    боец смерти шире стоящего); динамикой по столбцам, штраф за отход ширины от средней — GRID_EVEN."""
+    import numpy as np
+    a = np.array(img.getchannel("A"))[y0:y1] > ALPHA_MIN
+    counts = a.sum(axis=0).astype(float)
+    xs = np.nonzero(counts)[0]
+    x0, x1 = int(xs[0]), int(xs[-1]) + 1
+    dens = np.convolve(counts, np.ones(GRID_SMOOTH) / GRID_SMOOTH, "same") / (y1 - y0)
+    avg = (x1 - x0) / n
+    w_lo, w_hi = int(avg * GRID_WIDTH[0]), int(avg * GRID_WIDTH[1])
+    widths = np.arange(w_lo, w_hi + 1)
+    width_cost = GRID_EVEN * ((widths - avg) / avg) ** 2
+    inf = float("inf")
+    cost = np.full(x1 + 1, inf)
+    cost[x0] = 0.0
+    back = []
+    for k in range(n):
+        nxt = np.full(x1 + 1, inf)
+        arg = np.zeros(x1 + 1, int)
+        last = k == n - 1
+        for x in range(x0 + w_lo, x1 + 1):
+            prev = x - widths
+            ok = prev >= x0
+            if not ok.any():
+                continue
+            c = cost[prev[ok]] + width_cost[ok]
+            i = int(np.argmin(c))
+            edge = 0.0 if last or x >= len(dens) else dens[x]
+            if last and x != x1:
+                continue
+            nxt[x] = c[i] + edge
+            arg[x] = prev[ok][i]
+        back.append(arg)
+        cost = nxt
+    bounds = [x1]
+    for k in range(n - 1, -1, -1):
+        bounds.append(int(back[k][bounds[-1]]))
+    bounds.reverse()
+    return [(bounds[i], bounds[i + 1]) for i in range(n)]
+
+
+def seam_frames(img, y0, y1, cells):
+    """Кадры ряда по швам вместо прямых разрезов (решение пользователя 19.10.2026: крылья Сангвинарной
+    стражи, оружие и свечение, залезающие в соседнюю ячейку, резались по прямой): шов — путь сверху вниз
+    по самым прозрачным пикселям (сдвиг ≤ 1 px на строку, динамикой, как seam carving) в ± SEAM_WINDOW
+    средней ширины от границы ячеек. Кадр — пиксели между своими швами, остальное прозрачно."""
+    import numpy as np
+    px = np.array(img)[y0:y1]
+    cost = (px[..., 3] > ALPHA_MIN).astype(float) + px[..., 3] / 255.0 * 0.25
+    h, w = cost.shape
+    avg = (cells[-1][1] - cells[0][0]) / len(cells)
+    win = int(avg * SEAM_WINDOW)
+    seams = [np.full(h, cells[0][0])]
+    for c0, _ in cells[1:]:
+        lo, hi = max(c0 - win, 0), min(c0 + win, w - 1)
+        xs = np.arange(lo, hi + 1)
+        local = cost[:, lo:hi + 1] + SEAM_PULL * np.abs(xs - c0)
+        acc = local.copy()
+        back = np.zeros(local.shape, int)
+        for y in range(1, h):
+            prev = acc[y - 1]
+            options = np.stack([np.r_[np.inf, prev[:-1]], prev, np.r_[prev[1:], np.inf]])
+            k = np.argmin(options, axis=0)
+            back[y] = k - 1
+            acc[y] += options[k, np.arange(len(xs))]
+        path = np.zeros(h, int)
+        path[-1] = int(np.argmin(acc[-1]))
+        for y in range(h - 1, 0, -1):
+            path[y - 1] = path[y] + back[y, path[y]]
+        seams.append(path + lo)
+    seams.append(np.full(h, cells[-1][1]))
+    frames = []
+    cols = np.arange(w)[None, :]
+    for i in range(len(cells)):
+        left, right = seams[i][:, None], seams[i + 1][:, None]
+        keep = (cols >= left) & (cols < right)
+        part = px.copy()
+        part[~keep] = 0
+        x0, x1 = int(seams[i].min()), int(seams[i + 1].max())
+        frames.append(Image.fromarray(np.ascontiguousarray(part[:, x0:x1])).copy())   # копия — изменяемая
+    return frames
 
 
 def frame_pitch(img, y0, y1):
@@ -251,7 +342,8 @@ def head_x(frame):
     return sum(xs) / len(xs)
 
 
-def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_order=None, drop=None, shot_frame=None):
+def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_order=None, drop=None, shot_frame=None,
+         counts=None):
     if rows_order:   # ряды листа в другом порядке (Дредноут: удар — второй ряд, шаг — третий)
         ROW_ANIMS[:] = rows_order   # больше четырёх — все ряды режутся по кадрам (Librarian: cast, Chapter Master: victory)
         if len(rows_order) > 4:
@@ -272,9 +364,11 @@ def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_o
 
     # Кадры и якоря (x — в координатах кадра, y — линия земли ряда)
     src = {}
-    pitch = frame_pitch(img, *rows[0])
-    for anim, (y0, y1) in zip(anims, rows):
-        if anim in EXTRA_ROWS:   # один кадр на весь ряд — подпись ряда сотрёт clear_label
+    pitch = frame_pitch(img, *rows[0]) if not counts else 0.0
+    for i_row, (anim, (y0, y1)) in enumerate(zip(anims, rows)):
+        if counts:   # кадры слиплись — сетка по числу кадров ряда
+            frames = seam_frames(img, y0, y1, grid_cells(img, y0, y1, counts[i_row]))
+        elif anim in EXTRA_ROWS:   # один кадр на весь ряд — подпись ряда сотрёт clear_label
             frames = [img.crop((0, y0, img.width, y1))]
         else:
             frames = [img.crop((c0, y0, c1, y1)) for c0, c1 in find_cells(img, y0, y1, pitch, not anim.startswith("death"))]
@@ -328,6 +422,9 @@ def main(sheet, folder, hit_frame=None, attack_fps=None, extra_anim=None, rows_o
                     my = sum(y for x, y in flash if x < mx + 3) / len([1 for x, _ in flash if x < mx + 3])
                     meta = (f"metadata/muzzle = Vector2({mx - ax:.1f}, {my - ay:.1f})\n"
                             f"metadata/shot_frame = {i}\n")
+                    color = flash_color(f, mx, my)   # снаряд в цвет вспышки (Projectile, tools/muzzle_color.py)
+                    if color:
+                        meta += "metadata/muzzle_color = Color(%.3f, %.3f, %.3f, 1)\n" % color
         tres_anims.append(
             f'{{\n"frames": [{", ".join(refs)}],\n"loop": {"true" if anim.split("_")[0] in LOOPING else "false"},\n'
             f'"name": &"{anim}",\n"speed": {attack_fps if anim.startswith("attack") and attack_fps else fps_of(anim)}\n}}')
@@ -355,7 +452,8 @@ if __name__ == "__main__":
     # --drop anim:i,j[;anim:k] — убрать кадры анимации (номера после нарезки), выпадающие из цикла
     args = sys.argv[1:]
     opts = {}
-    for key in ("--hit-frame", "--attack-fps", "--extra-anim", "--rows", "--drop", "--shot-frame"):
+    # --counts 13,13,13,11 — кадров в каждом ряду: кадры слиплись (свечение, оружие) — режется сеткой
+    for key in ("--hit-frame", "--attack-fps", "--extra-anim", "--rows", "--drop", "--shot-frame", "--counts"):
         if key in args:
             i = args.index(key)
             opts[key] = args[i + 1]
@@ -367,4 +465,5 @@ if __name__ == "__main__":
          opts["--rows"].split(",") if "--rows" in opts else None,
          {a: {int(i) for i in idx.split(",")} for a, idx in (p.split(":") for p in opts["--drop"].split(";"))}
          if "--drop" in opts else None,
-         int(opts["--shot-frame"]) if "--shot-frame" in opts else None)
+         int(opts["--shot-frame"]) if "--shot-frame" in opts else None,
+         [int(n) for n in opts["--counts"].split(",")] if "--counts" in opts else None)

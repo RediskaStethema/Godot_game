@@ -15,11 +15,6 @@ const SCALE: float = IsoGrid.TILE_WIDTH / TOP_WIDTH_PX
 # Высота одного «этажа» блока на экране — для зданий из нескольких блоков
 const LEVEL_HEIGHT: float = SIDE_HEIGHT_PX * SCALE
 
-# Номера Tiles/Slice N.png по назначению
-const FLOOR = [36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 36, 10, 4]  # пол: в основном тёмный, изредка светлый и с кратерами
-const KINGDOM = [16, 17, 18, 19, 20, 21, 22, 23, 24, 25] # плиты королевства: техно-панели
-const ENEMY = [43, 44, 45, 46, 47]                     # зона врага: тёмные панели
-
 static var _cache: Dictionary = {}
 
 static func tile(n: int) -> Texture2D:
@@ -100,13 +95,17 @@ static func pick_any(variants: Array, cell: Vector2i, salt: int = 0) -> Variant:
 
 # Объект темы {"texture": путь, "base": точка земли в картинке (px), "scale", "tint"} — основанием в точке foot
 # (руины на клетке, декор, tools/props_from_sheet.py); flip — отразить по горизонтали
+# Анимированный объект: "frames" — кадров в ряд на листе texture, "fps"; base — в кадре; time — время (с)
 static func draw_prop(canvas: CanvasItem, prop: Dictionary, foot: Vector2, modulate: Color = Color.WHITE,
-		flip: bool = false) -> void:
+		flip: bool = false, time: float = 0.0) -> void:
 	var tex := FactionTheme.load_texture(prop["texture"])
 	if tex == null:
 		return
 	var k: float = prop.get("scale", 1.0)
-	var base: Vector2 = prop.get("base", Vector2(tex.get_width() / 2.0, tex.get_height()))
+	var frames: int = prop.get("frames", 1)
+	var size := Vector2(tex.get_width() / float(frames), tex.get_height())
+	var src := Rect2(Vector2(posmod(int(floor(time * prop.get("fps", 0.0))), frames) * size.x, 0.0), size)
+	var base: Vector2 = prop.get("base", Vector2(size.x / 2.0, size.y))
 	canvas.draw_set_transform(foot, 0.0, Vector2(-k if flip else k, k))
-	canvas.draw_texture_rect(tex, Rect2(-base, tex.get_size()), false, modulate * prop.get("tint", Color.WHITE))
+	canvas.draw_texture_rect_region(tex, Rect2(-base, size), src, modulate * prop.get("tint", Color.WHITE))
 	canvas.draw_set_transform(Vector2.ZERO)

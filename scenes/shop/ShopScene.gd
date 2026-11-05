@@ -15,8 +15,13 @@ const HAND_CARD_SIZE = Vector2(118, 96)
 # при 10 картах в окне 1152 px — ~90 px; уже этого — прокрутка
 const HAND_CARD_MIN_WIDTH: float = 84.0
 const HAND_CARD_GAP: int = 8
+const HAND_TITLE_FONT: int = 13        # название карты руки (кегль прежней разметки, через UITheme.ui_px)
+const HAND_TITLE_FONT_MIN: int = 8
+const HAND_PORTRAIT_ALPHA: float = 0.22   # портрет фоном карты руки — под текстом, не мешает читать
 const HAND_CARD_PAD: float = 5.0       # поля карты руки по бокам (у card_style — 10)
 const HAND_BUTTON_PAD: float = 4.0     # поля кнопки «Продать» по бокам
+const NO_MONEY_SIZE: float = 1.6       # вспышка «не хватает Req» (Vfx "no_money", кадр 64×32) у кнопки
+const SELL_FADE_TIME: float = 0.25     # проданная карта гаснет под огнём
 
 # «Рука» — карты, ещё не выложенные на поле: купленные сейчас +
 # оставшиеся на скамейке с прошлого боя. Не больше BattleManager.MAX_HAND_SIZE.
@@ -44,6 +49,10 @@ func _ready() -> void:
 	ShopManager.shop_refreshed.connect(_populate_shop)
 	battle_button.pressed.connect(_on_battle_pressed)
 	reroll_button.pressed.connect(_on_reroll_pressed)
+	# Кнопка неактивна (не хватает Req) — клик всё равно отвечает: вспышка у кнопки и сообщение
+	reroll_button.gui_input.connect(func(e: InputEvent):
+		if reroll_button.disabled and e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+			_on_reroll_pressed())
 
 	# Загружаем выживших
 	for unit in BattleManager.player_units:
@@ -68,6 +77,11 @@ func _ready() -> void:
 	if ShopManager.catch_up_just_issued:
 		_open_catch_up()
 
+# Новый набор после обновления — карты переворачиваются из рубашки по очереди (ShopSlot.reveal)
+const REVEAL_DELAY: float = 0.25
+const REVEAL_STAGGER: float = 0.12
+var _reveal_next: bool = false
+
 func _populate_shop(offers: Array) -> void:
 	for child in shop_slots.get_children():
 		child.queue_free()
@@ -77,6 +91,9 @@ func _populate_shop(offers: Array) -> void:
 		slot.setup(offers[i], i)
 		slot.set_hand_full(_is_hand_full())
 		slot.purchase_requested.connect(_on_purchase_requested)
+		if _reveal_next:
+			slot.reveal(REVEAL_DELAY + REVEAL_STAGGER * i)
+	_reveal_next = false
 	_refresh_reroll_button()
 
 func _on_purchase_requested(slot_index: int) -> void:
@@ -92,6 +109,10 @@ func _on_purchase_requested(slot_index: int) -> void:
 	var card = ShopManager.try_purchase(slot_index)
 	if not card:
 		AudioManager.play("no_money")
+		_show_message("Не хватает Requisition: карта стоит %d" % ShopManager.get_price(ShopManager.current_offers[slot_index]))
+		for slot in shop_slots.get_children():
+			if slot.get("slot_index") == slot_index and slot.has_method("flash_no_money"):
+				slot.flash_no_money()
 		return
 	AudioManager.play("buy")
 
@@ -118,7 +139,20 @@ func _sell_card(card: CardData) -> void:
 	AudioManager.play("sell")
 	_show_message("Продано: %s (+%d Req)" % [card.title, refund])
 	_refresh_catch_up_picker()
-	_refresh_hand()
+	# Карта сгорает на своём месте (лист card_sell) и гаснет; ряд руки сдвигается, когда догорела —
+	# иначе под огнём сразу оказывалась соседняя карта
+	var burning: Control = null
+	for node in hand_row.get_children():
+		if node.get_meta("card", null) == card:
+			burning = node
+	if burning:
+		burning.propagate_call("set_mouse_filter", [Control.MOUSE_FILTER_IGNORE])
+		Vfx.spawn_over(self, "card_sell", burning.get_global_rect())
+		var tw := burning.create_tween()
+		tw.tween_property(burning, "modulate:a", 0.0, SELL_FADE_TIME)
+		tw.tween_callback(_refresh_hand)
+	else:
+		_refresh_hand()
 	_populate_shop(ShopManager.current_offers)
 	SaveManager.save_run()
 
@@ -151,34 +185,61 @@ func _fit_hand_cards() -> void:
 	var w := clampf((hand_scroll.size.x - HAND_CARD_GAP * (n - 1)) / n, HAND_CARD_MIN_WIDTH, HAND_CARD_SIZE.x)
 	for c in cards:
 		c.custom_minimum_size.x = floorf(w)
+		var title: Label = c.find_child("HandTitle", true, false)
+		if title:
+			title.add_theme_font_size_override("font_size", UITheme.fit_font_size(UITheme.ui_font(), title.text,
+				floorf(w) - HAND_CARD_PAD * 2.0 - 2.0, UITheme.ui_px(HAND_TITLE_FONT), UITheme.ui_px(HAND_TITLE_FONT_MIN)))
 
 func _make_hand_card(card: CardData) -> Control:
 	var panel = PanelContainer.new()
+	panel.set_meta("card", card)   # продажа — эффект на месте этой карты
 	panel.custom_minimum_size = HAND_CARD_SIZE
 	var style := UITheme.card_style(card.rarity)
 	style.content_margin_left = HAND_CARD_PAD
 	style.content_margin_right = HAND_CARD_PAD
 	panel.add_theme_stylebox_override("panel", style)
 	panel.tooltip_text = card.description
+	panel.clip_contents = true   # иллюстрация по большей стороне — лишнее за краем карты
+	# Иллюстрация карты (или портрет) — фоном карты, приглушена: высота карт та же, рука помещается в окно 648
+	var art := UITheme.make_card_backdrop(card)
+	var tex = null if art else UITheme.card_portrait(card)
+	if art:
+		panel.add_child(art)
+	if tex:
+		var bg = TextureRect.new()
+		bg.texture = tex
+		bg.modulate = UITheme.card_tint(card) * Color(1, 1, 1, HAND_PORTRAIT_ALPHA)
+		bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(bg)
 	var col = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 2)
 	panel.add_child(col)
 
+	# Название — в одну строку шрифтом названий карт, кегль — под ширину карты (_fit_hand_cards; решение
+	# пользователя 24.10.2026: «Devastator Squad» переносилось на две строки поверх арта)
 	var title = UITheme.make_label(card.title, "SmallLabel")
-	title.autowrap_mode = TextServer.AUTOWRAP_WORD   # перенос только между словами: «Dreadnought» целиком
+	title.name = "HandTitle"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	title.add_theme_font_size_override("font_size", 13)
+	title.clip_text = true
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title.add_theme_font_override("font", UITheme.ui_font())
+	title.add_theme_font_size_override("font_size", UITheme.ui_px(HAND_TITLE_FONT))
+	title.add_theme_constant_override("outline_size", 4)   # поверх иллюстрации
 	col.add_child(title)
 
 	var info = "×%d" % card.unit_count if card.card_type == "squad" else UITheme.TYPE_NAMES.get(card.card_type, "")
 	var info_label = UITheme.make_label(info, "DimLabel")
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	info_label.add_theme_constant_override("outline_size", 4)
 	col.add_child(info_label)
 
 	var sell = Button.new()
 	sell.text = "Продать +%d" % EconomyManager.get_sell_price(card)
-	sell.add_theme_font_size_override("font_size", 12)
+	sell.add_theme_font_size_override("font_size", UITheme.ui_px(12))
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		var sb = UITheme.get_theme().get_stylebox(state, "Button")   # карта ещё не в дереве — тема напрямую
 		if sb:
@@ -258,9 +319,12 @@ func _on_catch_up_reroll() -> void:
 # -------------------------------------------------------
 func _on_reroll_pressed() -> void:
 	var cost = ShopManager.get_reroll_cost()
+	_reveal_next = true
 	if not ShopManager.try_reroll():
+		_reveal_next = false
 		AudioManager.play("no_money")
 		_show_message("Не хватает Requisition: обновление стоит %d" % cost)
+		Vfx.spawn_over(self, "no_money", reroll_button.get_global_rect(), NO_MONEY_SIZE)
 		return
 	AudioManager.play("reroll")
 	_show_message("Набор обновлён (−%d Req), следующее обновление — %d Req" % [cost, ShopManager.get_reroll_cost()])
@@ -294,8 +358,11 @@ func _build_hud() -> void:
 	hud.offset_bottom = UITheme.HUD_HEIGHT
 	add_child(hud)
 	var hud_row = HBoxContainer.new()
-	hud_row.add_theme_constant_override("separation", 24)
+	hud_row.add_theme_constant_override("separation", 16)
 	hud.add_child(hud_row)
+	var badge := UITheme.make_chapter_badge()   # бог / орден забега — первым слева
+	if badge:
+		hud_row.add_child(badge)
 	hud_row.add_child(UITheme.make_label("WH40KINGS", "TitleLabel"))
 	message_label = UITheme.make_label("", "SmallLabel")
 	message_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -303,16 +370,19 @@ func _build_hud() -> void:
 	message_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	message_label.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT)
 	hud_row.add_child(message_label)
-	round_label.reparent(hud_row)
+	hud_row.add_child(UITheme.icon_row("hud", "wave", round_label))
 	round_label.theme_type_variation = "HeaderLabel"
 	timeline = RunTimeline.new()   # 15 волн: мини-боссы, босс, события, ближайшая волна
 	hud_row.add_child(timeline)
-	requisition_label.reparent(hud_row)
+	hud_row.add_child(UITheme.icon_row("hud", "requisition", requisition_label))
 	requisition_label.theme_type_variation = "ValueLabel"
-	citadel_label = UITheme.make_label("Цитадель %d/%d" % [ceili(BattleManager.citadel_hp), int(BattleManager.CITADEL_MAX_HP)], "ValueLabel")
+	citadel_label = UITheme.make_label("%d/%d" % [ceili(BattleManager.citadel_hp), int(BattleManager.CITADEL_MAX_HP)], "ValueLabel")
 	if BattleManager.citadel_hp <= BattleManager.CITADEL_MAX_HP / 4:
 		citadel_label.add_theme_color_override("font_color", UITheme.RED_BRIGHT)
-	hud_row.add_child(citadel_label)
+	var citadel_row := UITheme.icon_row("hud", "citadel_hp", citadel_label)   # «Цитадель» — значком
+	citadel_row.tooltip_text = "Цитадель"
+	citadel_row.mouse_filter = Control.MOUSE_FILTER_PASS
+	hud_row.add_child(citadel_row)
 	for l in [round_label, requisition_label, citadel_label]:
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	$TopBar.hide()

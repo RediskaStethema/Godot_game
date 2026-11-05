@@ -87,8 +87,13 @@ func shake(strength: float) -> void:
 	_shake_tween.tween_property(self, "offset", Vector2.ZERO, SHAKE_STEP)
 
 # Экран ↔ мир (UI живёт в CanvasLayer, камера на него не влияет)
+# Вне дерева (сцена боя уходит, а прицел орудия ещё опрашивает курсор) преобразования нет — точка как есть
 func screen_to_world(p: Vector2) -> Vector2:
+	if not is_inside_tree():
+		return p
 	return get_canvas_transform().affine_inverse() * p
 
 func world_to_screen(p: Vector2) -> Vector2:
+	if not is_inside_tree():
+		return p
 	return get_canvas_transform() * p

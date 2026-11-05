@@ -37,6 +37,8 @@ const EVENTS = {
 	"burning":      {"volume": -14.0, "max_per_sec": 4,  "pitch": 0.1},
 	"poison":       {"volume": -14.0, "max_per_sec": 4,  "pitch": 0.1},
 	"battle_cry":   {"volume": -6.0,  "max_per_sec": 2,  "pitch": 0.03},
+	"jump_land":    {"volume": -8.0,  "max_per_sec": 6,  "pitch": 0.08},   # приземление Assault
+	"deep_strike":  {"volume": -4.0,  "max_per_sec": 2,  "pitch": 0.03},   # телепорт Терминаторов
 	"revive":       {"volume": -8.0,  "max_per_sec": 3,  "pitch": 0.05},
 	"orbital_strike": {"volume": -2.0, "max_per_sec": 2, "pitch": 0.0},
 	# Интерфейс
@@ -47,6 +49,9 @@ const EVENTS = {
 	"reroll":       {"volume": -6.0,  "max_per_sec": 6,  "pitch": 0.0},
 	"place":        {"volume": -8.0,  "max_per_sec": 8,  "pitch": 0.05},
 	"tile_bought":  {"volume": -6.0,  "max_per_sec": 4,  "pitch": 0.0},
+	"building_level_up": {"volume": -6.0, "max_per_sec": 4, "pitch": 0.0},
+	"wall_hit":     {"volume": -10.0, "max_per_sec": 6,  "pitch": 0.08},   # удар по стене владений (KingdomWall)
+	"wall_break":   {"volume": -4.0,  "max_per_sec": 3,  "pitch": 0.05},   # звено стены разбито
 	"pause":        {"volume": -8.0,  "max_per_sec": 4,  "pitch": 0.0},
 	# Итоги и переходы
 	"battle_start": {"volume": -4.0,  "max_per_sec": 1,  "pitch": 0.0},
@@ -56,7 +61,6 @@ const EVENTS = {
 	"run_lost":     {"volume": 0.0,   "max_per_sec": 1,  "pitch": 0.0},
 	"expansion":    {"volume": -4.0,  "max_per_sec": 1,  "pitch": 0.0},
 }
-const MUSIC_TRACKS = ["menu", "shop", "battle", "boss"]
 
 var record_history: bool = false  # тесты / отладка: писать события в history (в игре — нет, лишние строки на выстрел)
 var history: Array[String] = []   # последние запрошенные события: «имя» или «имя (нет файла)»
@@ -147,6 +151,12 @@ func current_music() -> String:
 # Звук для теста / подмены без файлов: событие → свой поток (пустой массив — снова искать файл)
 func set_streams(event: String, streams: Array) -> void:
 	_streams[event] = streams
+
+# Файлы всех событий — заранее (BattleScene._ready): поиск файла — до 27 проверок диска, первое
+# событие каждого вида посреди схватки давало выброс тика (test_performance)
+func warm_cache() -> void:
+	for event in EVENTS:
+		_get_streams(event)
 
 func _get_streams(event: String) -> Array:
 	if not _streams.has(event):

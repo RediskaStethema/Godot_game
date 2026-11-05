@@ -32,7 +32,7 @@ func _ready() -> void:
 # Раса игрока на забег: от неё оформление поля и цитадели (FactionTheme).
 # Выбор расы — позже; новый забег её не сбрасывает (выбирается до new_run)
 var player_faction: String = FactionTheme.DEFAULT_FACTION
-# Орден Космодесанта (Chapters) — выбирается после расы; "" — без ордена
+# Орден Космодесанта / бог Хаоса (Chapters) — выбирается после расы; "" — без ордена
 var player_chapter: String = ""
 # Уровень сложности забега (Difficulty, 1..COUNT) — выбирается после ордена, новый забег его не сбрасывает
 var difficulty: int = Difficulty.DEFAULT

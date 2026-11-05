@@ -173,7 +173,7 @@ func apply_run_start() -> void:
 		return
 	EconomyManager.requisition += int(passive_value("reserves"))
 	if selected_start_card != "" and owned_start_cards.has(selected_start_card):
-		var card := CardFactory.create(selected_start_card)
+		var card := CardFactory.equivalent(selected_start_card, RunManager.player_faction)
 		if card:
 			BattleManager.pending_cards.append(card)
 
@@ -186,7 +186,9 @@ func _reached(rule: Dictionary) -> bool:
 func is_chapter_unlocked(id: String) -> bool:
 	return not active() or not CHAPTER_UNLOCKS.has(id) or _reached(CHAPTER_UNLOCKS[id])
 
+# Карта Хаоса открывается вместе со своей картой Космодесанта (CardFactory.base_id)
 func is_card_unlocked(id: String) -> bool:
+	id = CardFactory.base_id(id)
 	return not active() or not CARD_UNLOCKS.has(id) or _reached(CARD_UNLOCKS[id])
 
 # «Дойдите до волны 8 (лучшая волна 5/8)»

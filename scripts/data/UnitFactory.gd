@@ -12,8 +12,10 @@ const SQUAD_MERGE_BONUSES = {
 		"damage": 0.20,         # +20% урона за уровень
 		"hp": 0.20,             # +20% максимального HP за уровень
 		"attack_speed": 0.15,   # +15% скорострельности за уровень
-		"heal": 0.35,           # лечение: 35% максимального HP каждому бойцу
+		"heal": 0.30,           # и лечение: 30% максимального HP каждому бойцу, павшие возвращаются (решение пользователя 21.10.2026)
 	},
+	# Хаос игрока — пока те же цифры, что у Космодесанта (на одобрение)
+	"chaos": {"damage": 0.20, "hp": 0.20, "attack_speed": 0.15, "heal": 0.30},
 }
 const DEFAULT_FACTION: String = "space_marines"
 
@@ -36,19 +38,46 @@ const PAIR_GROWTH: int = 1
 # Космодесант в силовой броне и техника — на ARMOUR_SCALE крупнее (решение пользователя); люди
 # (Scout, культисты) — прежнего роста
 const ARMOUR_SCALE: float = 1.1
+# Дальность ближнего боя — ноги к ногам, px (решение пользователя 21.10.2026: при 60 бойцы ростом 31 px
+# били через пустоту — «стоят слишком далеко»). Крупные модели (Champion, Дредноут, Hellbrute, Chaos Lord) — дальше
+const MELEE_RANGE: float = 30.0
+
+# Бойцы богов Хаоса в чужом отряде (Святилище культа, решение пользователя 21.10.2026): павший боец соседнего
+# отряда встаёт бойцом отряда бога, сила — по редкости отряда, в который он встал
+const CONVERT_RARITY_MULT = {"common": 0.7, "rare": 1.0, "epic": 1.3}
+static var _convert_cache: Dictionary = {}   # kind → UnitData (шаблон, общий для всех таких бойцов)
+
+static func convert_kind(god_factory_id: String, host_rarity: String) -> String:
+	return "%s:%s" % [god_factory_id, host_rarity]
+
+static func convert_fighter(kind: String) -> UnitData:
+	if not _convert_cache.has(kind):
+		var parts := kind.split(":")
+		var d := create(parts[0])
+		var k: float = CONVERT_RARITY_MULT.get(parts[1] if parts.size() > 1 else "rare", 1.0)
+		d.hp_multiplier = k
+		d.damage_multiplier = k
+		_convert_cache[kind] = d
+	return _convert_cache[kind]
 
 # Бойцов за уровень у отряда карты: пехота — SQUAD_GROWTH, пары — PAIR_GROWTH
 static func squad_growth_for(card: CardData) -> int:
 	if card.unit_factory_id in SPLIT_UNITS:
 		return SQUAD_GROWTH
-	if card.unit_factory_id in PAIR_UNITS:
+	if card.unit_factory_id in PAIR_UNITS or card.unit_factory_id in PAIR_GROWTH_UNITS:
 		return PAIR_GROWTH
 	return 0
 const SPLIT_UNITS = ["tactical_marine", "assault_marine", "scout_marine", "devastator", "terminator",
-	"chaos_marine", "chaos_cultist", "chaos_havoc", "chaos_raptor", "plague_marine"]
-const PAIR_UNITS = ["apothecary", "librarian", "chaplain", "land_speeder", "dreadnought", "chapter_master"]
+	"chaos_marine", "chaos_cultist", "chaos_havoc", "chaos_raptor", "plague_marine",
+	"sanguinary_guard", "firedrakes", "khorne_berzerkers", "plaguebearers", "rubric_marines", "noise_marines"]
+const PAIR_UNITS = ["apothecary", "librarian", "chaplain", "land_speeder", "dreadnought", "chapter_master",
+	"hellbrute", "chaos_lord_player", "honour_guard", "centurion_devastators", "thunderwolf_cavalry"]
+# Пары без деления статов: Chaos Champion — враг-элита и так парами с полными статами (EnemyWaves),
+# у игрока та же пара растёт на PAIR_GROWTH бойца за уровень
+const PAIR_GROWTH_UNITS = ["chaos_champion"]
 const ARMOURED_UNITS = ["tactical_marine", "assault_marine", "devastator", "terminator",
-	"apothecary", "librarian", "chaplain", "land_speeder", "dreadnought", "chapter_master"]
+	"apothecary", "librarian", "chaplain", "land_speeder", "dreadnought", "chapter_master",
+	"honour_guard", "sanguinary_guard", "centurion_devastators", "thunderwolf_cavalry", "firedrakes"]
 
 static func get_merge_bonuses(faction: String) -> Dictionary:
 	return SQUAD_MERGE_BONUSES.get(faction, SQUAD_MERGE_BONUSES[DEFAULT_FACTION])
@@ -76,6 +105,23 @@ static func create(factory_id: String) -> UnitData:
 		"land_speeder":    d = land_speeder()
 		"dreadnought":     d = dreadnought()
 		"chapter_master":  d = chapter_master()
+		# Хаос игрока (решение пользователя 16.10.2026): герои-пары по статам техники и командира Космодесанта
+		"hellbrute":         d = hellbrute()
+		"chaos_lord_player": d = chaos_lord_player()
+		# Космодесант-враг (забег за Хаос): элита и боссы по статам Champion / Hellbrute / Chaos Lord
+		"veteran_terminator":  d = veteran_terminator()
+		"dreadnought_boss":    d = dreadnought_boss()
+		"chapter_master_boss": d = chapter_master_boss()
+		# Особые юниты орденов и богов (решение пользователя 18.10.2026) — только в магазине своего ордена
+		"honour_guard":          d = honour_guard()
+		"sanguinary_guard":      d = sanguinary_guard()
+		"centurion_devastators": d = centurion_devastators()
+		"thunderwolf_cavalry":   d = thunderwolf_cavalry()
+		"firedrakes":            d = firedrakes()
+		"khorne_berzerkers":     d = khorne_berzerkers()
+		"plaguebearers":         d = plaguebearers()
+		"rubric_marines":        d = rubric_marines()
+		"noise_marines":         d = noise_marines()
 		_:
 			push_warning("UnitFactory: неизвестный id '%s', создаю Tactical Marine" % factory_id)
 			d = tactical_marine()
@@ -111,7 +157,7 @@ static func tactical_marine() -> UnitData:
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.cost = 5
 	d.rarity = GameConstants.RARITY_COMMON
-	d.sprite_path = "res://assets/sprites/space_marine_tactical"  # лист assets/assetlist.png (tools/sheet_to_frames.py)
+	d.sprite_path = "res://assets/sprites/space_marine_tactical"  # лист assets/source_sheets/assetlist.png (tools/sheet_to_frames.py)
 	d.projectile = "bolt"
 	return d
 
@@ -124,12 +170,18 @@ static func assault_marine() -> UnitData:
 	d.hp = 90.0
 	d.damage = 18.0
 	d.attack_speed = 1.2
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 120.0
 	d.priority = GameConstants.PRIORITY_NEAREST
+	# Прыжковый ранец (решение пользователя 17.10.2026): раз за бой — на вражеского стрелка, удар при
+	# приземлении по площади и оглушение. Цифры — на одобрение
+	d.jump_range = 320.0
+	d.jump_damage_mult = 1.5
+	d.jump_radius = 40.0
+	d.jump_stun = 0.5
 	d.cost = 5
 	d.rarity = GameConstants.RARITY_COMMON
-	d.sprite_path = "res://assets/sprites/space_marine"  # пока тот же спрайт
+	d.sprite_path = "res://assets/sprites/space_marine_assault"  # лист assets/source_sheets/Assault_marine_assets.png (tools/sheet_to_frames.py)
 	return d
 
 static func chaos_marine() -> UnitData:
@@ -145,13 +197,11 @@ static func chaos_marine() -> UnitData:
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.cost = 5
 	d.rarity = GameConstants.RARITY_COMMON
-	d.sprite_path = "res://assets/sprites/chaos"  # ← временно тот же
-	d.projectile = "bolt"
-	d.projectile_warm = true
+	d.sprite_path = "res://assets/sprites/chaos_marine"  # лист assets/source_sheets/chaos_marine_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
+	d.projectile = "chaos_bolt"
 	return d
 
 # Элита Хаоса (эскорт мини-босса): усиленный Chaos Marine ближнего боя.
-# Своего спрайта нет — спрайт chaos, крупнее и с красным тинтом.
 static func chaos_champion() -> UnitData:
 	var d = chaos_marine()
 	d.unit_name = "Chaos Champion"
@@ -160,16 +210,16 @@ static func chaos_champion() -> UnitData:
 	d.hp = 180.0
 	d.damage = 22.0
 	d.attack_speed = 1.0
-	d.attack_range = 70.0
+	d.attack_range = MELEE_RANGE * 1.15   # Champion крупнее
 	d.move_speed = 80.0
 	d.retreat_hp_threshold = 0.0
 	d.rarity = GameConstants.RARITY_RARE
-	d.tint = Color(1.0, 0.55, 0.5)
+	d.sprite_path = "res://assets/sprites/chaos_champion"  # лист assets/source_sheets/chaos_champion_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
 	d.sprite_scale = 1.25
 	return d
 
 # Главный босс последней волны: Chaos Lord — один огромный боец, удар отбрасывает.
-# Спрайт chaos, фиолетовый тинт, ×1.8 размера. Баланс — черновой.
+# Свой лист, ×1.8 размера. Баланс — черновой.
 static func chaos_lord() -> UnitData:
 	var d = chaos_marine()
 	d.unit_name = "Chaos Lord"
@@ -178,17 +228,17 @@ static func chaos_lord() -> UnitData:
 	d.hp = 2200.0
 	d.damage = 50.0
 	d.attack_speed = 0.8
-	d.attack_range = 80.0
+	d.attack_range = MELEE_RANGE * 1.35   # Chaos Lord крупнее всех
 	d.move_speed = 60.0
 	d.on_hit_knockback = 250.0
 	d.retreat_hp_threshold = 0.0
 	d.rarity = GameConstants.RARITY_EPIC
-	d.tint = Color(0.85, 0.5, 1.0)
+	d.sprite_path = "res://assets/sprites/chaos_lord"  # лист assets/source_sheets/chaos_lord_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
 	d.sprite_scale = 1.8
 	return d
 
 # Мини-босс каждой 5-й волны: Hellbrute — медленная машина ближнего боя,
-# удар отбрасывает. Спрайт chaos, оранжевый тинт, ×1.5 размера. Баланс — черновой.
+# удар отбрасывает. Свой лист, ×1.5 размера. Баланс — черновой.
 static func chaos_hellbrute() -> UnitData:
 	var d = chaos_marine()
 	d.unit_name = "Hellbrute"
@@ -197,19 +247,19 @@ static func chaos_hellbrute() -> UnitData:
 	d.hp = 600.0
 	d.damage = 30.0
 	d.attack_speed = 0.7
-	d.attack_range = 75.0
+	d.attack_range = MELEE_RANGE * 1.25   # Hellbrute крупнее
 	d.move_speed = 55.0
 	d.on_hit_knockback = 150.0
 	d.retreat_hp_threshold = 0.0
 	d.rarity = GameConstants.RARITY_EPIC
-	d.tint = Color(1.0, 0.65, 0.35)
+	d.sprite_path = "res://assets/sprites/chaos_hellbrute"  # лист assets/source_sheets/chaos_hellbrute_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
 	d.sprite_scale = 1.5
 	return d
 
 # Архетипы обычных волн Хаоса (EnemyWaves.ARCHETYPES). Статы — от √(HP × DPS)
 # Chaos Marine (35.5): культист 0.4 от него, рапторы 1.25, хавоки и чумные 1.5;
 # сколько бойцов в отряде (EnemyWaves power) — подобрано tests/balance_sim.gd.
-# Свой спрайт — у культистов, остальные — спрайт chaos с тинтом и масштабом.
+# У всех свои листы.
 
 # Культисты: толпа слабых стрелков с коротким стволом
 static func chaos_cultist() -> UnitData:
@@ -221,8 +271,9 @@ static func chaos_cultist() -> UnitData:
 	d.attack_speed = 0.85
 	d.attack_range = 110.0
 	d.move_speed = 85.0
-	d.sprite_path = "res://assets/sprites/chaos_cultist"  # лист assets/Сhaos_cultists.png (tools/sheet_to_frames.py)
+	d.sprite_path = "res://assets/sprites/chaos_cultist"  # лист assets/source_sheets/Chaos_cultists.png (tools/sheet_to_frames.py)
 	d.sprite_scale = 0.85
+	d.blood = "red"   # люди, не десантники Хаоса
 	return d
 
 # Хавоки: тяжёлое оружие из тыла, бьют самого опасного
@@ -237,11 +288,10 @@ static func chaos_havoc() -> UnitData:
 	d.move_speed = 60.0
 	d.priority = GameConstants.PRIORITY_HIGHEST_THREAT
 	d.projectile = "flame"   # огненная струя (Flamethrower-Sheet) — уже тёплая, без перекраски
-	d.projectile_warm = false
 	d.on_hit_status = StatusEffects.BURNING   # попадание поджигает, огонь перекидывается
 	d.on_hit_status_power = 3.0
 	d.on_hit_status_duration = 3.0
-	d.tint = Color(0.75, 0.85, 1.0)
+	d.sprite_path = "res://assets/sprites/chaos_havoc"  # лист assets/source_sheets/chaos_havoc_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
 	d.sprite_scale = 1.1
 	return d
 
@@ -254,10 +304,10 @@ static func chaos_raptor() -> UnitData:
 	d.hp = 120.0
 	d.damage = 15.0
 	d.attack_speed = 0.9
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 140.0
 	d.priority = GameConstants.PRIORITY_RANGED_FIRST
-	d.tint = Color(0.6, 0.6, 0.75)
+	d.sprite_path = "res://assets/sprites/chaos_raptor"  # лист assets/source_sheets/chaos_raptor_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
 	return d
 
 # Чумные десантники: медленные и живучие, урон слабый, не отступают
@@ -269,14 +319,15 @@ static func plague_marine() -> UnitData:
 	d.hp = 300.0
 	d.damage = 12.0
 	d.attack_speed = 0.8
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 55.0
 	d.retreat_hp_threshold = 0.0
 	d.on_hit_status = StatusEffects.POISONED   # яд Nurgle: стак за удар
 	d.on_hit_status_power = 2.0
 	d.on_hit_status_duration = 4.0
-	d.tint = Color(0.7, 1.0, 0.55)
+	d.sprite_path = "res://assets/sprites/chaos_plague_marine"  # лист assets/source_sheets/Plague_Marine_assets.png (tools/sheet_to_frames.py, удар — кадр 7)
 	d.sprite_scale = 1.15
+	d.blood = "green"   # нурглиты
 	return d
 
 # Лёгкий стрелок: хрупкий, быстрый, добивает раненых
@@ -295,7 +346,7 @@ static func scout_marine() -> UnitData:
 	d.priority = GameConstants.PRIORITY_LOWEST_HP
 	d.cost = 4
 	d.rarity = GameConstants.RARITY_COMMON
-	d.sprite_path = "res://assets/sprites/space_marine_scout"  # лист assets/Assets_scout.png (tools/sheet_to_frames.py)
+	d.sprite_path = "res://assets/sprites/space_marine_scout"  # лист assets/source_sheets/Assets_scout.png (tools/sheet_to_frames.py)
 	d.sprite_scale = 0.85
 	d.projectile = "spark"
 	return d
@@ -312,11 +363,12 @@ static func devastator() -> UnitData:
 	d.attack_range = 320.0
 	d.move_speed = 60.0
 	d.priority = GameConstants.PRIORITY_HIGHEST_THREAT
+	# Окапывание (решение пользователя 17.10.2026): стоит на месте — урон до +30% за 2 с. Цифры — на одобрение
+	d.entrench_time = 2.0
+	d.entrench_bonus = 0.3
 	d.cost = 7
 	d.rarity = GameConstants.RARITY_RARE
-	# TODO: свой спрайт devastator
-	d.sprite_path = "res://assets/sprites/space_marine"
-	d.tint = Color(0.6, 0.75, 1.0)
+	d.sprite_path = "res://assets/sprites/space_marine_devastator"  # лист assets/source_sheets/Devastator_assets.png (tools/sheet_to_frames.py)
 	d.projectile = "charged"
 	return d
 
@@ -329,13 +381,15 @@ static func terminator() -> UnitData:
 	d.hp = 320.0
 	d.damage = 38.0
 	d.attack_speed = 0.8
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 55.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.retreat_hp_threshold = 0.0   # терминаторы не отступают
+	# Deep Strike (решение пользователя 17.10.2026): через 1 с боя — телепорт к переднему отряду врага
+	d.deep_strike_delay = 1.0
 	d.cost = 10
 	d.rarity = GameConstants.RARITY_RARE
-	d.sprite_path = "res://assets/sprites/space_marine_terminator"  # лист assets/Terminator_assets.png (tools/sheet_to_frames.py)
+	d.sprite_path = "res://assets/sprites/space_marine_terminator"  # лист assets/source_sheets/Terminator_assets.png (tools/sheet_to_frames.py)
 	d.sprite_scale = 1.35
 	return d
 
@@ -348,16 +402,14 @@ static func apothecary() -> UnitData:
 	d.hp = 300.0
 	d.damage = 10.0
 	d.attack_speed = 0.8
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 80.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.heal_per_second = 20.0
 	d.heal_radius = 150.0
 	d.cost = 7
 	d.rarity = GameConstants.RARITY_RARE
-	# TODO: свой спрайт apothecary
-	d.sprite_path = "res://assets/sprites/space_marine"
-	d.tint = Color(1.0, 0.7, 0.7)
+	d.sprite_path = "res://assets/sprites/space_marine_apothecary"  # лист assets/source_sheets/Apothecary_assets.png (tools/sheet_to_frames.py, + ряд лечения)
 	d.sprite_scale = 0.95
 	return d
 
@@ -379,7 +431,7 @@ static func librarian() -> UnitData:
 	d.on_hit_stun = 1.0
 	d.cost = 10
 	d.rarity = GameConstants.RARITY_RARE
-	d.sprite_path = "res://assets/sprites/space_marine_librarian"  # лист assets/Librarian_assets.png (tools/sheet_to_frames.py, + ряд каста)
+	d.sprite_path = "res://assets/sprites/space_marine_librarian"  # лист assets/source_sheets/Librarian_assets.png (tools/sheet_to_frames.py, + ряд каста)
 	d.sprite_scale = 1.05
 	d.projectile = "charged"
 	return d
@@ -408,7 +460,7 @@ static func chaplain() -> UnitData:
 	d.battle_cry_radius = 180.0
 	d.cost = 8
 	d.rarity = GameConstants.RARITY_RARE
-	d.sprite_path = "res://assets/sprites/space_marine_chaplain"  # лист assets/Сhaplin_assets.png (tools/sheet_to_frames.py)
+	d.sprite_path = "res://assets/sprites/space_marine_chaplain"  # лист assets/source_sheets/Chaplain_assets.png (tools/sheet_to_frames.py)
 	d.sprite_scale = 1.05
 	return d
 
@@ -425,9 +477,10 @@ static func land_speeder() -> UnitData:
 	d.move_speed = 160.0
 	d.priority = GameConstants.PRIORITY_FARTHEST
 	d.retreat_hp_threshold = 0.0
+	d.mobile_fire = true   # стреляет на ходу, кружит вокруг цели (решение пользователя 17.10.2026)
 	d.cost = 9
 	d.rarity = GameConstants.RARITY_RARE
-	d.sprite_path = "res://assets/sprites/space_marine_land_speeder"  # лист assets/Landspeeder_assets.png (tools/sheet_to_frames.py)
+	d.sprite_path = "res://assets/sprites/space_marine_land_speeder"  # лист assets/source_sheets/Landspeeder_assets.png (tools/sheet_to_frames.py)
 	d.sprite_scale = 1.35   # холст листа выше машины (взрыв в смерти) — иначе выйдет мельче пехоты
 	d.projectile = "bolt"
 	return d
@@ -441,14 +494,14 @@ static func dreadnought() -> UnitData:
 	d.hp = 1400.0
 	d.damage = 90.0
 	d.attack_speed = 0.6
-	d.attack_range = 70.0
+	d.attack_range = MELEE_RANGE * 1.15   # Дредноут крупнее
 	d.move_speed = 45.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.on_hit_knockback = 300.0
 	d.retreat_hp_threshold = 0.0
 	d.cost = 14
 	d.rarity = GameConstants.RARITY_EPIC
-	d.sprite_path = "res://assets/sprites/space_marine_dreadnought"  # лист assets/Dreadnought_assets.png (tools/sheet_to_frames.py)
+	d.sprite_path = "res://assets/sprites/space_marine_dreadnought"  # лист assets/source_sheets/Dreadnought_assets.png (tools/sheet_to_frames.py)
 	d.sprite_scale = 1.6
 	return d
 
@@ -461,13 +514,256 @@ static func chapter_master() -> UnitData:
 	d.hp = 1000.0
 	d.damage = 75.0
 	d.attack_speed = 1.0
-	d.attack_range = 60.0
+	d.attack_range = MELEE_RANGE
 	d.move_speed = 70.0
 	d.priority = GameConstants.PRIORITY_NEAREST
 	d.commander_damage_bonus = 0.15
 	d.retreat_hp_threshold = 0.0
 	d.cost = 16
 	d.rarity = GameConstants.RARITY_EPIC
-	d.sprite_path = "res://assets/sprites/space_marine_chapter_master"  # лист assets/chapter_master.png (tools/sheet_to_frames.py, + поза победы)
+	d.sprite_path = "res://assets/sprites/space_marine_chapter_master"  # лист assets/source_sheets/chapter_master.png (tools/sheet_to_frames.py, + поза победы)
 	d.sprite_scale = 1.3
+	return d
+
+# -------------------------------------------------------
+# ХАОС ИГРОКА (решение пользователя 16.10.2026): отряды — те же архетипы, что у врага
+# (chaos_cultist, chaos_marine, chaos_raptor, chaos_havoc, plague_marine, chaos_champion);
+# Hellbrute и Chaos Lord врага — боссы-одиночки, у игрока свои пары: статы Dreadnought и
+# Chapter Master (паритет HP×DPS за Req), вид — листы Hellbrute и Chaos Lord врага. Цифры — на одобрение
+# -------------------------------------------------------
+static func hellbrute() -> UnitData:
+	var d = dreadnought()
+	d.unit_name = "Hellbrute"
+	d.faction = "chaos"
+	d.tags = ["chaos", "melee", "vehicle", "elite"]
+	d.sprite_path = "res://assets/sprites/chaos_hellbrute"
+	d.sprite_scale = 1.5
+	return d
+
+static func chaos_lord_player() -> UnitData:
+	var d = chapter_master()
+	d.unit_name = "Chaos Lord"
+	d.faction = "chaos"
+	d.tags = ["chaos", "melee", "elite", "commander"]
+	d.sprite_path = "res://assets/sprites/chaos_lord"
+	d.sprite_scale = 1.4
+	return d
+
+# -------------------------------------------------------
+# КОСМОДЕСАНТ-ВРАГ (забег за Хаос): обычные волны — отряды игрока (EnemyWaves.SM_ARCHETYPES),
+# элита и боссы — статы Chaos Champion / Hellbrute / Chaos Lord, вид Космодесанта:
+# баланс волн тот же, что у Хаоса
+# -------------------------------------------------------
+static func veteran_terminator() -> UnitData:
+	var d = chaos_champion()
+	d.unit_name = "Terminator Veteran"
+	d.faction = "space_marines"
+	d.tags = ["marine", "melee", "elite"]
+	d.sprite_path = "res://assets/sprites/space_marine_terminator"
+	d.projectile_warm = false
+	d.tint = Color.WHITE
+	d.sprite_scale = 1.5   # как Terminator игрока в броне (×ARMOUR_SCALE)
+	return d
+
+static func dreadnought_boss() -> UnitData:
+	var d = chaos_hellbrute()
+	d.unit_name = "Dreadnought"
+	d.faction = "space_marines"
+	d.tags = ["marine", "melee", "vehicle", "elite"]
+	d.sprite_path = "res://assets/sprites/space_marine_dreadnought"
+	d.projectile_warm = false
+	d.tint = Color.WHITE
+	d.sprite_scale = 1.8
+	return d
+
+static func chapter_master_boss() -> UnitData:
+	var d = chaos_lord()
+	d.unit_name = "Chapter Master"
+	d.faction = "space_marines"
+	d.tags = ["marine", "melee", "elite", "boss"]
+	d.sprite_path = "res://assets/sprites/space_marine_chapter_master"
+	d.projectile_warm = false
+	d.tint = Color.WHITE
+	d.sprite_scale = 1.8
+	return d
+
+# -------------------------------------------------------
+# ОСОБЫЕ ЮНИТЫ ОРДЕНОВ И БОГОВ (решение пользователя 18.10.2026): Epic, только в магазине своего ордена
+# (Chapters "unit_card", CardFactory.build_pool). Статы — «за одиночку», делит create() (SPLIT / PAIR_UNITS);
+# способности — готовыми полями UnitData. Свои листы (19.10.2026); Космодесант — уже в цветах ордена (chapter_armor = false).
+# Цифры — черновые, на одобрение
+# -------------------------------------------------------
+# Ultramarines — Почётная стража Виктрикс: стойкая элита, щит в начале боя
+static func honour_guard() -> UnitData:
+	var d = UnitData.new()
+	d.unit_name = "Victrix Honour Guard"
+	d.faction = "space_marines"
+	d.tags = ["marine", "melee", "elite"]
+	d.hp = 1300.0
+	d.damage = 70.0
+	d.attack_speed = 0.9
+	d.attack_range = MELEE_RANGE
+	d.move_speed = 60.0
+	d.priority = GameConstants.PRIORITY_NEAREST
+	d.shield_ratio = 0.25
+	d.retreat_hp_threshold = 0.0
+	d.cost = 15
+	d.rarity = GameConstants.RARITY_EPIC
+	d.sprite_path = "res://assets/sprites/space_marine_honour_guard"  # лист assets/source_sheets/honour_guard.png (tools/sheet_to_frames.py)
+	d.tint = Color.WHITE
+	d.sprite_scale = 1.15
+	return d
+
+# Blood Angels — Сангвинарная стража: прыжок на стрелков, сильный удар с оглушением
+static func sanguinary_guard() -> UnitData:
+	var d = assault_marine()
+	d.unit_name = "Sanguinary Guard"
+	d.tags = ["marine", "melee", "jump", "elite"]
+	d.hp = 400.0
+	d.damage = 50.0
+	d.attack_speed = 1.1
+	d.move_speed = 115.0
+	d.jump_damage_mult = 2.0
+	d.jump_stun = 0.7
+	d.retreat_hp_threshold = 0.0
+	d.cost = 15
+	d.rarity = GameConstants.RARITY_EPIC
+	d.sprite_path = "res://assets/sprites/space_marine_sanguinary_guard"  # лист assets/source_sheets/sanguinary_guard_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
+	d.chapter_armor = false
+	d.sprite_scale = 1.1
+	return d
+
+# Imperial Fists — Центурионы-опустошители: тяжёлая огневая точка, окапываются сильнее
+static func centurion_devastators() -> UnitData:
+	var d = devastator()
+	d.unit_name = "Centurion Devastators"
+	d.tags = ["marine", "ranged", "heavy", "elite"]
+	d.hp = 1100.0
+	d.damage = 80.0
+	d.attack_speed = 0.6
+	d.attack_range = 300.0
+	d.move_speed = 40.0
+	d.entrench_bonus = 0.4
+	d.retreat_hp_threshold = 0.0
+	d.cost = 14
+	d.rarity = GameConstants.RARITY_EPIC
+	d.sprite_path = "res://assets/sprites/space_marine_centurion"  # лист assets/source_sheets/centurion_devastators_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
+	d.chapter_armor = false
+	d.sprite_scale = 1.6
+	return d
+
+# Space Wolves — Громовые волки: быстрая кавалерия, сбивает с ног
+static func thunderwolf_cavalry() -> UnitData:
+	var d = assault_marine()
+	d.unit_name = "Thunderwolf Cavalry"
+	d.tags = ["marine", "melee", "fast", "elite"]
+	d.hp = 1100.0
+	d.damage = 65.0
+	d.attack_speed = 1.0
+	d.move_speed = 150.0
+	d.jump_range = 0.0   # не прыгает — бежит
+	d.on_hit_knockback = 200.0
+	d.retreat_hp_threshold = 0.0
+	d.cost = 15
+	d.rarity = GameConstants.RARITY_EPIC
+	d.sprite_path = "res://assets/sprites/space_marine_thunderwolf"  # лист assets/source_sheets/thunderwolf_cavalry_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
+	d.chapter_armor = false
+	d.sprite_scale = 1.5
+	return d
+
+# Salamanders — Огненные драконы: огнемёты вблизи, сильный поджог
+static func firedrakes() -> UnitData:
+	var d = tactical_marine()
+	d.unit_name = "Firedrakes"
+	d.tags = ["marine", "ranged", "elite"]
+	d.hp = 380.0
+	d.damage = 40.0
+	d.attack_speed = 0.8
+	d.attack_range = 110.0
+	d.move_speed = 60.0
+	d.projectile = "flame"
+	d.on_hit_status = StatusEffects.BURNING
+	d.on_hit_status_power = 4.0
+	d.on_hit_status_duration = 3.0
+	d.retreat_hp_threshold = 0.0
+	d.cost = 14
+	d.rarity = GameConstants.RARITY_EPIC
+	d.sprite_path = "res://assets/sprites/space_marine_firedrakes"  # лист assets/source_sheets/firedrakes_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
+	d.chapter_armor = false
+	d.sprite_scale = 1.3
+	return d
+
+# Khorne — Берсерки: ярость в ближнем бою, не отступают
+static func khorne_berzerkers() -> UnitData:
+	var d = chaos_marine()
+	d.unit_name = "Khorne Berzerkers"
+	d.tags = ["chaos", "melee", "elite"]
+	d.projectile = ""
+	d.hp = 180.0
+	d.damage = 40.0
+	d.attack_speed = 1.4
+	d.attack_range = MELEE_RANGE
+	d.move_speed = 100.0
+	d.retreat_hp_threshold = 0.0
+	d.cost = 14
+	d.rarity = GameConstants.RARITY_EPIC
+	d.sprite_path = "res://assets/sprites/chaos_berzerkers"  # лист assets/source_sheets/khorne_berzerkers_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
+	d.sprite_scale = 1.1
+	return d
+
+# Nurgle — Чумоносцы: живучие демоны, яд при каждом ударе
+static func plaguebearers() -> UnitData:
+	var d = chaos_marine()
+	d.unit_name = "Plaguebearers"
+	d.tags = ["chaos", "melee", "daemon"]
+	d.projectile = ""
+	d.hp = 400.0
+	d.damage = 18.0
+	d.attack_speed = 0.8
+	d.attack_range = MELEE_RANGE
+	d.move_speed = 50.0
+	d.on_hit_status = StatusEffects.POISONED
+	d.on_hit_status_power = 3.0
+	d.on_hit_status_duration = 4.0
+	d.retreat_hp_threshold = 0.0
+	d.cost = 14
+	d.rarity = GameConstants.RARITY_EPIC
+	d.blood = "green"
+	d.sprite_path = "res://assets/sprites/chaos_plaguebearers"  # лист assets/source_sheets/plaguebearers_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
+	return d
+
+# Tzeentch — Рубриковые десантники: варп-болты бьют сильно и издалека
+static func rubric_marines() -> UnitData:
+	var d = chaos_marine()
+	d.unit_name = "Rubric Marines"
+	d.tags = ["chaos", "ranged", "elite"]
+	d.hp = 300.0
+	d.damage = 40.0
+	d.attack_speed = 0.7
+	d.attack_range = 220.0
+	d.move_speed = 55.0
+	d.projectile = "warp_bolt"   # варп-болт FXpack13 — синий, без перекраски в тёплый
+	d.projectile_warm = false
+	d.retreat_hp_threshold = 0.0
+	d.cost = 15
+	d.rarity = GameConstants.RARITY_EPIC
+	d.sprite_path = "res://assets/sprites/chaos_rubric_marines"  # лист assets/source_sheets/rubric_marines_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
+	d.sprite_scale = 1.1
+	return d
+
+# Slaanesh — Шумовые десантники: звуковое оружие оглушает
+static func noise_marines() -> UnitData:
+	var d = chaos_marine()
+	d.unit_name = "Noise Marines"
+	d.tags = ["chaos", "ranged"]
+	d.hp = 120.0
+	d.damage = 20.0
+	d.attack_speed = 1.2
+	d.attack_range = 200.0
+	d.move_speed = 85.0
+	d.on_hit_stun = 0.25
+	d.projectile = "sonic_wave"   # звуковая волна (пакет эффектов), не болт Chaos Marine
+	d.cost = 14
+	d.rarity = GameConstants.RARITY_EPIC
+	d.sprite_path = "res://assets/sprites/chaos_noise_marines"  # лист assets/source_sheets/noise_marines_sheet.png (tools/prep_sheet.py + sheet_to_frames.py --counts)
 	return d

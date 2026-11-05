@@ -3,8 +3,9 @@ extends Control
 # Главное меню — главная сцена. «Продолжить» — есть сохранение забега
 # (SaveManager), «Новый забег» — сброс и магазин 1-й волны (при сохранении —
 # с подтверждением), «Настройки» — GameSettings.
-# Вид — по концепту assets_menu.png: слева аквила, название и кнопки
-# (UITheme «MainMenuButton» с иконками), справа сцена с башней над планетой.
+# Вид — по концепту assets_menu.png, арт — лист UI_assets.png (tools/ui_from_sheet.py): слева золотая
+# аквила, название, разделитель с черепом и кнопки (UITheme «MainMenuButton» с иконками),
+# справа сцена с башней над планетой.
 # UI собирается кодом, стили — из UITheme.
 
 const BUTTON_SIZE = Vector2(320, 52)
@@ -46,7 +47,7 @@ func _build_layout() -> void:
 	var new_run = _make_button("НОВЫЙ ЗАБЕГ", "icon_eagle", _on_new_run_pressed)
 	new_run.name = "NewRunButton"
 	col.add_child(new_run)
-	var arsenal = _make_button("АРСЕНАЛ", "icon_eagle", _on_arsenal_pressed)
+	var arsenal = _make_button("АРСЕНАЛ", "icon_skull", _on_arsenal_pressed)
 	arsenal.name = "ArsenalButton"
 	col.add_child(arsenal)
 	col.add_child(_make_button("НАСТРОЙКИ", "icon_settings", _on_settings_pressed))
@@ -115,16 +116,22 @@ func _make_title_block() -> VBoxContainer:
 	eagle.custom_minimum_size = eagle.texture.get_size() * LOGO_SCALE
 	eagle.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	eagle.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	eagle.modulate = UITheme.TEXT
 	box.add_child(eagle)
 	var title = UITheme.make_label("WH40KINGS", "TitleLabel")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 42)
+	title.add_theme_font_size_override("font_size", UITheme.ui_px(42))
 	title.add_theme_color_override("font_color", UITheme.TEXT)
 	box.add_child(title)
 	var sub = UITheme.make_label("———  УДЕРЖИТЕ ЦИТАДЕЛЬ 15 ВОЛН  ———", "DimLabel")
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(sub)
+	if ResourceLoader.exists(UITheme.DIVIDER_SKULL):   # разделитель с черепом листа UI_assets.png
+		var divider = TextureRect.new()
+		divider.texture = load(UITheme.DIVIDER_SKULL)
+		divider.custom_minimum_size = Vector2(0, divider.texture.get_height())
+		divider.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		divider.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		box.add_child(divider)
 	return box
 
 func _spacer(h: float) -> Control:
@@ -166,7 +173,7 @@ func _open_race_select() -> void:
 	dialog.setup()
 	dialog.chosen.connect(_on_race_chosen)
 
-# Раса с орденами (Космодесант) — следом выбор ордена, затем сложности; «Отмена» в любом
+# Раса с орденами / богами (Космодесант, Хаос) — следом их выбор, затем сложности; «Отмена» в любом
 # окне — забег не начат
 func _on_race_chosen(faction: String) -> void:
 	if not Chapters.has_chapters(faction):
@@ -174,7 +181,7 @@ func _on_race_chosen(faction: String) -> void:
 		return
 	var dialog = ChapterSelectDialog.new()
 	add_child(dialog)
-	dialog.setup()
+	dialog.setup(faction)
 	dialog.chosen.connect(func(chapter): _open_difficulty_select(faction, chapter))
 
 func _open_difficulty_select(faction: String, chapter: String) -> void:
@@ -190,14 +197,14 @@ func _open_start_card_select(faction: String, chapter: String, level: int) -> vo
 		return
 	var dialog = StartCardDialog.new()
 	add_child(dialog)
-	dialog.setup()
+	dialog.setup(faction)
 	dialog.chosen.connect(func(card_id):
 		MetaProgress.select_start_card(card_id)
 		_start_new_run(faction, chapter, level))
 
 func _start_new_run(faction: String, chapter: String, level: int) -> void:
+	RunManager.player_faction = faction   # раньше сброса: стартовая карта — карта этой расы
 	BattleManager.reset_run()   # + MetaProgress.apply_run_start: «Резервы», стартовая карта
-	RunManager.player_faction = faction
 	RunManager.player_chapter = chapter
 	RunManager.difficulty = level
 	SaveManager.delete_save()

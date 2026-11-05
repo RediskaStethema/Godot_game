@@ -1,0 +1,215 @@
+[gd_resource type="SpriteFrames" load_steps=48 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/0.png" id="idle_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/1.png" id="idle_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/2.png" id="idle_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/3.png" id="idle_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/4.png" id="idle_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/5.png" id="idle_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/6.png" id="idle_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/7.png" id="idle_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/8.png" id="idle_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/9.png" id="idle_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/10.png" id="idle_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/idle/11.png" id="idle_11"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/0.png" id="walk_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/1.png" id="walk_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/2.png" id="walk_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/3.png" id="walk_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/4.png" id="walk_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/5.png" id="walk_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/6.png" id="walk_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/7.png" id="walk_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/8.png" id="walk_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/9.png" id="walk_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/10.png" id="walk_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/11.png" id="walk_11"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/run/12.png" id="walk_12"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/0.png" id="attack_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/1.png" id="attack_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/2.png" id="attack_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/3.png" id="attack_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/4.png" id="attack_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/5.png" id="attack_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/6.png" id="attack_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/7.png" id="attack_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/8.png" id="attack_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/9.png" id="attack_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/10.png" id="attack_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/attack/11.png" id="attack_11"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/death/0.png" id="death_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/death/1.png" id="death_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/death/2.png" id="death_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/death/3.png" id="death_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/death/4.png" id="death_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/death/5.png" id="death_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/death/6.png" id="death_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/death/7.png" id="death_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/death/8.png" id="death_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/chaos_rubric_marines/death/9.png" id="death_9"]
+
+[resource]
+metadata/muzzle = Vector2(61.0, -106.0)
+metadata/shot_frame = 5
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("idle_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_11")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("walk_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_11")
+}, {
+"duration": 1.0,
+"texture": ExtResource("walk_12")
+}],
+"loop": true,
+"name": &"walk",
+"speed": 14.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("attack_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_11")
+}],
+"loop": false,
+"name": &"attack",
+"speed": 16.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("death_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("death_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("death_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("death_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("death_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("death_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("death_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("death_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("death_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("death_9")
+}],
+"loop": false,
+"name": &"death",
+"speed": 10.0
+}]

@@ -14,6 +14,7 @@ var config_path: String = CONFIG_PATH
 var battle_speed: float = 1.0      # множитель скорости боя (Engine.time_scale в бою)
 var fullscreen: bool = false
 var master_volume: float = 1.0     # 0..1, шина Master
+var atmosphere: bool = true        # цветокоррекция, частицы и свет на поле боя (WorldGrade, Atmosphere)
 
 func _ready() -> void:
 	_load()
@@ -30,6 +31,10 @@ func set_battle_speed(value: float) -> void:
 
 func set_fullscreen(value: bool) -> void:
 	fullscreen = value
+	_commit()
+
+func set_atmosphere(value: bool) -> void:
+	atmosphere = value
 	_commit()
 
 func set_master_volume(value: float) -> void:
@@ -53,6 +58,7 @@ func _save() -> void:
 	var cfg = ConfigFile.new()
 	cfg.set_value("battle", "speed", battle_speed)
 	cfg.set_value("video", "fullscreen", fullscreen)
+	cfg.set_value("video", "atmosphere", atmosphere)
 	cfg.set_value("audio", "master_volume", master_volume)
 	cfg.save(config_path)
 
@@ -64,4 +70,5 @@ func _load() -> void:
 	if not BATTLE_SPEEDS.has(battle_speed):
 		battle_speed = 1.0
 	fullscreen = bool(cfg.get_value("video", "fullscreen", false))
+	atmosphere = bool(cfg.get_value("video", "atmosphere", true))
 	master_volume = clampf(float(cfg.get_value("audio", "master_volume", 1.0)), 0.0, 1.0)

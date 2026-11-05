@@ -47,7 +47,7 @@ func _main() -> void:
 
 	# 1. Пустой профиль
 	var chapters_open: Array = []
-	for c in Chapters.CHAPTERS:
+	for c in Chapters.for_faction("space_marines"):   # боги Хаоса открыты всегда — у них нет условий
 		if meta.is_chapter_unlocked(c["id"]):
 			chapters_open.append(c["id"])
 	bm.reset_run()

@@ -53,10 +53,16 @@ var next_battle_note: String = ""
 # Заряженные карты-события (id карт): разыгрываются на расстановке, срабатывают
 # в начале боя (fire_armed_events). Сохраняются — «Продолжить» их не теряет
 var armed_events: Array[String] = []
+# Клетки, куда сыграны заряженные карты (метка Orbital Strike на расстановке; на удар не влияют) — сохраняются:
+# после «Продолжить» метка снова на клетке
+var armed_tiles: Array[Vector2i] = []
 
 # Здания: стоят между раундами на своих клетках (CardData → Vector2i)
 var player_buildings: Dictionary = {}
 var buildings: Array = []           # узлы Building текущего боя (ставит BattleScene)
+# Стена вокруг владений (карта building_type "wall") клетку не занимает: в player_buildings — на WALL_TILE вне поля
+const WALL_TILE := Vector2i(-100, -100)
+var kingdom_wall: Node2D = null     # KingdomWall текущего боя (ставит BattleScene), null — стены нет
 var projectiles: Array = []         # снаряды в полёте (Projectile.launch) — тикают в бою, урон при попадании
 
 signal citadel_hp_changed(hp: float)
@@ -81,6 +87,7 @@ func start_battle() -> void:
 	if phase == BattlePhase.RUNNING:
 		return  # защита от двойного запуска
 	damage_by_unit.clear()
+	thralls.clear()
 
 	phase = BattlePhase.RUNNING
 	winner_team = -1
@@ -181,6 +188,11 @@ func clear_projectiles() -> void:
 # Урон отрядов игрока за бой (UnitData → урон по HP: без щита и перебора сверх HP цели) — итоги боя.
 # По UnitData, а не по узлу: отряд, павший целиком, тоже в итогах. Яд и огонь не считаются
 var damage_by_unit: Dictionary = {}
+# Порабощённые за бой (благословение Слаанеш, Soldier.charm): отряд (UnitData) → сколько — apply_thralls после победы
+var thralls: Dictionary = {}
+
+func add_thrall(data: UnitData) -> void:
+	thralls[data] = thralls.get(data, 0) + 1
 func credit_damage(source, amount: float) -> void:
 	if amount <= 0.0 or not is_instance_valid(source) or source.team != GameConstants.TEAM_PLAYER:
 		return
@@ -225,13 +237,6 @@ func _check_battle_end() -> void:
 
 	print("BattleManager: бой закончен, победитель — команда ", winner_team)
 	emit_signal("battle_ended", winner_team)
-# -------------------------------------------------------
-# ПРОВЕРКА ПОБЕДЫ
-# -------------------------------------------------------
-
-
-func set_player_units(units: Array[UnitData]) -> void:
-	player_units = units
 
 # -------------------------------------------------------
 # КОРОЛЕВСТВО
@@ -252,6 +257,16 @@ func reset_kingdom() -> void:
 func has_citadel() -> bool:
 	return is_instance_valid(citadel)
 
+func has_kingdom_wall() -> bool:
+	return kingdom_wall != null and is_instance_valid(kingdom_wall)
+
+# Карта стены владений в забеге (null — не построена)
+func get_wall_card() -> CardData:
+	for card in player_buildings:
+		if card.building_type == "wall":
+			return card
+	return null
+
 func damage_citadel(amount: float) -> void:
 	if citadel_hp <= 0.0:
 		return
@@ -270,6 +285,16 @@ func heal_citadel(amount: float) -> float:
 	emit_signal("citadel_hp_changed", citadel_hp)
 	return citadel_hp - before
 
+# После боя: Кузня Вулкана чинит цитадель (статы по уровню и ордену); цитадель пала — не чинит
+func repair_from_forges() -> float:
+	if citadel_hp <= 0.0:
+		return 0.0
+	var amount := 0.0
+	for card in player_buildings:
+		if card.building_type == "vulkan_forge":
+			amount += Chapters.apply_building_stats(card.get_building_stats(), RunManager.player_chapter).get("repair", 0.0)
+	return heal_citadel(amount) if amount > 0.0 else 0.0
+
 # Итог боя: цитадель ранена и ниже порога — подкрепление в следующем магазине
 func _check_catch_up() -> void:
 	if citadel_hp > 0.0 and citadel_hp < _citadel_hp_at_start \
@@ -281,6 +306,7 @@ func _check_catch_up() -> void:
 func reset_run() -> void:
 	battle_in_progress = false
 	armed_events.clear()
+	armed_tiles.clear()
 	catch_up_pending = false
 	next_battle_enemy_hp = 1.0
 	next_battle_note = ""
@@ -306,9 +332,16 @@ func reset_run() -> void:
 func sync_army_from_squads(squads: Array) -> void:
 	for squad in squads:
 		var hp_list: Array[float] = []
+		var kinds: Array[String] = []
 		for soldier in squad.soldiers:
+			if soldier.charmed:
+				continue   # порабощённый (Слаанеш) — не боец отряда: после боя он вернёт павшего (apply_thralls)
 			hp_list.append(clampf(soldier.current_hp / soldier.max_hp, 0.01, 1.0))
+			kinds.append(soldier.convert_kind)
+		if not kinds.any(func(k): return k != ""):
+			kinds.clear()   # все свои — список типов не нужен
 		squad.data.saved_hp = hp_list
+		squad.data.saved_kinds = kinds
 		if not player_units.has(squad.data):
 			player_units.append(squad.data)
 		player_placements[squad.data] = squad.tile
@@ -320,7 +353,8 @@ func sync_army_from_squads(squads: Array) -> void:
 func store_survivors(alive_squads: Array, at_start: Array) -> Array[String]:
 	player_units.clear()
 	player_placements.clear()
-	sync_army_from_squads(alive_squads)
+	# Отряд, где остались одни порабощённые, — пал (возрождается ниже)
+	sync_army_from_squads(alive_squads.filter(func(sq): return sq.soldiers.any(func(x): return not x.charmed)))
 	var revived: Array[String] = []
 	for entry in at_start:
 		var data: UnitData = entry["data"]
@@ -332,9 +366,30 @@ func store_survivors(alive_squads: Array, at_start: Array) -> Array[String]:
 		revived.append(data.unit_name)
 	return revived
 
-# Ход Казарм (после выигранного боя, после store_survivors): каждому отряду на соседней с казармами
-# клетке (по сторонам) возвращается до refill павших бойцов с полным HP, не больше squad_size.
-# Живых не лечит. Возвращает, сколько бойцов вернулось
+# Ход Казарм (после выигранного боя, после store_survivors) — отрядам на соседних клетках (по сторонам):
+# Казармы Космодесанта лечат живых на heal (доля max HP) и возвращают до refill павших с полным HP (решение
+# пользователя 21.10.2026). Святилище культа Хаоса (та же карта, раса chaos) не лечит; если среди соседей есть
+# отряд бога Хаоса, павшие ДРУГИХ соседей встают бойцами этого бога (UnitData.saved_kinds, сила — по редкости
+# отряда, UnitFactory.convert_fighter), иначе — свои. Не больше squad_size. Возвращает, сколько бойцов вернулось
+# Порабощённые (благословение Слаанеш) после выигранного боя, после store_survivors: за каждого — павший боец
+# отряда возвращается с полным HP; павших не хватило — отряд лечится на ChaosGods.SLAANESH_HEAL (раз за бой)
+# (решение пользователя 25.10.2026). Возвращает, сколько было порабощено
+func apply_thralls() -> int:
+	var total := 0
+	for d in thralls:
+		if not player_units.has(d):
+			continue
+		var n: int = thralls[d]
+		total += n
+		var missing: int = maxi(d.squad_size - d.saved_hp.size(), 0)
+		for i in range(mini(n, missing)):
+			d.saved_hp.append(1.0)
+		if n > missing:
+			for i in d.saved_hp.size():
+				d.saved_hp[i] = minf(d.saved_hp[i] + ChaosGods.SLAANESH_HEAL, 1.0)
+	thralls.clear()
+	return total
+
 const NEIGHBOUR_TILES: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
 func refill_from_barracks() -> int:
@@ -342,19 +397,42 @@ func refill_from_barracks() -> int:
 	for card in player_buildings:
 		if card.building_type != "barracks":
 			continue
-		var refill = floori(card.get_building_stats().get("refill", 0.0))
+		var stats: Dictionary = card.get_building_stats()
+		var refill = floori(stats.get("refill", 0.0))
+		var heal: float = stats.get("heal", 0.0) if card.faction != "chaos" else 0.0
+		var neighbours: Array[UnitData] = []
 		for d in player_units:
-			if not player_placements.has(d) or not NEIGHBOUR_TILES.has(player_placements[d] - player_buildings[card]):
-				continue
+			if player_placements.has(d) and NEIGHBOUR_TILES.has(player_placements[d] - player_buildings[card]):
+				neighbours.append(d)
+		var god := _god_squad_among(neighbours) if card.faction == "chaos" else null
+		for d in neighbours:
+			if heal > 0.0:
+				for i in d.saved_hp.size():
+					d.saved_hp[i] = minf(d.saved_hp[i] + heal, 1.0)
 			var added = mini(refill, d.squad_size - d.saved_hp.size())
+			var kind := ""
+			if god and d != god:
+				kind = UnitFactory.convert_kind(god.factory_id, d.rarity)
+				while d.saved_kinds.size() < d.saved_hp.size():   # свои бойцы, дописанные без типа
+					d.saved_kinds.append("")
 			for i in range(added):
 				d.saved_hp.append(1.0)
+				if kind != "":
+					d.saved_kinds.append(kind)
 			total += maxi(added, 0)
 			if added > 0:   # вид: ворота казарм на поле (анимация refill листа, если есть)
 				for b in buildings:
 					if is_instance_valid(b) and b.card == card:
 						b.play_once("refill")
 	return total
+
+# Отряд бога Хаоса (особый юнит бога — Chapters unit_card) среди отрядов или null
+func _god_squad_among(squads: Array[UnitData]) -> UnitData:
+	var gods: Array = Chapters.for_faction("chaos").map(func(c): return c.get("unit_card", ""))
+	for d in squads:
+		if d.factory_id in gods:
+			return d
+	return null
 
 # Поражение / ничья — армия потеряна
 func lose_army() -> void:
@@ -390,6 +468,7 @@ func save_state() -> Dictionary:
 		"next_enemy_hp": next_battle_enemy_hp,
 		"next_note": next_battle_note,
 		"armed_events": Array(armed_events.duplicate()),
+		"armed_tiles": armed_tiles.map(_v2i_to_arr),
 	}
 
 func load_state(d: Dictionary) -> void:
@@ -407,7 +486,13 @@ func load_state(d: Dictionary) -> void:
 		var card = CardFactory.create(entry["card"])
 		if card:
 			card.building_level = clampi(int(entry.get("level", 1)), 1, CardData.MAX_BUILDING_LEVEL)
-			player_buildings[card] = _arr_to_v2i(entry["tile"])
+			# Стена — вне клеток (старые сохранения: стояла на клетке — клетка освобождается; две стены — одна
+			# уровнем выше)
+			var wall := get_wall_card() if card.building_type == "wall" else null
+			if wall:
+				wall.building_level = mini(wall.building_level + card.building_level, CardData.MAX_BUILDING_LEVEL)
+				continue
+			player_buildings[card] = WALL_TILE if card.building_type == "wall" else _arr_to_v2i(entry["tile"])
 	pending_cards = CardFactory.create_many(d["hand"])
 	battle_in_progress = bool(d.get("in_progress", false))
 	catch_up_pending = bool(d.get("catch_up_pending", false))
@@ -416,6 +501,9 @@ func load_state(d: Dictionary) -> void:
 	armed_events.clear()
 	for id in d.get("armed_events", []):
 		armed_events.append(str(id))
+	armed_tiles.clear()
+	for t in d.get("armed_tiles", []):
+		armed_tiles.append(_arr_to_v2i(t))
 	emit_signal("citadel_hp_changed", citadel_hp)
 
 static func _v2i_to_arr(v: Vector2i) -> Array:
@@ -441,6 +529,7 @@ func fire_armed_events() -> Array:
 				hits.append({"pos": pos, "radius": r})
 				AudioManager.play("orbital_strike")
 	armed_events.clear()
+	armed_tiles.clear()
 	return hits
 
 # Точка удара: боец врага, вокруг которого в радиусе больше всего врагов
@@ -458,12 +547,14 @@ func _densest_enemy_point(radius: float) -> Variant:
 			best = e.global_position
 	return best
 
-# Щит цитадели на бой — сумма от зданий (Fortress Wall)
+# Щит цитадели на бой — от стены владений (Fortress Wall) и зданий со щитом (бастион Imperial Fists)
 func prepare_citadel_shield() -> void:
 	citadel_shield = MetaProgress.passive_value("walls")   # пассивка «Освящённые стены»
 	for b in buildings:
 		if is_instance_valid(b):
 			citadel_shield += b.get_citadel_shield()
+	if has_kingdom_wall():
+		citadel_shield += kingdom_wall.get_citadel_shield()
 	emit_signal("citadel_hp_changed", citadel_hp)
 
 # Волна, в которой можно расширять королевство
@@ -479,7 +570,7 @@ func get_tile_cost() -> int:
 
 # Списывает Requisition и открывает клетку. Соседство и рамку проверяет вызывающий.
 func try_buy_tile(tile: Vector2i) -> bool:
-	if not can_expand_kingdom() or kingdom_tiles.has(tile):
+	if not can_expand_kingdom() or kingdom_tiles.has(tile) or kingdom_tiles.size() >= IsoGrid.MAX_KINGDOM_TILES:
 		return false
 	if not EconomyManager.try_spend(get_tile_cost()):
 		return false

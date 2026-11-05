@@ -1,0 +1,211 @@
+[gd_resource type="SpriteFrames" load_steps=43 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/0.png" id="idle_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/1.png" id="idle_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/2.png" id="idle_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/3.png" id="idle_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/4.png" id="idle_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle/5.png" id="idle_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/0.png" id="refill_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/1.png" id="refill_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/2.png" id="refill_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/3.png" id="refill_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/4.png" id="refill_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/5.png" id="refill_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/6.png" id="refill_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill/7.png" id="refill_7"]
+
+
+
+
+
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_2/0.png" id="idle_2_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_2/1.png" id="idle_2_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_2/2.png" id="idle_2_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_2/3.png" id="idle_2_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_2/4.png" id="idle_2_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_2/5.png" id="idle_2_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_2/0.png" id="refill_2_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_2/1.png" id="refill_2_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_2/2.png" id="refill_2_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_2/3.png" id="refill_2_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_2/4.png" id="refill_2_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_2/5.png" id="refill_2_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_2/6.png" id="refill_2_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_2/7.png" id="refill_2_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_3/0.png" id="idle_3_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_3/1.png" id="idle_3_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_3/2.png" id="idle_3_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_3/3.png" id="idle_3_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_3/4.png" id="idle_3_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/idle_3/5.png" id="idle_3_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_3/0.png" id="refill_3_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_3/1.png" id="refill_3_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_3/2.png" id="refill_3_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_3/3.png" id="refill_3_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_3/4.png" id="refill_3_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_3/5.png" id="refill_3_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_3/6.png" id="refill_3_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_3/7.png" id="refill_3_7"]
+
+[resource]
+metadata/level_shift = {2: Vector2(-30, 0), 3: Vector2(-33, 0)}
+metadata/level_scale = {2: 1.154, 3: 1.027}
+metadata/level_static = ["idle_2", "refill_2", "idle_3", "refill_3"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("idle_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_5")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("refill_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_7")
+}],
+"loop": false,
+"name": &"refill",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("idle_2_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_5")
+}],
+"loop": true,
+"name": &"idle_2",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("refill_2_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2_7")
+}],
+"loop": false,
+"name": &"refill_2",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("idle_3_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_5")
+}],
+"loop": true,
+"name": &"idle_3",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("refill_3_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3_7")
+}],
+"loop": false,
+"name": &"refill_3",
+"speed": 10.0
+}]

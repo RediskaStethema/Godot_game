@@ -7,10 +7,11 @@ extends SceneTree
 #    без листа — блоки, как раньше;
 # 2) Казармы вернули бойцов — анимация refill;
 # 3) Apothecary с рядом heal — лечит → heal, некого лечить → стойка;
-# 4) броня в цвет ордена: свои — шейдер с тоном ордена, враги и Ultramarines — как нарисовано,
+# 4) броня в цвет ордена: свои — шейдер с тоном ордена (Ultramarines — синий листа, темнее), враги — как нарисовано,
 #    вспышка попадания не снимает перекраску;
 # 5) звук: шины, событие без файла — тихо, с потоком — играет, предел частоты, выстрел снаряда и
-#    музыка магазина вызывают свои события.
+#    музыка магазина вызывают свои события;
+# 6) пакет эффектов (EFFECTS_NEEDED.txt): розыгрыш карт и начало боя вызывают свои эффекты, ромб под картой.
 # Классы сцен по имени не упоминаются (скрипт компилируется до автолоадов) — через load().
 #   godot --headless --path . -s tests/test_asset_hooks.gd
 
@@ -87,13 +88,13 @@ func _main() -> void:
 	var tower_frames := _sheet({"idle": 2, "attack": 3, "idle_2": 2})
 	tower_frames.set_meta("muzzle", Vector2(20, -60))
 	tower_frames.set_meta("shot_frame", 1)
-	B._frames_cache["tower"] = tower_frames
-	B._frames_cache["wall"] = null
+	B._frames_cache["space_marines/tower"] = tower_frames
+	B._frames_cache["space_marines/generator"] = null
 	var turret = CardFactory.bolter_turret()
-	var wall = CardFactory.fortress_wall()
-	await _battle([_squad_unit("tactical_marine", 3)] as Array[UnitData], {turret: Vector2i(0, 0), wall: Vector2i(0, 2)})
+	var gen = CardFactory.plasma_generatorium()
+	await _battle([_squad_unit("tactical_marine", 3)] as Array[UnitData], {turret: Vector2i(0, 0), gen: Vector2i(0, 2)})
 	var t = bm.buildings.filter(func(b): return b.card == turret)[0]
-	var w = bm.buildings.filter(func(b): return b.card == wall)[0]
+	var w = bm.buildings.filter(func(b): return b.card == gen)[0]
 	var occ: Rect2 = t.get_occlusion_rect()
 	var width_ok := absf(occ.size.x - 140.0 * B.SPRITE_WIDTH) < 1.0
 	_check("здание со своим листом: спрайт вместо блоков (ширина %.0f ≈ %.0f), рамка прозрачности по нему; без листа — блоки" % [
@@ -103,7 +104,7 @@ func _main() -> void:
 	var portrait = load(UI_THEME).card_portrait(turret)
 	_check("уровень 2 — вид idle_2; портрет карты — кадр листа", t.sprite.animation == "idle_2"
 		and portrait == tower_frames.get_frame_texture("idle", 0))
-	current_scene._on_start_pressed()
+	current_scene._on_start_pressed(false)
 	bm.set_process(false)
 	var enemy = reg.get_alive_soldiers_of_team(1)[0]
 	t.attack_timer = 0.0
@@ -115,7 +116,7 @@ func _main() -> void:
 	bm.stop_battle()
 
 	# 2. Казармы вернули бойцов — анимация refill
-	B._frames_cache["barracks"] = _sheet({"idle": 2, "refill": 3})
+	B._frames_cache["space_marines/barracks"] = _sheet({"idle": 2, "refill": 3})
 	var barracks = CardFactory.barracks()
 	var wounded = _squad_unit("tactical_marine", 9)
 	wounded.saved_hp = [1.0, 1.0, 1.0] as Array[float]
@@ -123,7 +124,7 @@ func _main() -> void:
 	var bb = bm.buildings.filter(func(b): return b.card == barracks)[0]
 	var added: int = bm.refill_from_barracks()
 	_check("Казармы вернули бойцов (%d) — анимация refill" % added, added > 0 and bb.sprite.animation == "refill")
-	for k in ["tower", "wall", "barracks"]:
+	for k in ["space_marines/tower", "space_marines/generator", "space_marines/barracks"]:
 		B._frames_cache.erase(k)
 
 	# 3. Apothecary с рядом heal
@@ -153,19 +154,26 @@ func _main() -> void:
 	var marine = reg.get_alive_soldiers_of_team(0)[0]
 	var foe = reg.get_alive_soldiers_of_team(1)[0]
 	var mat = marine.sprite.material
-	var red_ok: bool = mat is ShaderMaterial and is_equal_approx(mat.get_shader_parameter("target_hue"), 0.0)
+	var ba_hue: float = load("res://scripts/data/Chapters.gd").get_chapter("blood_angels")["armor"]["hue"]
+	var red_ok: bool = mat is ShaderMaterial and is_equal_approx(mat.get_shader_parameter("target_hue"), ba_hue)
 	marine.take_damage(1.0)
 	var flash_mat = marine.sprite.material
 	var flashing: bool = flash_mat is ShaderMaterial and flash_mat.get_shader_parameter("flash") > 0.0 \
-		and is_equal_approx(flash_mat.get_shader_parameter("target_hue"), 0.0)
+		and is_equal_approx(flash_mat.get_shader_parameter("target_hue"), ba_hue)
 	var t0 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t0 < 300:
 		await process_frame
-	_check("Blood Angels: броня красная, враг как нарисован; вспышка — с перекраской, после — снова цвет ордена",
-		red_ok and foe.sprite.material == null and flashing and marine.sprite.material == mat)
+	var foe_mat = foe.sprite.material
+	var foe_ok: bool = foe_mat is ShaderMaterial and not foe_mat.get_shader_parameter("armor") 		and foe_mat.get_shader_parameter("outline_px") > 0.0
+	_check("Blood Angels: броня красная, враг как нарисован (только контур); вспышка — с перекраской, после — снова цвет ордена",
+		red_ok and foe_ok and flashing and marine.sprite.material == mat)
 	rm.player_chapter = "ultramarines"
 	await _battle([_squad_unit("tactical_marine", 3)] as Array[UnitData])
-	_check("Ultramarines — синие как нарисовано (без шейдера)", reg.get_alive_soldiers_of_team(0)[0].sprite.material == null)
+	var um_mat = reg.get_alive_soldiers_of_team(0)[0].sprite.material
+	var um: Dictionary = load("res://scripts/data/Chapters.gd").get_chapter("ultramarines")["armor"]
+	_check("Ultramarines — синий листа, но темнее (шейдер: тон %.3f, яркость ×%.2f)" % [um["hue"], um["val"]],
+		um_mat is ShaderMaterial and is_equal_approx(um_mat.get_shader_parameter("target_hue"), um["hue"])
+		and um_mat.get_shader_parameter("val_mult") < 1.0)
 	rm.player_chapter = ""
 
 	# 5. Звук
@@ -192,7 +200,76 @@ func _main() -> void:
 	audio.history.clear()
 	await _battle([_squad_unit("tactical_marine", 3)] as Array[UnitData])
 	var P = load("res://scripts/battle/Projectile.gd")
-	P.launch(current_scene, "bolt", Vector2.ZERO, null, Vector2(100, 0))
+	P.launch(current_scene, "bolt", Vector2.ZERO, null, Vector2(100, 0)).tick(0.1)   # звук — при вылете из ствола
 	_check("события звука: музыка боя, выстрел снаряда (%s)" % ", ".join(audio.history.slice(0, 4)),
 		audio.current_music() == "battle" and audio.history.any(func(h): return h.begins_with("shot_bolt")))
+	bm.stop_battle()
+	await _effects_pack()
 	quit()
+
+# 6. Пакет эффектов (EFFECTS_NEEDED.txt, листы tools/fx_fix.py): розыгрыш карт на расстановке и начало боя
+# вызывают свои эффекты; ромб под перетаскиваемой картой — по клетке; вариант расы
+func _has_fx(parent: Node, kind: String) -> bool:
+	var V = load("res://scripts/battle/Vfx.gd")
+	var frames: SpriteFrames = V._get_frames(kind)
+	return parent.get_children().any(func(c): return c is AnimatedSprite2D and c.sprite_frames == frames)
+
+# Уровень / появление отряда — свет на каждом бойце (LevelUpGlow: кольцо за спрайтом и свет перед ним)
+func _has_level_glow(squad, kind: String = "level") -> bool:
+	return squad != null and squad.soldiers.all(func(s): return s.get_children().filter(func(c):
+		return c.get_script() != null and c.get_script().resource_path.ends_with("LevelUpGlow.gd") and c.kind == kind).size() == 2)
+
+# Свечение клетки (TileGlow) вида look — в рендерере поля
+func _has_tile_glow(renderer, look: String) -> bool:
+	for c in renderer.get_children():
+		if c.get_script() != null and c.get_script().resource_path.ends_with("TileGlow.gd") 				and c.verdict == look and not c.is_queued_for_deletion():
+			return true
+	return false
+
+func _effects_pack() -> void:
+	var bm = root.get_node("BattleManager")
+	var V = load("res://scripts/battle/Vfx.gd")
+	var wall = CardFactory.fortress_wall()
+	var own = _squad_unit("tactical_marine", 9)
+	# стена владений — вне клеток; на (0, 2) — здание (ромб «нельзя»)
+	await _battle([own] as Array[UnitData], {wall: bm.WALL_TILE, CardFactory.plasma_generatorium(): Vector2i(0, 2)},
+		{own: Vector2i(1, 1)})
+	var s = current_scene
+	var units: Node = s.units_container
+	var tactical = CardFactory.create("tactical_squad")
+	s._play_squad_card(tactical, Vector2i(2, 1))
+	s._play_building_card(CardFactory.plasma_generatorium(), Vector2i(2, 2))
+	var arrive_build: bool = _has_level_glow(s._get_player_squad_at(Vector2i(2, 1)), "arrive") 		and _has_tile_glow(s.renderer, "build")
+	s._merge_squad(tactical, s._get_player_squad_at(Vector2i(1, 1)))
+	s._play_upgrade_card(CardFactory.create("battle_fury"), Vector2i(1, 1))
+	s._play_event_card(CardFactory.create("orbital_strike"), Vector2i(0, 1))
+	_check("расстановка: отряд — свет телепорта на бойцах, здание — волна по клетке, уровень — свет с шевронами, " +
+		"улучшение — знак карты, орбитальный удар — метка на клетке", arrive_build
+		and _has_level_glow(s._get_player_squad_at(Vector2i(1, 1))) and _has_fx(units, "upgrade_battle_fury")
+		and _has_tile_glow(s.renderer, "strike"))
+	var verdicts = [s._drop_verdict(tactical, Vector2i(1, 1)), s._drop_verdict(tactical, Vector2i(2, 0)),
+		s._drop_verdict(tactical, Vector2i(0, 2)), s._drop_verdict(CardFactory.create("battle_fury"), Vector2i(2, 0))]
+	s._update_drag_target(tactical, Vector2i(1, 1))
+	var marker_ok: bool = is_instance_valid(s._drag_target) and s._drag_target.verdict == "compatible"
+	s._update_drag_target(null, Vector2i.ZERO)
+	_check("ромб под картой: свой отряд — compatible, пусто — playable, здание — invalid, улучшение на пустую — invalid (%s); " % [
+		verdicts] + "отпустили — гаснет", verdicts == ["compatible", "playable", "invalid", "invalid"] and marker_ok
+		and s._drag_target == null)
+	# Карта не ляжет — ромб «нельзя»: отряд на максимуме и здоров, здание на максимуме
+	var mine = s._get_player_squad_at(Vector2i(1, 1))
+	while mine.data.can_merge_upgrade():
+		s._merge_squad(tactical, mine)
+	mine.heal_by_ratio(1.0)
+	for i in 2:
+		s._play_building_card(CardFactory.plasma_generatorium(), Vector2i(0, 2))
+	var maxed := [s._drop_verdict(tactical, Vector2i(1, 1)), s._drop_verdict(CardFactory.plasma_generatorium(), Vector2i(0, 2))]
+	_check("ромб «нельзя» там, где карта не ляжет: отряд ур.%d здоров, генератор ур.%d (%s)" % [mine.data.squad_level,
+		s._get_player_building_at(Vector2i(0, 2)).card.building_level, maxed],
+		maxed == ["invalid", "invalid"] and not s._merge_squad(tactical, mine))
+	s._on_start_pressed(false)
+	await _frames(1)   # метка снята queue_free — уходит из дерева в конце кадра
+	var w = bm.kingdom_wall
+	_check("начало боя: метка снята, щит стены — вспышкой по стене владений; вариант расы — _chaos, нет варианта — общий",
+		not _has_tile_glow(s.renderer, "strike") and w != null and w.segments.all(func(x): return x.flash_left > 0.0)
+		and V.race_kind("orbital_strike", "chaos") == "orbital_strike_chaos" and V.race_kind("squad_lost", "chaos") == "squad_lost")
+	bm.stop_battle()

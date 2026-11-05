@@ -14,7 +14,7 @@ const BENCH_SCENE = preload("res://scenes/battle/Bench.tscn")
 const SQUAD_SCENE = preload("res://scenes/battle/Squad.tscn")
 # Область экрана под поле: под HUD; при расстановке — до скамейки
 const PLAY_AREA_MARGIN: float = 8.0
-const STRIKE_FLASH_TIME: float = 0.8   # вспышка орбитального удара, с
+const UPGRADE_FX_RISE := Vector2(0, -48)   # знак карты-улучшения — над головами отряда
 
 var iso_grid: IsoGrid = IsoGrid.new()
 var renderer: IsoGridRenderer = null
@@ -23,7 +23,6 @@ var bench: Node = null
 var hud: BattleHud = null
 var inspector: SquadInspector = null
 var expansion_banner: ExpansionBanner = null   # объявление этапа расширения (после боя, до магазина)
-var merge_menu: MergeMenu = null   # выбор «улучшить / вылечить» отряд его картой
 var pause_menu: PauseMenu = null
 var fader: OcclusionFader = null   # прозрачность построек — только на расстановке
 var reticle: ArtilleryReticle = null   # прицел орудия игрока — в бою за курсором
@@ -46,6 +45,23 @@ var enemy_elites_at_start: int = 0      # элитные враги (тег elit
 # Отряды игрока на старте боя — павшие целиком при победе возрождаются
 var player_squads_at_start: Array[Dictionary] = []
 var _battle_resolved: bool = false
+# Построение перед боем (решение пользователя 23.10.2026, ориентир — 9 Kings, Screenshot 2026-10-23 181716.png):
+# после «В БОЙ» армия выходит из королевства за переднюю стену и встаёт строем — ближний бой впереди, стрелки
+# и лекари сзади (_deploy_slots); бой стартует сам, когда встали. Клетка отряда (squad.tile) по-прежнему решает
+# бонус ряда и соседство со зданиями — строй только меняет, где отряд начинает бой. Враги в своей зоне — так же
+# (_place_enemy_squads: ближний бой в передние клетки)
+# Ход — бегом своей скоростью (решение пользователя 23.10.2026: было всем за 1.8 с с разгоном — до 300 px/с, отряды
+# «вылетали», ноги не успевали): скорость бега отряда × DEPLOY_PACE, медленные — быстрее, чтобы успеть за
+# DEPLOY_MAX_TIME; равномерно (без разгона — темп ног совпадает с ходом). С ×2 / ×3 скорости боя — быстрее
+const DEPLOY_PACE: float = 1.5
+const DEPLOY_MAX_TIME: float = 3.5      # сек — самый долгий ход
+const DEPLOY_HOLD: float = 0.5          # сек — армия стоит строем перед стартом
+const DEPLOY_BACK_LINE: float = 1.1     # клеток от переднего края рамки до задней линии (за стеной владений)
+const DEPLOY_LINE_STEP: float = 1.2     # клеток между линиями
+const DEPLOY_SLOTS: int = 4             # отрядов в линии
+const DEPLOY_SLOT_STEP: float = 1.3     # клеток между отрядами в линии
+const DEPLOY_BACK_RANGE: float = 80.0   # дальность атаки больше — отряд встаёт назад (лекари — тоже)
+var is_deploying: bool = false
 
 # Тип карты → розыгрыш на клетку (card, tile) → разыграна ли. Новый тип карты:
 # функция здесь + строка в словаре + подсказка в CardData.PLAY_HINTS
@@ -71,8 +87,9 @@ func _ready() -> void:
 	_build_ui()
 	_build_field()
 	_populate_field()
-	Vfx.warm_cache()          # листы эффектов и снарядов — на загрузке, не посреди схватки
+	Vfx.warm_cache()          # листы эффектов и снарядов и файлы звуков — на загрузке, не посреди схватки
 	Projectile.warm_cache()
+	AudioManager.warm_cache()
 	SaveManager.save_run()
 	# Загрузили сохранение посреди боя: армия уже стоит как была — сразу в бой
 	if BattleManager.battle_in_progress:
@@ -84,6 +101,10 @@ func _build_ui() -> void:
 	bg_layer.layer = -1
 	add_child(bg_layer)
 	bg_layer.add_child(UITheme.make_background())
+	# Цветокоррекция мира — слой 1 перед UI в дереве: UI того же слоя рисуется позже и не тонируется
+	var grade := WorldGrade.new()
+	add_child(grade)
+	move_child(grade, $UI.get_index())
 
 	bench = BENCH_SCENE.instantiate()
 	add_child(bench)
@@ -97,12 +118,18 @@ func _build_ui() -> void:
 	if battle_type != RunMapNode.BATTLE:
 		wave_text += " · " + UITheme.NODE_NAMES.get(battle_type, battle_type)
 	wave_text += " · " + Difficulty.level_name(RunManager.difficulty)
-	hud.setup(wave_text, result_label, start_button, bench.BENCH_RIGHT_RESERVE)
+	hud.setup(wave_text, result_label, start_button)
 	hud.set_message("Расставьте отряды")
 	start_button.pressed.connect(_on_start_pressed)
 
 	inspector = SquadInspector.new()
 	inspector.click_blocker = _artillery_takes_click
+	inspector.building_finder = func(world: Vector2) -> Building:
+		return _get_player_building_at(iso_grid.screen_to_tile(world))
+	# Справка — между плашкой сообщения и рукой на расстановке, не поверх них
+	inspector.top_limit = hud.message_bottom
+	inspector.bottom_limit = func() -> float:
+		return get_viewport().get_visible_rect().size.y - (UITheme.BENCH_PEEK if is_placement_phase else 0.0)
 	$UI.add_child(inspector)
 	pause_menu = PauseMenu.new()
 	add_child(pause_menu)
@@ -116,11 +143,18 @@ func _build_ui() -> void:
 func _build_field() -> void:
 	# Бойцы рисуются по глубине: кто ниже на экране — тот ближе
 	units_container.y_sort_enabled = true
+	# Тени и кольца бойцов — одним слоем под отрядами (SoldierShadows)
+	var shadows := SoldierShadows.new()
+	add_child(shadows)
+	move_child(shadows, units_container.get_index())
+	shadows.setup(units_container)
 	iso_grid.set_unlocked_tiles(BattleManager.kingdom_tiles)
 	iso_grid.setup()
 	renderer = IsoGridRenderer.new()
 	renderer.setup(iso_grid)
 	grid_renderer.add_child(renderer)
+	SideCritters.spawn(units_container, renderer, iso_grid)   # существа по краям поля (только вид)
+	AuraRing.layer = renderer   # кольца аур — на земле, под бойцами
 	# Здания и цитадель полупрозрачны, пока за ними стоят бойцы (только расстановка)
 	fader = OcclusionFader.new()
 	add_child(fader)
@@ -130,6 +164,10 @@ func _build_field() -> void:
 	reticle = ArtilleryReticle.new()
 	reticle.camera = camera
 	add_child(reticle)
+	# Пепел / угли в воздухе над всем полем (только вид)
+	var atmosphere := Atmosphere.new()
+	add_child(atmosphere)
+	atmosphere.setup(iso_grid.get_world_bounds().grow(300.0), FactionTheme.current().get("atmosphere", ""))
 	_fit_camera(false)
 	get_viewport().size_changed.connect(_fit_camera.bind(false))
 
@@ -137,12 +175,15 @@ func _populate_field() -> void:
 	_spawn_citadel()
 	_place_enemy_squads()
 	_place_player_buildings()
+	_build_kingdom_wall(false)
 	_place_player_squads()
+	for tile in BattleManager.armed_tiles:   # «Продолжить»: заряженный удар — метка снова на своей клетке
+		_strike_marks.append(TileGlow.target(renderer, "strike", iso_grid.tile_to_screen(tile)))
 	_update_synergy_preview()
 	_update_expansion()
 	# Этап расширения объявлен экраном ещё до магазина (решение пользователя) — здесь подсказка в шапке
 	if BattleManager.can_expand_kingdom() and not iso_grid.get_expansion_tiles().is_empty():
-		_show_message("Этап расширения: клетки рядом с королевством — от %d Req, клик по зелёной клетке"
+		_show_message("Этап расширения: клетки рядом с королевством — от %d Req, клик по клетке с ценой"
 			% BattleManager.get_tile_cost())
 	elif BattleManager.next_battle_note != "":
 		_show_message(BattleManager.next_battle_note)
@@ -152,7 +193,7 @@ func _get_play_area() -> Rect2:
 	var top = UITheme.HUD_HEIGHT
 	var bottom = screen.y
 	if is_placement_phase:
-		bottom -= UITheme.BENCH_HEIGHT
+		bottom -= UITheme.BENCH_PEEK
 	return Rect2(PLAY_AREA_MARGIN, top + PLAY_AREA_MARGIN,
 		screen.x - PLAY_AREA_MARGIN * 2.0, bottom - top - PLAY_AREA_MARGIN * 2.0)
 
@@ -175,21 +216,34 @@ func _spawn_citadel() -> void:
 	units_container.add_child(citadel)
 	BattleManager.citadel = citadel
 
-# Здания стоят на своих клетках между раундами
+# Здания стоят на своих клетках между раундами (стена владений — не на клетке: _build_kingdom_wall)
 func _place_player_buildings() -> void:
 	BattleManager.buildings.clear()
 	for card in BattleManager.player_buildings:
+		if card.building_type == "wall":
+			BattleManager.player_buildings[card] = BattleManager.WALL_TILE
+			continue
 		var tile: Vector2i = BattleManager.player_buildings[card]
 		if iso_grid.is_valid_tile(tile) and not _is_tile_occupied(tile):
 			_spawn_building(card, tile)
 
-func _spawn_building(card: CardData, tile: Vector2i) -> void:
+# Стена вокруг владений (KingdomWall) — по карте стены забега; каждый бой — целая. rising — вырастает из земли
+func _build_kingdom_wall(rising: bool) -> void:
+	if BattleManager.has_kingdom_wall():
+		BattleManager.kingdom_wall.queue_free()
+	BattleManager.kingdom_wall = null
+	var card := BattleManager.get_wall_card()
+	if card:
+		BattleManager.kingdom_wall = KingdomWall.build(units_container, iso_grid, card, rising)
+
+func _spawn_building(card: CardData, tile: Vector2i) -> Building:
 	var building = Building.new()
 	building.setup(card, tile)
 	building.position = iso_grid.tile_to_screen(tile)
 	units_container.add_child(building)
 	BattleManager.buildings.append(building)
 	renderer.set_occupied(tile, true)
+	return building
 
 # Один UnitData = один отряд; без сохранённой клетки — первая свободная
 func _place_player_squads() -> void:
@@ -199,34 +253,49 @@ func _place_player_squads() -> void:
 		var count = unit_data.saved_hp.size()
 		if count == 0:
 			continue
-		var tile: Vector2i = BattleManager.player_placements.get(unit_data, Vector2i(-1, -1))
+		var tile: Vector2i = BattleManager.player_placements.get(unit_data, IsoGrid.NO_TILE)
 		if not iso_grid.is_valid_tile(tile) or _is_tile_occupied(tile):
 			while tile_index < free_tiles.size() and _is_tile_occupied(free_tiles[tile_index]):
 				tile_index += 1
 			if tile_index >= free_tiles.size():
 				break
 			tile = free_tiles[tile_index]
-		_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, count, unit_data.saved_hp)
+		var squad := _spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, count, unit_data.saved_hp, unit_data.saved_kinds)
+		if unit_data.respawned:   # пал целиком, бой выигран — возродился: свет появления на бойцах
+			unit_data.respawned = false
+			_glow_soldiers.call_deferred(squad, "arrive")
 
 # Состав врагов — данными в EnemyWaves; заполняют зону с переднего края в тыл
 func _place_enemy_squads() -> void:
 	var tiles = iso_grid.get_enemy_tiles_front_first()
-	var specs = EnemyWaves.build(battle_wave, battle_type, tiles.size(), RunManager.rng.seed, RunManager.difficulty)
+	var specs = EnemyWaves.build(battle_wave, battle_type, tiles.size(), RunManager.rng.seed, RunManager.difficulty,
+		FactionTheme.enemy_of(RunManager.player_faction))
 	enemy_elites_at_start = 0
+	# Строй врага, как у игрока (построение перед боем): ближний бой — в передние клетки зоны, стрелки — в задние;
+	# внутри групп — порядок волны (EnemyWaves: босс и танки впереди)
+	var front: Array = []
+	var back: Array = []
 	for i in range(mini(specs.size(), tiles.size())):
 		var spec: Dictionary = specs[i]
 		var enemy_data = UnitFactory.create(spec["unit"])
+		enemy_data.attack_range = minf(enemy_data.attack_range, EnemyWaves.MAX_ENEMY_RANGE)
 		enemy_data.hp_multiplier = spec["mult"] * BattleManager.next_battle_enemy_hp   # событие забега
 		enemy_data.damage_multiplier = spec["mult"]
-		_spawn_squad(enemy_data, GameConstants.TEAM_ENEMY, tiles[i], spec["count"])
+		var is_back: bool = enemy_data.attack_range > DEPLOY_BACK_RANGE or enemy_data.heal_per_second > 0.0
+		(back if is_back else front).append([enemy_data, spec["count"]])
+	var placed: Array = front + back
+	for i in placed.size():
+		var enemy_data: UnitData = placed[i][0]
+		_spawn_squad(enemy_data, GameConstants.TEAM_ENEMY, tiles[i], placed[i][1])
 		if "elite" in enemy_data.tags:
-			enemy_elites_at_start += spec["count"]
+			enemy_elites_at_start += placed[i][1]
 
-func _spawn_squad(unit_data: UnitData, team: int, tile: Vector2i, count: int, hp_list: Array[float] = []) -> void:
+func _spawn_squad(unit_data: UnitData, team: int, tile: Vector2i, count: int, hp_list: Array[float] = [],
+		kinds: Array[String] = []) -> Squad:
 	var is_enemy = team == GameConstants.TEAM_ENEMY
 	var squad = SQUAD_SCENE.instantiate()
 	units_container.add_child(squad)
-	squad.setup(unit_data, team, tile, count, hp_list)
+	squad.setup(unit_data, team, tile, count, hp_list, kinds)
 	squad.global_position = iso_grid.tile_to_screen(tile, is_enemy)
 	SquadRegistry.register(squad)
 	# Враг скрыт до начала боя — игрок расставляется вслепую
@@ -235,6 +304,7 @@ func _spawn_squad(unit_data: UnitData, team: int, tile: Vector2i, count: int, hp
 	renderer.set_occupied(tile, true, is_enemy)
 	if not is_enemy and is_placement_phase:
 		_update_synergy_preview()
+	return squad
 
 func _is_tile_occupied(tile: Vector2i) -> bool:
 	return renderer.occupied_tiles_player.has(tile)
@@ -252,7 +322,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		# В конце кадра: к тому времени окно знает, над интерфейсом ли курсор (gui_get_hovered_control)
 		_update_building_hover.call_deferred(event.position)
-	if not is_placement_phase or merge_menu:
+	if not is_placement_phase:
 		return
 	if event is InputEventMouseMotion:
 		renderer.update_hover(iso_grid.screen_to_tile(_screen_to_world(event.position)))
@@ -265,24 +335,72 @@ func _input(event: InputEvent) -> void:
 # Тащим карту здания — зона действия от клетки под курсором, как если бы здание встало туда.
 # Курсор над интерфейсом (скамейка, шапка) — ничего
 func _update_building_hover(screen_pos: Vector2) -> void:
+	if not is_inside_tree():   # отложенный вызов пришёл, когда сцена боя уже ушла (смена сцены)
+		return
 	var world = _screen_to_world(screen_pos)
 	var tile = iso_grid.screen_to_tile(world)
 	var dragging: CardData = bench.dragging_card
 	var found: Building = null
-	if dragging == null and merge_menu == null and get_viewport().gui_get_hovered_control() == null:
+	if dragging == null and get_viewport().gui_get_hovered_control() == null:
 		for b in BattleManager.buildings:
 			if is_instance_valid(b) and b.tile == tile:
 				found = b
 				break
 	hovered_building = found
-	fader.pinned = found
-	inspector.show_building_hover(found.describe() if found else "", screen_pos)
+	# Открыта справка здания — оно не гаснет и его зона видна, пока курсор не на другом здании;
+	# подсказка при наведении на него же не нужна — то же в справке
+	var info: Building = inspector.info_building if is_instance_valid(inspector.info_building) else null
+	var shown: Building = found if found else info
+	fader.pinned = shown
+	inspector.show_building_hover(found.describe() if found and found != info else "", screen_pos)
 	var effect: Array[Vector2i] = []
 	if dragging and dragging.card_type == "building" and iso_grid.is_valid_tile(tile):
 		effect = Building.get_effect_tiles(dragging.building_type, tile)
-	elif found:
-		effect = Building.get_effect_tiles(found.building_type, found.tile)
+	elif shown:
+		effect = Building.get_effect_tiles(shown.building_type, shown.tile)
 	renderer.set_effect_tiles(effect)
+	_update_drag_target(dragging, tile)
+
+# Ромб на клетке под перетаскиваемой картой (только вид): playable — ляжет на пустую клетку, compatible —
+# на свой отряд / здание того же типа (уровень, лечение, карта-улучшение), invalid — сюда нельзя
+var _drag_target: TileGlow = null
+var _drag_target_key := ""
+func _update_drag_target(card: CardData, tile: Vector2i) -> void:
+	var kind := ""
+	if card and is_placement_phase and iso_grid.is_valid_tile(tile):
+		kind = _drop_verdict(card, tile)
+	var key := "%s %s" % [kind, tile]
+	if key == _drag_target_key:
+		return
+	_drag_target_key = key
+	if is_instance_valid(_drag_target):
+		_drag_target.dismiss()   # старый ромб тает, новый проявляется — перетекают с клетки на клетку
+	_drag_target = null
+	if kind != "":
+		_drag_target = TileGlow.target(renderer, kind, iso_grid.tile_to_screen(tile))
+
+func _drop_verdict(card: CardData, tile: Vector2i) -> String:
+	var squad := _get_player_squad_at(tile)
+	if card.card_type == "building" and card.building_type == "wall":   # стена — на любую клетку королевства
+		var wall := BattleManager.get_wall_card()
+		return "playable" if wall == null else ("compatible" if wall.can_level_up_building() else "invalid")
+	match card.card_type:
+		"squad", "building":
+			# свой отряд / здание того же типа: ляжет, только если есть что улучшить или вылечить
+			if get_same_card_tiles(card).has(tile):
+				var takes: bool
+				if card.card_type == "squad":
+					takes = squad.data.can_merge_upgrade() or squad.is_wounded()
+				else:
+					var own := _get_player_building_at(tile)
+					takes = own != null and own.card.can_level_up_building()
+				return "compatible" if takes else "invalid"
+		"upgrade":
+			return "compatible" if squad and squad.data.can_apply_upgrade(card) else "invalid"
+		"event":
+			if card.event_type == "orbital_strike":
+				return "playable"
+	return "invalid" if _is_tile_occupied(tile) else "playable"
 
 # Этап расширения объявляется экраном в конце боя перед волной расширения — до магазина
 # (решение пользователя: успеть отложить Req на клетки). Дальше — по кнопке «В магазин»
@@ -317,6 +435,7 @@ func _try_buy_tile(tile: Vector2i) -> void:
 	iso_grid.set_unlocked_tiles(BattleManager.kingdom_tiles)
 	_update_expansion()
 	AudioManager.play("tile_bought")
+	TileGlow.burst(renderer, iso_grid.tile_to_screen(tile))
 	_show_message("Королевство расширено (−%d Req), клеток: %d" % [cost, BattleManager.kingdom_tiles.size()])
 	_update_synergy_preview()   # новый ряд меняет, кто впереди и сзади
 	_save_placement()
@@ -325,9 +444,9 @@ func _try_buy_tile(tile: Vector2i) -> void:
 # КАРТЫ СО СКАМЕЙКИ
 # -------------------------------------------------------
 func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
+	_update_drag_target(null, Vector2i.ZERO)   # карту отпустили — ромб под ней гаснет
 	if not is_placement_phase:
 		return
-	_close_merge_menu()
 	var tile = iso_grid.screen_to_tile(_screen_to_world(screen_pos))
 	if not iso_grid.is_valid_tile(tile):
 		_show_message("Мимо сетки")
@@ -340,19 +459,18 @@ func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
 		AudioManager.play("place")
 		_consume_bench_card(card)
 
-# Отряд на пустую клетку; на свой отряд того же типа — меню «улучшить / вылечить»
+# Отряд на пустую клетку; на свой отряд того же типа — улучшение с лечением (_merge_squad)
 func _play_squad_card(card: CardData, tile: Vector2i) -> bool:
 	var own = _get_player_squad_at(tile)
 	if own and own.data.factory_id == card.unit_factory_id:
-		_open_merge_menu(card, own)
-		return false   # карту тратит выбор в меню
+		return _merge_squad(card, own)
 	if _is_tile_occupied(tile):
 		_show_message("Тайл занят")
 		return false
 	var unit_data = UnitFactory.create(card.unit_factory_id)
 	unit_data.squad_size = card.unit_count
 	unit_data.squad_growth = UnitFactory.squad_growth_for(card)
-	_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, card.unit_count)
+	_materialize(_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, card.unit_count))
 	return true
 
 # Улучшение бросают НА свой отряд
@@ -361,28 +479,99 @@ func _play_upgrade_card(card: CardData, tile: Vector2i) -> bool:
 	if squad == null:
 		_show_message("%s: перетащите на свой отряд" % card.title)
 		return false
+	if card.upgrade_type in ["blessing", "change_god"]:
+		return _play_god_card(card, squad)
 	if not squad.apply_upgrade(card):
 		_show_message("%s: не подходит этому отряду (только «%s», знамя не складывается)" % [card.title, card.affects_tag])
 		return false
+	# Знак карты над отрядом (у Хаоса — свои id карт: daemonic_armour, icon_of_chaos…)
+	Vfx.spawn(units_container, "upgrade_" + card.id, squad.global_position + UPGRADE_FX_RISE)
 	_show_message("%s → %s (%s)" % [card.title, squad.data.unit_name, card.description])
 	return true
 
-# Здание на пустую клетку; такая же карта на своё здание — уровень +1
+# Карты богов Хаоса (ChaosGods, решение пользователя 25.10.2026): благословение — только на отряд своего бога, до 3 раз;
+# «Chaos Gods' Blessing» — на любой отряд Хаоса (и Common без бога): окно выбора бога, карта уходит из руки по выбору
+# (Отмена — остаётся)
+func _play_god_card(card: CardData, squad: Squad) -> bool:
+	var god: String = squad.data.get_god()
+	if not "chaos" in squad.data.tags:
+		_show_message("%s: только на отряд Хаоса" % card.title)
+		return false
+	if card.upgrade_type == "change_god":
+		var dialog := GodPickDialog.new()
+		$UI.add_child(dialog)
+		dialog.setup(squad.data.unit_name, god)
+		dialog.chosen.connect(_on_god_chosen.bind(card, squad))
+		return false   # карта уйдёт из руки, когда бог выбран (_on_god_chosen)
+	if god == "":
+		_show_message("%s: у отряда нет бога — сначала Chaos Gods' Blessing" % card.title)
+		return false
+	if card.blessing_god != god:
+		_show_message("%s: только на отряд бога %s (у этого — %s)" % [card.title, ChaosGods.god_name(card.blessing_god),
+			ChaosGods.god_name(god)])
+		return false
+	if squad.data.blessings >= ChaosGods.MAX_BLESSINGS:
+		_show_message("%s: у отряда уже %d/%d благословений" % [card.title, squad.data.blessings, ChaosGods.MAX_BLESSINGS])
+		return false
+	if not squad.apply_upgrade(card):   # Тзинч — только стрелкам
+		_show_message("%s: действует только на стрелков" % card.title)
+		return false
+	_glow_soldiers(squad, "arrive")
+	_show_message("%s → %s: %s" % [card.title, squad.data.unit_name,
+		ChaosGods.describe(squad.data.get_god(), squad.data.blessings, squad.data.tags)])
+	return true
+
+func _on_god_chosen(new_god: String, card: CardData, squad: Squad) -> void:
+	if not is_instance_valid(squad) or not is_placement_phase or not bench.bench_cards.has(card):
+		return
+	squad.data.change_god(new_god)
+	for s in squad.soldiers:
+		s.refresh_stats_from_data()
+	_glow_soldiers(squad, "arrive")
+	AudioManager.play("place")
+	_show_message("%s теперь служит богу %s" % [squad.data.unit_name, ChaosGods.god_name(new_god)])
+	_consume_bench_card(card)
+
+# Здание на пустую клетку; такая же карта на своё здание — уровень +1. Стена владений — на любую клетку
 func _play_building_card(card: CardData, tile: Vector2i) -> bool:
+	if card.building_type == "wall":
+		return _play_wall_card(card)
 	var own = _get_player_building_at(tile)
 	if own and own.card.id == card.id:
 		if not own.card.level_up_building():
 			_show_message("%s: максимальный уровень" % own.card.title)
 			return false
+		var from_scale: Vector2 = own.sprite.scale if own.sprite else Vector2.ONE
 		own.refresh_stats()
+		own.play_level_up(from_scale)
+		TileGlow.burst(renderer, own.global_position, "level", own.card.faction)
+		AudioManager.play("building_level_up")
 		_show_message("%s улучшено до уровня %d/%d" % [own.card.title, own.card.building_level, CardData.MAX_BUILDING_LEVEL])
 		return true
 	if _is_tile_occupied(tile):
 		_show_message("Тайл занят")
 		return false
-	_spawn_building(card, tile)
+	_materialize(_spawn_building(card, tile))
 	BattleManager.player_buildings[card] = tile
 	_show_message("Построено: %s" % card.title)
+	return true
+
+# Стена владений (решение пользователя 22.10.2026): клетку не занимает. Нет стены — вырастает по контуру,
+# есть — уровень +1 (звенья крепче, щит больше)
+func _play_wall_card(card: CardData) -> bool:
+	var own := BattleManager.get_wall_card()
+	if own:
+		if not own.level_up_building():
+			_show_message("%s: максимальный уровень" % own.title)
+			return false
+		BattleManager.kingdom_wall.refresh_stats()
+		BattleManager.kingdom_wall.flash_shield()
+		_show_message("%s улучшена до уровня %d/%d" % [own.title, own.building_level, CardData.MAX_BUILDING_LEVEL])
+		return true
+	BattleManager.player_buildings[card] = BattleManager.WALL_TILE
+	_build_kingdom_wall(true)
+	AudioManager.play("tile_bought")
+	_show_message("Возведена стена вокруг владений: %s" % card.title)
 	return true
 
 # Карты-события: подкрепление — сразу отряд; орбитальный удар — заряжается до боя
@@ -399,14 +588,43 @@ func _play_event_card(card: CardData, tile: Vector2i) -> bool:
 			var unit_data = UnitFactory.create(squad_card.unit_factory_id)
 			unit_data.squad_size = squad_card.unit_count
 			unit_data.squad_growth = UnitFactory.squad_growth_for(squad_card)
-			_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, squad_card.unit_count)
+			_materialize(_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, squad_card.unit_count))
 			_show_message("Подкрепление: %s" % squad_card.title)
 			return true
 		"orbital_strike":
 			BattleManager.armed_events.append(card.id)
+			BattleManager.armed_tiles.append(tile)
+			_strike_marks.append(TileGlow.target(renderer, "strike", iso_grid.tile_to_screen(tile)))
 			_show_message("Орбитальный удар наведён: ударит в начале боя")
 			return true
 	return false
+
+# Карта легла на клетку — моделька проявляется (решение пользователя 21.10.2026: на поле кладут карту, а не
+# модельку): вырастает из клетки — на каждом бойце свет телепорта (LevelUpGlow "arrive", у Хаоса — бордо), под
+# зданием волна света по клетке (TileGlow "build"); решение пользователя 22.10.2026: столбы и «вата» пакета
+# выбивались из стиля. Только вид, расстановка
+const SPAWN_TIME: float = 0.3
+const SPAWN_FROM_SCALE: float = 0.35
+var _spawn_tweens: Array[Tween] = []   # «В БОЙ» раньше конца — доводим сразу (масштаб отряда сдвигает бойцов)
+var _strike_marks: Array = []          # метки Orbital Strike на клетках (TileGlow) — до «В БОЙ»
+func _materialize(node: Node2D) -> void:
+	node.scale = Vector2(SPAWN_FROM_SCALE, SPAWN_FROM_SCALE)
+	node.modulate.a = 0.0
+	var tw := node.create_tween().set_parallel(true)
+	_spawn_tweens = _spawn_tweens.filter(func(t: Tween): return t.is_valid())
+	_spawn_tweens.append(tw)
+	tw.tween_property(node, "scale", Vector2.ONE, SPAWN_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "modulate:a", 1.0, SPAWN_TIME * 0.6)
+	if node is Building:
+		TileGlow.burst(renderer, node.global_position, "build", node.card.faction)
+	elif node is Squad:
+		_glow_soldiers(node, "arrive")
+
+# Свет на каждом живом бойце отряда волной по строю (LevelUpGlow: появление, лечение)
+func _glow_soldiers(squad: Squad, kind: String) -> void:
+	var alive: Array = squad.soldiers.filter(func(s): return s.current_state != Soldier.State.DEAD)
+	for i in alive.size():
+		LevelUpGlow.play(alive[i], 0, float(i) / maxf(alive.size() - 1, 1.0), kind)
 
 func _get_player_building_at(tile: Vector2i) -> Building:
 	for b in BattleManager.buildings:
@@ -414,41 +632,26 @@ func _get_player_building_at(tile: Vector2i) -> Building:
 			return b
 	return null
 
-func _open_merge_menu(card: CardData, squad: Squad) -> void:
-	if not MergeMenu.has_options(squad):
+# Карта отряда на свой отряд того же типа (решение пользователя 21.10.2026, меню «улучшить / вылечить» убрано):
+# уровень +1 (бойцы роста — с полным HP), затем лечение — живым доля max HP, павшие возвращаются с той же долей.
+# На максимальном уровне — только лечение; отряд здоров и на максимуме — карта не тратится
+func _merge_squad(card: CardData, squad: Squad) -> bool:
+	var leveled := squad.merge_upgrade()
+	if not leveled and not squad.is_wounded():
 		_show_message("%s: максимальный уровень, отряд здоров" % squad.data.unit_name)
-		return
-	inspector.close_info()
-	inspector.enabled = false
-	merge_menu = MergeMenu.new()
-	$UI.add_child(merge_menu)
-	merge_menu.setup(card, squad)
-	merge_menu.place_near(_world_to_screen(squad.global_position))
-	merge_menu.chosen.connect(_on_merge_chosen)
-	merge_menu.closed.connect(_on_merge_menu_closed)
-
-func _on_merge_chosen(card: CardData, squad: Squad, upgrade: bool) -> void:
-	if not is_instance_valid(squad) or not bench.bench_cards.has(card):
-		return
-	if upgrade:
-		if not squad.merge_upgrade():
-			return
-		_show_message("%s улучшен до уровня %d/%d" % [squad.data.unit_name,
-			squad.data.squad_level, UnitFactory.MAX_SQUAD_LEVEL])
+		return false
+	var revived := squad.heal_by_ratio(UnitFactory.get_merge_bonuses(squad.data.faction)["heal"])
+	# Уровень — свет на каждом бойце (Squad.merge_upgrade → LevelUpGlow), только лечение — зелёный свет на бойцах
+	if not leveled:
+		_glow_soldiers(squad, "heal")
+	var extra := ", вернулось бойцов: %d" % revived if revived > 0 else ""
+	if leveled:
+		_show_message("%s улучшен до уровня %d/%d и вылечен%s" % [squad.data.unit_name,
+			squad.data.squad_level, UnitFactory.MAX_SQUAD_LEVEL, extra])
 	else:
-		var revived = squad.heal_by_ratio(UnitFactory.get_merge_bonuses(squad.data.faction)["heal"])
-		var extra = ", вернулось бойцов: %d" % revived if revived > 0 else ""
-		_show_message("%s вылечен%s" % [squad.data.unit_name, extra])
-		_update_synergy_preview()
-	_consume_bench_card(card)
-
-func _on_merge_menu_closed() -> void:
-	merge_menu = null
-	inspector.enabled = true
-
-func _close_merge_menu() -> void:
-	if merge_menu:
-		merge_menu.close()
+		_show_message("%s вылечен%s (уровень максимальный)" % [squad.data.unit_name, extra])
+	_update_synergy_preview()
+	return true
 
 func _consume_bench_card(card: CardData) -> void:
 	bench.bench_cards.erase(card)
@@ -528,6 +731,9 @@ func _on_bench_card_hovered(card: CardData) -> void:
 	for b in BattleManager.buildings:
 		if is_instance_valid(b):
 			b.modulate = BUILDING_HIGHLIGHT if tiles.has(b.tile) else Color.WHITE
+	# Карта стены — подсвечена стена владений (клетки у неё нет)
+	if BattleManager.has_kingdom_wall():
+		BattleManager.kingdom_wall.set_highlighted(is_placement_phase and card != null 			and card.card_type == "building" and card.building_type == "wall")
 
 func get_same_card_tiles(card: CardData) -> Array[Vector2i]:
 	var tiles: Array[Vector2i] = []
@@ -540,30 +746,104 @@ func get_same_card_tiles(card: CardData) -> Array[Vector2i]:
 					tiles.append(squad.tile)
 		"building":
 			for b in BattleManager.player_buildings:
-				if b.id == card.id:
+				if b.id == card.id and BattleManager.player_buildings[b] != BattleManager.WALL_TILE:
 					tiles.append(BattleManager.player_buildings[b])
 	return tiles
 
-func _on_start_pressed() -> void:
+# deploy = false — армия сразу на местах построения, бой без хода (тесты)
+func _on_start_pressed(deploy: bool = true) -> void:
+	for tw in _spawn_tweens:   # моделька ещё растёт из клетки — сразу в полный размер
+		if tw.is_valid():
+			tw.custom_step(SPAWN_TIME)
+	_spawn_tweens.clear()
+	for mark in _strike_marks:   # удар — в начале боя, метка больше не нужна
+		if is_instance_valid(mark):
+			mark.queue_free()
+	_strike_marks.clear()
+	_update_drag_target(null, Vector2i.ZERO)
 	is_placement_phase = false
 	AudioManager.play("battle_start")
 	_on_bench_card_hovered(null)
 	renderer.set_grid_overlay(false)   # в бою — только поле, здания, цитадель и бойцы
 	fader.enabled = false
 	start_button.disabled = true
-	_close_merge_menu()
 	# Армия перед боем — в забег и в сохранение. До синергий: они меняют max_hp
 	# бойцов только на этот бой и исказили бы доли HP
 	BattleManager.battle_in_progress = true
 	_save_placement()
-	# Бой: прячем скамейку и синергии, камера отъезжает на всё поле
+	# Бой: прячем скамейку, камера отъезжает на всё поле
 	bench.visible = false
-	hud.set_battle_mode()
 	_fit_camera(true)
-	hud.set_message("Бой идёт...")
 	_update_expansion()
 	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_ENEMY):
 		squad.visible = true
+	_base_time_scale = Engine.time_scale
+	_speed_applied = true
+	_apply_battle_speed()
+	var slots := _deploy_slots(SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
+	if not deploy:
+		for squad in slots:
+			squad.global_position = slots[squad]
+		_begin_battle()
+		return
+	_deploy_army(slots)
+
+# Места построения: линии поперёк оси наступления за передней стеной — впереди ближний бой, за ним стрелки
+# и лекари; в линии — по ряду клетки (отряды не перебегают друг другу дорогу)
+func _deploy_slots(squads: Array) -> Dictionary:
+	var front: Array = []
+	var back: Array = []
+	for squad in squads:
+		var d: UnitData = squad.data
+		(back if d.attack_range > DEPLOY_BACK_RANGE or d.heal_per_second > 0.0 else front).append(squad)
+	var by_row := func(a, b): return a.tile.y < b.tile.y or (a.tile.y == b.tile.y and a.tile.x > b.tile.x)
+	front.sort_custom(by_row)
+	back.sort_custom(by_row)
+	var lines: Array = []   # от передней к задней
+	for group in [front, back]:
+		for i in range(0, group.size(), DEPLOY_SLOTS):
+			lines.append(group.slice(i, i + DEPLOY_SLOTS))
+	var back_u: float = iso_grid.grid_width - 0.5 + DEPLOY_BACK_LINE
+	var center_v: float = (IsoGrid.KINGDOM_FRAME_MIN.y + iso_grid.grid_height - 1) / 2.0
+	var slots := {}
+	for k in lines.size():
+		var u: float = back_u + (lines.size() - 1 - k) * DEPLOY_LINE_STEP
+		var line: Array = lines[k]
+		for j in line.size():
+			var v: float = center_v + (j - (line.size() - 1) / 2.0) * DEPLOY_SLOT_STEP
+			slots[line[j]] = iso_grid.lattice_to_screen(u, v)
+	return slots
+
+# Ход на построение — только вид (бой не идёт: тиков нет); на паузе стоит, скорость боя ускоряет
+func _deploy_army(slots: Dictionary) -> void:
+	is_deploying = true
+	hud.set_message("Построение...")
+	var tw := create_tween().set_parallel(true)
+	for squad in slots:
+		var to: Vector2 = slots[squad]
+		var way: Vector2 = to - squad.global_position
+		var speed: float = maxf(squad.data.get_move_speed() * DEPLOY_PACE, way.length() / DEPLOY_MAX_TIME)
+		var time: float = way.length() / maxf(speed, 1.0)
+		tw.tween_property(squad, "global_position", to, time)
+		for s in squad.soldiers:
+			s.deploy_walk(speed, way)
+		# Дошёл — стойка лицом к врагу, пока остальные подходят
+		tw.tween_callback(_deploy_arrived.bind(squad)).set_delay(time)
+	# Пауза «стоят строем» — после последнего: параллельный шаг длится до него, дальше — по очереди
+	# (без set_parallel(false) пауза шла бы вместе с ходом и бой стартовал бы на бегу)
+	tw.set_parallel(false)
+	tw.tween_interval(DEPLOY_HOLD)
+	tw.tween_callback(_begin_battle)
+
+func _deploy_arrived(squad: Squad) -> void:
+	if is_instance_valid(squad):
+		for s in squad.soldiers:
+			s.deploy_stand()
+
+# Армия стоит строем — схватка: марш, синергии, бонусы, щиты, старт тиков
+func _begin_battle() -> void:
+	is_deploying = false
+	hud.set_message("Бой идёт...")
 	for squad in SquadRegistry.get_all_alive_squads():
 		squad.start_march()
 
@@ -575,32 +855,39 @@ func _on_start_pressed() -> void:
 	SynergyManager.apply_chapter_bonus(my_soldiers)
 	SynergyManager.apply_meta_bonus(my_soldiers)
 	SynergyManager.apply_commander_bonus(my_soldiers)
-	hud.show_synergies()
+	Building.apply_battle_start()   # здания на соседние отряды: щит, клич, вампиризм, +урон
 
 	player_soldiers_at_start = my_soldiers.size()
 	player_squads_at_start.clear()
 	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER):
 		player_squads_at_start.append({"data": squad.data, "tile": squad.tile})
 	BattleManager.prepare_citadel_shield()
+	_show_shields(my_soldiers)
 	BattleManager.start_battle()
 	for hit in BattleManager.fire_armed_events():
 		_spawn_strike_flash(hit["pos"], hit["radius"])
-	_base_time_scale = Engine.time_scale
-	_speed_applied = true
-	_apply_battle_speed()
 
-# Вспышка орбитального удара: круг, гаснет за STRIKE_FLASH_TIME
+# Щиты в начале боя (только вид): Iron Halo на бойцах, щит стен на цитадели
+func _show_shields(soldiers: Array) -> void:
+	var bannered := {}   # аура знамени — одно кольцо на отряд (знамя у всего отряда), за центром отряда
+	for s in soldiers:
+		if s.shield > 0.0:
+			Vfx.attach(s, "shield", s.data.sprite_scale * Soldier.EFFECT_SCALE)
+		if s.data.banner_aura_bonus > 0.0 and not bannered.has(s.data):
+			bannered[s.data] = true
+			AuraRing.follow_squad(s.parent_squad, UnitData.BANNER_RADIUS,
+				"banner_chaos" if s.data.faction == "chaos" else "banner")
+	# Щит стен — вспышка по стене владений (решение пользователя 22.10.2026: купол убран); без стены (пассивка
+	# «Освящённые стены») — щит на цитадели
+	if BattleManager.citadel_shield > 0.0 and BattleManager.has_kingdom_wall():
+		BattleManager.kingdom_wall.flash_shield()
+	elif BattleManager.citadel_shield > 0.0 and is_instance_valid(BattleManager.citadel):
+		Vfx.attach(BattleManager.citadel, "citadel_shield")
+
+# Орбитальный удар: луч с неба и кольцо по земле (у Хаоса — разлом варпа); кольцо листа — радиус ~130
+const STRIKE_VFX_RADIUS: float = 130.0
 func _spawn_strike_flash(pos: Vector2, radius: float) -> void:
-	var flash = Node2D.new()
-	flash.position = pos
-	flash.z_index = 10
-	flash.draw.connect(func():
-		flash.draw_circle(Vector2.ZERO, radius, Color(1.0, 0.75, 0.3, 0.35))
-		flash.draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(1.0, 0.85, 0.5, 0.9), 3.0, true))
-	units_container.get_parent().add_child(flash)
-	var tw = flash.create_tween()
-	tw.tween_property(flash, "modulate:a", 0.0, STRIKE_FLASH_TIME)
-	tw.tween_callback(flash.queue_free)
+	Vfx.spawn(units_container, Vfx.race_kind("orbital_strike"), pos, radius / STRIKE_VFX_RADIUS)
 
 # -------------------------------------------------------
 # КОНЕЦ БОЯ
@@ -632,11 +919,15 @@ func _on_battle_ended(winner_team: int) -> void:
 	BattleManager.next_battle_enemy_hp = 1.0
 	BattleManager.next_battle_note = ""
 	# Живые до итога: store_survivors возрождает павшие отряды, Казармы пополняют — потери считать раньше
-	var alive_at_end := SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER).size()
+	var alive_at_end := SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER).filter(func(s): return not s.charmed).size()
 	var result_text := _resolve_battle(winner_team)
 	var building_income := EconomyManager.collect_building_income(BattleManager.player_buildings)
 	if building_income > 0:
 		result_text += " · генераторы +%d Req" % building_income
+	var repaired := BattleManager.repair_from_forges()
+	if repaired > 0.0:
+		result_text += " · кузня +%d HP цитадели" % roundi(repaired)
+	_show_building_income(repaired)
 	hud.set_message(result_text)
 	AudioManager.play("victory" if won else "defeat")
 	var summary := _battle_summary(alive_at_end)
@@ -698,7 +989,7 @@ func _resolve_battle(winner_team: int) -> String:
 		var income = EconomyManager.give_round_income(false)
 		BattleManager.lose_army()
 		return "%s +%d Req" % ["Поражение!" if winner_team == GameConstants.TEAM_ENEMY else "Ничья!", income]
-	var alive = SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER).size()
+	var alive = SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER).filter(func(s): return not s.charmed).size()
 	var flawless = player_soldiers_at_start > 0 and alive == player_soldiers_at_start
 	var bonuses = EconomyManager.calculate_victory_bonuses(SynergyManager.income_bonus, flawless, enemy_elites_at_start)
 	var income = EconomyManager.give_round_income(true, bonuses)
@@ -710,8 +1001,35 @@ func _resolve_battle(winner_team: int) -> String:
 	var refilled = BattleManager.refill_from_barracks()
 	if refilled > 0:
 		text += " · Казармы вернули бойцов: %d" % refilled
+	_show_barracks_refill(refilled)
+	var thralls = BattleManager.apply_thralls()
+	if thralls > 0:
+		text += " · порабощено: %d" % thralls
 	print("BattleScene: армия %d отрядов, возрождено %s" % [BattleManager.player_units.size(), revived])
 	return text
+
+# Только вид: Казармы лечат / пополняют соседние отряды (у Святилища — только пополнение) — вспышка на клетках
+# (решение пользователя 22.10.2026: лист пакета refill — яркий и обрезанный) — свет на каждом живом бойце соседних
+# отрядов волной (LevelUpGlow "heal"), как уровень отряда
+func _show_barracks_refill(refilled: int) -> void:
+	var squads: Array = units_container.get_children().filter(func(n): return n is Squad and n.team == GameConstants.TEAM_PLAYER)
+	for b in BattleManager.buildings:
+		if not is_instance_valid(b) or b.building_type != "barracks":
+			continue
+		if refilled <= 0 and b.card.faction == "chaos":
+			continue
+		for squad in squads:
+			if not BattleManager.NEIGHBOUR_TILES.has(squad.tile - b.tile):
+				continue
+			_glow_soldiers(squad, "heal")
+
+# Только вид: генераторы дали доход (разряд над зданием), Кузня чинит цитадель
+func _show_building_income(repaired: float) -> void:
+	for b in BattleManager.buildings:
+		if is_instance_valid(b) and b.stats.get("income", 0.0) > 0.0:
+			TileGlow.burst(renderer, b.global_position, "income", b.card.faction)
+	if repaired > 0.0 and is_instance_valid(BattleManager.citadel):
+		Vfx.spawn(units_container, "forge_repair", BattleManager.citadel.global_position)
 
 # Забег окончен (победа над боссом / цитадель пала): экран итога, сохранение удаляется
 func _end_run(victory: bool, message: String) -> void:
@@ -765,18 +1083,18 @@ func _restore_time_scale() -> void:
 
 # Ушли со сцены посреди боя (в меню) — скорость не должна остаться ускоренной
 func _exit_tree() -> void:
+	BattleManager.kingdom_wall = null
+	if AuraRing.layer == renderer:   # новая сцена боя могла уже поставить свой слой
+		AuraRing.layer = null
 	_restore_time_scale()
 	_end_finale_slowmo()
 
 # -------------------------------------------------------
 # UI
 # -------------------------------------------------------
-# Во время расстановки — только предпросмотр синергий, бойцам ничего не применяем
+# Во время расстановки — только предпросмотр синергий (справка цитадели), бойцам ничего не применяем
 func _update_synergy_preview() -> void:
-	if hud == null:
-		return
 	SynergyManager.calculate_synergies(SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER))
-	hud.show_synergies()
 
 # Подсказка игроку в шапке + в консоль
 func _show_message(text: String) -> void:

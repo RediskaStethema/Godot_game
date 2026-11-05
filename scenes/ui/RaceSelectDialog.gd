@@ -5,9 +5,10 @@ extends ModalOverlay
 # расы видны, но недоступны («Скоро»). chosen(faction) — по выбору доступной;
 # окно закрывается и при выборе, и по «Отмена».
 
-const CARD_SIZE = Vector2(200, 170)
+const CARD_SIZE = Vector2(200, 220)
 const CARD_PADDING: float = 14.0
-const ART_ICON = "res://assets/ui/menu/icon_eagle.png"
+const ART_ICON = "res://assets/ui/menu/icon_eagle.png"   # нет эмблемы расы (assets/ui/races/<id>.png)
+const EMBLEM_SIZE: float = 84.0
 
 signal chosen(faction: String)
 
@@ -38,7 +39,7 @@ func _make_card(f: Dictionary) -> Control:
 	card.name = "Race_" + f["id"]
 	card.custom_minimum_size = CARD_SIZE
 	card.disabled = not available
-	card.theme_type_variation = "PrimaryButton" if available else ""
+	card.theme_type_variation = "SelectCard"
 	card.pressed.connect(choose.bind(f["id"]))
 	var box = VBoxContainer.new()
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -48,7 +49,13 @@ func _make_card(f: Dictionary) -> Control:
 	box.add_theme_constant_override("separation", 6)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(box)
-	if available:
+	var emblem := UITheme.make_icon("races", f["id"], EMBLEM_SIZE)   # эмблема расы пакета интерфейса
+	if emblem:
+		emblem.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		if not available:
+			emblem.modulate = Color(0.45, 0.45, 0.5)
+		box.add_child(emblem)
+	elif available:
 		var icon = TextureRect.new()
 		icon.texture = load(ART_ICON)
 		icon.custom_minimum_size = Vector2(0, 40)
@@ -69,6 +76,7 @@ func _make_card(f: Dictionary) -> Control:
 	box.add_child(desc)
 	for c in box.get_children():
 		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ModalOverlay.fit_card_to_content(card, box, CARD_PADDING)
 	return card
 
 # Выбор расы; закрытую выбрать нельзя

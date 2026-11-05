@@ -242,7 +242,7 @@ func _battle(wave: int, units: Array[UnitData], bought: int) -> Dictionary:
 	var e_squads = sr.get_alive_squads_of_team(GameConstants.TEAM_ENEMY).size()
 	var e_info = "%d/%d/%.2f" % [e_squads, enemies.size(), EnemyWaves.get_stat_mult(wave)]
 	bm.battle_ended.connect(_on_end)
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	var p_start = scene.player_soldiers_at_start
 	var t0 = game_time
 	while not ended and game_time - t0 < MAX_GAME_SECONDS:
@@ -413,8 +413,8 @@ func _campaign_best(offers: Array, prio: Array, need_afford: bool) -> int:
 		best_rank = rank
 	return best
 
-func _campaign_free_tiles() -> int:
-	return bm.kingdom_tiles.size() - bm.player_units.size() - bm.player_buildings.size()
+func _campaign_free_tiles() -> int:   # стена владений клетку не занимает
+	return bm.kingdom_tiles.size() - bm.player_units.size() 		- bm.player_buildings.keys().filter(func(b): return b.building_type != "wall").size()
 
 func _campaign_useful(card: CardData) -> bool:
 	match card.card_type:
@@ -423,6 +423,8 @@ func _campaign_useful(card: CardData) -> bool:
 				return true
 			return bm.player_units.any(func(d): return d.factory_id == card.unit_factory_id and d.can_merge_upgrade())
 		"building":
+			if card.building_type == "wall":   # стена владений — вне клеток
+				return bm.get_wall_card() == null or bm.get_wall_card().can_level_up_building()
 			if _campaign_free_tiles() > 0:
 				return true
 			return bm.player_buildings.keys().any(func(b): return b.id == card.id and b.can_level_up_building())
@@ -457,6 +459,13 @@ func _campaign_apply(card: CardData) -> void:
 							d.saved_hp.append(1.0)
 						return
 		"building":
+			if card.building_type == "wall":   # стена владений — вне клеток: первая строится, следующие — уровень
+				var wall = bm.get_wall_card()
+				if wall == null:
+					bm.player_buildings[card] = bm.WALL_TILE
+				else:
+					wall.level_up_building()
+				return
 			if _campaign_free_tiles() > 0:
 				bm.player_buildings[card] = _campaign_building_tile(card)
 			else:
@@ -518,7 +527,7 @@ func _campaign_battle() -> int:
 	current_scene = scene
 	await process_frame
 	bm.battle_ended.connect(_on_end)
-	scene._on_start_pressed()
+	scene._on_start_pressed(false)
 	var t0 = game_time
 	var so = root.get_node("SoldierRegistry")
 	while not ended and game_time - t0 < MAX_GAME_SECONDS:

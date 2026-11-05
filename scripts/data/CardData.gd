@@ -35,6 +35,7 @@ var building_level: int = 1
 @export var upgrade_type: String = ""   # "hp_boost", "damage_boost"
 @export var upgrade_value: float = 0.0  # 0.2 = +20%
 @export var affects_tag: String = ""    # "marine", "chaos" — кого затрагивает
+@export var blessing_god: String = ""   # благословение бога Хаоса (upgrade_type "blessing"): чей отряд — ChaosGods
 
 # --- Если event ---
 @export var event_type: String = ""        # "reinforcements", "orbital_strike"

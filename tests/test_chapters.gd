@@ -46,8 +46,8 @@ func _snapshot(chapter: String) -> Dictionary:
 	current_scene = scene
 	await process_frame
 	await process_frame
-	scene._on_start_pressed()
-	var out = {"shield": bm.citadel_shield, "chapter_line": "Орден" in scene.hud._synergy_label.text}
+	scene._on_start_pressed(false)
+	var out = {"shield": bm.citadel_shield, "chapter_line": "Орден" in "\n".join(load("res://scenes/battle/ui/BattleHud.gd").synergy_lines())}
 	for s in root.get_node("SoldierRegistry").get_alive_soldiers_of_team(0):
 		if not out.has(s.data.factory_id):
 			out[s.data.factory_id] = {"range": s.current_attack_range, "damage": s.current_damage,
@@ -81,8 +81,9 @@ func _main() -> void:
 
 	var ba = await _snapshot("blood_angels")
 	await _finish()
-	_check("Blood Angels: +15% урона только ближнему бою",
-		_near(ba["assault_marine"]["damage"], ab["damage"] * 1.15) and _near(ba["tactical_marine"]["damage"], tb["damage"]))
+	# Минус ордена (решение пользователя 18.10.2026): Красная жажда — стрелкам −15% урона
+	_check("Blood Angels: +15% урона ближнему бою, стрелкам −15% (минус ордена)",
+		_near(ba["assault_marine"]["damage"], ab["damage"] * 1.15) and _near(ba["tactical_marine"]["damage"], tb["damage"] * 0.85))
 
 	var sw = await _snapshot("space_wolves")
 	await _finish()
@@ -101,8 +102,14 @@ func _main() -> void:
 		and sal["assault_marine"]["status"] == StatusEffects.BURNING and _near(t["damage"], tb["damage"]))
 	var a = sal["assault_marine"]["node"]
 	var enemy = root.get_node("SoldierRegistry").get_alive_soldiers_of_team(1)[0]
+	enemy.global_position = a.global_position + Vector2(30, 0)
 	a.target = enemy
 	a._do_attack()
+	# У Assault удар — на кадре замаха (hit_frame листа): тики до него
+	var frames: SpriteFrames = a.sprite.sprite_frames
+	var hit_time: float = maxf(frames.get_meta("hit_frame", 0), 0) / frames.get_animation_speed("attack")
+	for i in ceili(hit_time / GameConstants.FIXED_TICK) + 1:
+		a._tick_melee_hit(GameConstants.FIXED_TICK)
 	_check("Salamanders: удар бойца ближнего боя поджёг цель", enemy.get_status_stacks(StatusEffects.BURNING) == 1)
 	await _finish()
 	quit()

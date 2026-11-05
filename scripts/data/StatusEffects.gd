@@ -23,10 +23,10 @@ const MIN_SPEED_MULT: float = 0.3      # ниже не замедляем, ск�
 
 # Цвет точки эффекта под полоской HP
 const COLORS = {
-	POISONED: Color(0.55, 0.9, 0.3),
-	BURNING: Color(1.0, 0.55, 0.15),
-	EMPOWERED: Color(1.0, 0.85, 0.35),
-	SLOWED: Color(0.45, 0.65, 0.95),
+	POISONED: Palette.POISON,
+	BURNING: Palette.FIRE,
+	EMPOWERED: Palette.AMBER_LIGHT,
+	SLOWED: Palette.SLOW_BLUE,
 }
 # Эффект на бойце, пока статус держится (Vfx.EFFECTS)
 const VFX = {
@@ -34,12 +34,6 @@ const VFX = {
 	BURNING: "burning",
 	EMPOWERED: "empowered",
 	SLOWED: "slowed",
-}
-const NAMES = {
-	POISONED: "Яд",
-	BURNING: "Горение",
-	EMPOWERED: "Усиление",
-	SLOWED: "Замедление",
 }
 
 static func is_dot(effect: String) -> bool:

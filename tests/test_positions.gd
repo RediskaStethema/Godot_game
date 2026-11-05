@@ -16,6 +16,14 @@ func _check(label: String, ok: bool) -> void:
 func _near(a: float, b: float) -> bool:
 	return absf(a - b) < EPS * maxf(absf(b), 1.0)
 
+# Клик левой кнопкой по точке мира — прямо в справку (как _unhandled_input от окна)
+func _click(inspector, world: Vector2) -> void:
+	var e := InputEventMouseButton.new()
+	e.button_index = MOUSE_BUTTON_LEFT
+	e.pressed = true
+	e.position = root.get_viewport().get_canvas_transform() * world
+	inspector._unhandled_input(e)
+
 func _squad_at(squads: Array, tile: Vector2i):
 	for s in squads:
 		if s.tile == tile:
@@ -43,6 +51,29 @@ func _main() -> void:
 	k4.append(Vector2i(3, 1))
 	_check("клетка в новом ряду: передний ряд — col 3, col 2 — средний",
 		syn.get_tile_position(Vector2i(3, 1), k4) == syn.FRONT and syn.get_tile_position(Vector2i(2, 1), k4) == "")
+
+	# 2б. Расширение с четырёх сторон (решение пользователя 23.10.2026): старт 3×3 в центре рамки 5×5 (−1..3),
+	# клетка в колонке −1 — новый задний ряд; 16 клеток — предел, кандидатов нет
+	var grid = load("res://scripts/battle/IsoGrid.gd").new()
+	grid.set_unlocked_tiles(k3)
+	var cand: Array[Vector2i] = grid.get_expansion_tiles()
+	var sides := [cand.has(Vector2i(-1, 1)), cand.has(Vector2i(3, 1)), cand.has(Vector2i(1, -1)), cand.has(Vector2i(1, 3))]
+	var k_back = k3.duplicate()
+	k_back.append(Vector2i(-1, 1))
+	var k16: Array[Vector2i] = k3.duplicate()
+	for t in [Vector2i(-1, 0), Vector2i(-1, 1), Vector2i(-1, 2), Vector2i(3, 0), Vector2i(3, 1), Vector2i(3, 2), Vector2i(1, -1)]:
+		k16.append(t)
+	grid.set_unlocked_tiles(k16)
+	var bm_tiles: Array[Vector2i] = bm.kingdom_tiles.duplicate()
+	bm.kingdom_tiles = k16.duplicate()
+	root.get_node("EconomyManager").round_number = 3
+	root.get_node("EconomyManager").requisition = 999
+	var bought_17: bool = bm.try_buy_tile(Vector2i(1, 3))
+	bm.kingdom_tiles = bm_tiles
+	_check("расширение: кандидаты %d, со всех сторон %s; −1 — задний ряд; на 16 клетках — кандидатов %d, покупка %s" % [
+		cand.size(), sides, grid.get_expansion_tiles().size(), bought_17],
+		cand.size() == 12 and not sides.has(false) and syn.get_tile_position(Vector2i(-1, 1), k_back) == syn.BACK
+		and syn.get_tile_position(Vector2i(0, 1), k_back) == "" and grid.get_expansion_tiles().is_empty() and not bought_17)
 
 	# 3. Бой: одинаковые отряды в разных рядах
 	bm.reset_run()
@@ -77,7 +108,25 @@ func _main() -> void:
 	var mid_info: String = load("res://scenes/battle/ui/SquadInspector.gd").describe(_squad_at(squads, Vector2i(1, 1)))
 	_check("справка отряда называет его ряд", "Передний ряд" in front_info and not "ряд:" in mid_info)
 
-	scene._on_start_pressed()
+	# Справка-карточка по клику (решение пользователя 23.10.2026): отряд — статы, без синергий; цитадель — синергии
+	# армии; в бою клик справку не открывает
+	var insp = scene.inspector
+	var front_sq = _squad_at(squads, Vector2i(2, 0))
+	_click(insp, front_sq.soldiers[0].global_position)
+	var squad_text: String = insp._card._body.text
+	var squad_ok: bool = insp.is_info_visible() and insp.info_squad == front_sq and "Здоровье" in squad_text \
+		and "Дальность" in squad_text and not "Синерги" in squad_text and insp._card._title.text == front_sq.data.unit_name
+	_click(insp, bm.citadel.get_occlusion_rect().get_center())
+	var cit_text: String = insp._card._body.text
+	var cit_ok: bool = insp.is_info_visible() and insp.info_citadel and insp.info_squad == null and "Синергии армии" in cit_text
+	_click(insp, bm.citadel.get_occlusion_rect().get_center())
+	var closed: bool = not insp.is_info_visible()
+	_check("справка: отряд %s, цитадель %s, повторный клик — закрыта %s" % [squad_ok, cit_ok, closed],
+		squad_ok and cit_ok and closed)
+
+	scene._on_start_pressed(false)
+	_click(insp, front_sq.soldiers[0].global_position)
+	_check("в бою клик по отряду справку не открывает", not insp.is_info_visible())
 	var tac_front = _squad_at(squads, Vector2i(2, 0)).soldiers[0]
 	var tac_mid = _squad_at(squads, Vector2i(1, 1)).soldiers[0]
 	var tac_back = _squad_at(squads, Vector2i(0, 0)).soldiers[0]

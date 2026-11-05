@@ -5,11 +5,7 @@
 [node name="Bench" type="CanvasLayer" unique_id=663621972]
 script = ExtResource("1_ekgk0")
 
-[node name="BenchPanel" type="PanelContainer" parent="." unique_id=1531934402]
-offset_left = 486.0
-offset_top = 447.0
-offset_right = 738.0
-offset_bottom = 649.0
-
-[node name="HBoxContainer" type="HBoxContainer" parent="BenchPanel" unique_id=1149375034]
-layout_mode = 2
+[node name="Cards" type="Control" parent="." unique_id=1531934402]
+layout_mode = 3
+anchors_preset = 0
+mouse_filter = 2

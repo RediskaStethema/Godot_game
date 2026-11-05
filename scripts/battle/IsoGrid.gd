@@ -11,7 +11,14 @@ const TILE_HEIGHT: int = 70
 # Рамка королевства игрока: в ней лежат открытые клетки (unlocked) и клетки,
 # которые можно докупить. Раскладка считается по рамке, поэтому при покупке
 # клетки поле не сдвигается.
-const MAX_KINGDOM_SIZE = Vector2i(4, 4)   # TDD: 3×3 → 4×4
+# Решение пользователя 23.10.2026 (как в 9 Kings): клетки докупаются с четырёх сторон — старт 3×3 (0..2) в центре
+# рамки 5×5 от KINGDOM_FRAME_MIN (−1) до MAX_KINGDOM_SIZE − 1 (3), всего не больше MAX_KINGDOM_TILES (TDD: 16).
+# Раскладка поля (зона врага, цитадель, карта) — от дальнего края рамки, как при рамке 4×4: клетки −1 лежат
+# на земле перед полосой боя, поле и карта не сдвинулись, координаты отрядов и сохранения — прежние.
+const MAX_KINGDOM_SIZE = Vector2i(4, 4)        # дальний край рамки (не включая): клетки до 3
+const KINGDOM_FRAME_MIN = Vector2i(-1, -1)     # ближний край рамки (включая)
+const MAX_KINGDOM_TILES: int = 16
+const NO_TILE = Vector2i(-999, -999)          # «клетки нет» (−1 — уже клетка рамки)
 var grid_width: int = MAX_KINGDOM_SIZE.x
 var grid_height: int = MAX_KINGDOM_SIZE.y
 # Открытые клетки королевства: tile → true
@@ -52,6 +59,10 @@ func setup() -> void:
 # запас под спрайты
 func get_world_bounds() -> Rect2:
 	var r = Rect2(Vector2.ZERO, get_layout_size())
+	# Клетки рамки −1 — за началом раскладки: верхний, левый и правый углы рамки
+	r = r.expand(tile_to_screen(KINGDOM_FRAME_MIN) - Vector2(0.0, TILE_HEIGHT / 2.0))
+	r = r.expand(tile_to_screen(Vector2i(KINGDOM_FRAME_MIN.x, grid_height - 1)) - Vector2(TILE_WIDTH / 2.0, 0.0))
+	r = r.expand(tile_to_screen(Vector2i(grid_width - 1, KINGDOM_FRAME_MIN.y)) + Vector2(TILE_WIDTH / 2.0, 0.0))
 	var citadel = tile_to_screen(citadel_tile)
 	r = r.expand(citadel + Vector2(-TILE_WIDTH / 2.0, TILE_HEIGHT / 2.0))
 	r = r.expand(citadel + Vector2(TILE_WIDTH / 2.0, -CITADEL_HEADROOM))
@@ -89,18 +100,6 @@ static func advance_direction() -> Vector2:
 static func rank_direction() -> Vector2:
 	return Vector2(-TILE_WIDTH, TILE_HEIGHT).normalized()
 
-# Размер ромба сетки в пикселях (рамка королевства или зона врага)
-func get_grid_pixel_size(is_enemy: bool = false) -> Vector2:
-	var n = (enemy_width + enemy_height) if is_enemy else (grid_width + grid_height)
-	return Vector2(n * TILE_WIDTH / 2.0, n * TILE_HEIGHT / 2.0)
-
-# Ограничивающий прямоугольник сетки на экране (для проверок и UI)
-func get_grid_rect(is_enemy: bool = false) -> Rect2:
-	var origin = enemy_origin if is_enemy else player_origin
-	var rows = enemy_height if is_enemy else grid_height
-	var top_left = origin + Vector2(-rows * TILE_WIDTH / 2.0, -TILE_HEIGHT / 2.0)
-	return Rect2(top_left, get_grid_pixel_size(is_enemy))
-
 # tile = (col, row) в сетке
 func tile_to_screen(tile: Vector2i, is_enemy: bool = false) -> Vector2:
 	var origin = enemy_origin if is_enemy else player_origin
@@ -127,16 +126,23 @@ func is_valid_tile(tile: Vector2i) -> bool:
 
 # Клетка в рамке королевства (открытая или нет)
 func is_in_bounds(tile: Vector2i) -> bool:
-	return tile.x >= 0 and tile.x < grid_width and \
-		   tile.y >= 0 and tile.y < grid_height
+	return tile.x >= KINGDOM_FRAME_MIN.x and tile.x < grid_width and \
+		   tile.y >= KINGDOM_FRAME_MIN.y and tile.y < grid_height
+
+# Все клетки рамки королевства (открытые и нет) — ряд за рядом
+func get_frame_tiles() -> Array[Vector2i]:
+	var tiles: Array[Vector2i] = []
+	for row in range(KINGDOM_FRAME_MIN.y, grid_height):
+		for col in range(KINGDOM_FRAME_MIN.x, grid_width):
+			tiles.append(Vector2i(col, row))
+	return tiles
 
 # Все открытые клетки королевства по порядку (ряд за рядом)
 func get_all_tiles() -> Array[Vector2i]:
 	var tiles: Array[Vector2i] = []
-	for row in range(grid_height):
-		for col in range(grid_width):
-			if unlocked.has(Vector2i(col, row)):
-				tiles.append(Vector2i(col, row))
+	for t in get_frame_tiles():
+		if unlocked.has(t):
+			tiles.append(t)
 	return tiles
 
 func set_unlocked_tiles(tiles: Array[Vector2i]) -> void:
@@ -145,18 +151,18 @@ func set_unlocked_tiles(tiles: Array[Vector2i]) -> void:
 		if is_in_bounds(t):
 			unlocked[t] = true
 
-# Клетки, которые можно докупить: в рамке, ещё закрыты и соседствуют с открытой
+# Клетки, которые можно докупить: в рамке, ещё закрыты и соседствуют с открытой; предел клеток — ни одной
 func get_expansion_tiles() -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
-	for row in range(grid_height):
-		for col in range(grid_width):
-			var t = Vector2i(col, row)
-			if unlocked.has(t):
-				continue
-			for n in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-				if unlocked.has(t + n):
-					result.append(t)
-					break
+	if unlocked.size() >= MAX_KINGDOM_TILES:
+		return result
+	for t in get_frame_tiles():
+		if unlocked.has(t):
+			continue
+		for n in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if unlocked.has(t + n):
+				result.append(t)
+				break
 	return result
 
 # Тайлы зоны врага от переднего края (col = 0, ближе к игроку) к тылу —
@@ -167,7 +173,3 @@ func get_enemy_tiles_front_first() -> Array[Vector2i]:
 		for row in range(enemy_height):
 			tiles.append(Vector2i(col, row))
 	return tiles
-
-# Расстояние между двумя тайлами (для AI)
-func tile_distance(a: Vector2i, b: Vector2i) -> int:
-	return abs(a.x - b.x) + abs(a.y - b.y)

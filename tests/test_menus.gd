@@ -72,7 +72,7 @@ func _main() -> void:
 	gs.set_battle_speed(2.0)
 	var battle = await _battle_scene()
 	_check("расстановка — скорость обычная", is_equal_approx(Engine.time_scale, 1.0))
-	battle._on_start_pressed()
+	battle._on_start_pressed(false)
 	_check("бой — скорость ×2", is_equal_approx(Engine.time_scale, 2.0))
 	gs.cycle_battle_speed()
 	var battle_three: bool = is_equal_approx(Engine.time_scale, 3.0)
@@ -119,8 +119,8 @@ func _main() -> void:
 	var marines = race.find_child("Race_space_marines", true, false) if race else null
 	var chaos = race.find_child("Race_chaos", true, false) if race else null
 	var tyranids = race.find_child("Race_tyranids", true, false) if race else null
-	_check("подтвердили → выбор расы: десант доступен и в фокусе, Хаос и Тираниды закрыты", race != null \
-		and marines != null and not marines.disabled and chaos.disabled and tyranids.disabled \
+	_check("подтвердили → выбор расы: десант доступен и в фокусе, Хаос открыт, Тираниды закрыты", race != null \
+		and marines != null and not marines.disabled and not chaos.disabled and tyranids.disabled \
 		and root.get_viewport().gui_get_focus_owner() == marines and current_scene == menu)
 	menu._open_race_select()
 	await _frames(1)
@@ -134,7 +134,7 @@ func _main() -> void:
 	extra._unhandled_input(esc)
 	await _frames(2)
 	_check("Esc закрывает окно выбора расы без старта", not is_instance_valid(extra) and current_scene == menu)
-	race.choose("chaos")   # закрытая раса — ничего
+	race.choose("tyranids")   # закрытая раса — ничего
 	await _frames(2)
 	_check("закрытую расу не выбрать", current_scene == menu and is_instance_valid(race))
 	race.choose("space_marines")
@@ -202,7 +202,7 @@ func _main() -> void:
 	await _frames(2)
 	_check("расстановка: выход без вопроса", current_scene.name == "MainMenu")
 	battle = await _battle_scene()
-	battle._on_start_pressed()
+	battle._on_start_pressed(false)
 	await _frames(10)
 	battle.pause_menu.open()
 	battle.pause_menu._leave(battle.pause_menu._to_main_menu)
@@ -242,7 +242,7 @@ func _main() -> void:
 
 	# 9. «Сдаться» в паузе посреди схватки — экран итога боя, сцена не меняется
 	battle = await _battle_scene()
-	battle._on_start_pressed()
+	battle._on_start_pressed(false)
 	await _frames(10)
 	battle.pause_menu.open()
 	battle.pause_menu._confirm_surrender()

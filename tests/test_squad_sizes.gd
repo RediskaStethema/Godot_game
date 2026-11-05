@@ -63,4 +63,40 @@ func _main() -> void:
 		old_hero.squad_size == 3 and old_hero.squad_growth == 1 and old_hero.saved_hp.size() == 2 and old_hero.saved_hp.all(func(v): return absf(v - 0.5) < EPS)
 		and old_tac.squad_size == 9 and old_tac.squad_growth == 2)
 
+	# 5. Карта отряда на свой отряд (решение пользователя 21.10.2026, без меню): уровень +1, бойцы роста,
+	#    лечение 30% и возврат павших; на максимуме — только лечение; здоров и на максимуме — карта не тратится
+	var bm = root.get_node("BattleManager")
+	bm.reset_run()
+	var tac_card = CardFactory.tactical_squad()
+	var d5 = UnitFactory.create(tac_card.unit_factory_id)
+	d5.squad_size = tac_card.unit_count
+	d5.squad_growth = UnitFactory.squad_growth_for(tac_card)
+	var hp: Array[float] = []
+	for i in 6:
+		hp.append(0.5)
+	d5.saved_hp = hp
+	bm.player_units = [d5] as Array[UnitData]
+	bm.player_placements = {d5: Vector2i(1, 1)}
+	var scene = load("res://scenes/battle/BattleScene.tscn").instantiate()
+	root.add_child(scene)
+	current_scene = scene
+	await process_frame
+	await process_frame
+	var squad = root.get_node("SquadRegistry").get_alive_squads_of_team(0)[0]
+	var played: bool = scene._play_squad_card(tac_card, Vector2i(1, 1))
+	var ratio: float = squad.soldiers[0].current_hp / squad.soldiers[0].max_hp
+	_check("улучшение: ур. %d, бойцов %d из %d, раненый 0.5 → %.2f (с учётом +20%% HP уровня)" % [d5.squad_level,
+		squad.soldiers.size(), d5.squad_size, ratio],
+		played and d5.squad_level == 1 and d5.squad_size == 11 and squad.soldiers.size() == 11 and ratio > 0.6)
+	d5.squad_level = UnitFactory.MAX_SQUAD_LEVEL
+	squad.soldiers[0].current_hp = squad.soldiers[0].max_hp * 0.2
+	var healed: bool = scene._play_squad_card(tac_card, Vector2i(1, 1))
+	var after: float = squad.soldiers[0].current_hp / squad.soldiers[0].max_hp
+	for s in squad.soldiers:
+		s.current_hp = s.max_hp
+	var wasted: bool = scene._play_squad_card(tac_card, Vector2i(1, 1))
+	_check("на максимуме — лечение 0.2 → %.2f; здоров — карта не тратится" % after,
+		healed and absf(after - 0.5) < EPS and not wasted)
+	scene.queue_free()
+	bm.reset_run()
 	quit()
