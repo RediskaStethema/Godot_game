@@ -55,7 +55,8 @@ const CHAPTERS = [
 	{"id": "khorne", "name": "Khorne", "faction": "chaos",
 		"desc": "Метка Кровавого бога: +20% урона бойцам ближнего боя",
 		"bonus": {"damage_mult": 1.20}, "tag": "melee",
-		"malus": {"damage_mult": 0.8}, "malus_tag": "ranged", "malus_desc": "−20% урона стрелкам",
+		# минус (решение пользователя 25.10.2026, было −20% урона стрелкам)
+		"malus": {"hp_mult": 0.9}, "malus_tag": "ranged", "malus_desc": "−10% HP стрелкам",
 		"unit_card": "khorne_berzerkers", "building_card": "skull_altar"},
 	{"id": "nurgle", "name": "Nurgle", "faction": "chaos",
 		"desc": "Метка Чумного бога: +15% HP всем",
@@ -85,6 +86,13 @@ static func get_chapter(id: String) -> Dictionary:
 		if c["id"] == id:
 			return c
 	return {}
+
+# Чьё особое здание (id карты, building_card ордена / бога); "" — общее здание
+static func building_owner(card_id: String) -> String:
+	for c in CHAPTERS:
+		if c.get("building_card", "") == card_id:
+			return c["id"]
+	return ""
 
 static func has_chapters(faction: String) -> bool:
 	return not for_faction(faction).is_empty()

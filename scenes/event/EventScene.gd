@@ -54,9 +54,10 @@ func _build() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	center.offset_top = UITheme.HUD_HEIGHT
 	add_child(center)
-	var panel = UITheme.make_panel("")
+	var panel = UITheme.make_panel("WindowPanel")   # рамка окон с аквилой — как остальные окна игры
 	panel.custom_minimum_size = Vector2(PANEL_WIDTH, 0)
 	center.add_child(panel)
+	ModalOverlay.add_frame_eagle(panel)
 	var col = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 14)
 	panel.add_child(col)
@@ -64,6 +65,9 @@ func _build() -> void:
 	var title = UITheme.make_label(_event.get("title", "Событие"), "TitleLabel")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
+	var divider := ModalOverlay.make_divider()
+	if divider:
+		col.add_child(divider)
 	var text = UITheme.make_label(_event.get("text", ""))
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

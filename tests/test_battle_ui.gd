@@ -125,7 +125,7 @@ func _main() -> void:
 	_check("итог боя: баннер «%s» с лучшим отрядом, мир на миг замедлен (%.2f)" % [
 		banner.find_child("Title", true, false).text if banner else "", Engine.time_scale],
 		banner != null and banner.find_child("Title", true, false).text == "ПОБЕДА" \
-		and "Лучший отряд" in banner.find_child("Subtitle", true, false).text and slowed)
+		and "Лучший отряд" in banner.find_child("Details", true, false).text and slowed)
 	var t0 := Time.get_ticks_msec()
 	while Time.get_ticks_msec() - t0 < 900:
 		await process_frame

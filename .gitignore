@@ -61,3 +61,6 @@ __pycache__/
 /buildings_png/
 /Screenshot*
 /assets_menu.png*
+
+# Справка Claude по картам и способностям (локальная)
+/CARD_ABILITIES.txt

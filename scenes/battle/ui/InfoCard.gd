@@ -5,6 +5,8 @@ extends PanelContainer
 # `Screenshot 2026-10-23 134613.png`): портрет в рамке слева в шапке, имя на плашке, справа — значок (бойцы, HP);
 # ниже — текст с цветными числами (BBCode), снизу по кромке — ромбики уровня. Отряд и цитадель — SquadInspector.
 #   setup(портрет, имя, значок, текст, уровень, макс. уровень, цвет плашки) — max_level 0: ромбиков нет
+#   fit(высота) — не выше доступной: шире (WIDTHS), не помогло — мельче текст (BODY_FONT_STEPS); решение
+#   пользователя 24.10.2026: справка цитадели с синергиями уходила за низ экрана
 
 const WIDTH: float = 270.0
 const PORTRAIT: float = 58.0
@@ -13,6 +15,9 @@ const PIP_STEP: float = 22.0
 const TITLE_FONT: int = 17
 const BADGE_FONT: int = 16
 const BODY_FONT: int = 14
+const WIDTHS: Array[float] = [270.0, 340.0, 420.0, 520.0]
+const BODY_FONT_STEPS: Array[int] = [14, 12, 11, 10]
+const BODY_MARGIN: float = 12.0   # поля текста слева и справа
 
 var _portrait: TextureRect
 var _plate: PanelContainer
@@ -24,6 +29,7 @@ var _level := 0
 var _max_level := 0
 
 func _init() -> void:
+	theme = UITheme.get_theme()   # без темы текст — системным шрифтом, не пиксельным основным (RetroSans)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	custom_minimum_size = Vector2(WIDTH, 0)
 	add_theme_stylebox_override("panel", UITheme.panel_style(Palette.PANEL, Palette.GOLD_DIM, 2, 8, 0.0))
@@ -62,12 +68,12 @@ func _init() -> void:
 	_title.clip_text = true
 	_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_title.add_theme_font_override("font", UITheme.ui_font())
-	_title.add_theme_font_size_override("font_size", TITLE_FONT)
+	_title.add_theme_font_size_override("font_size", UITheme.ui_px(TITLE_FONT))
 	_title.add_theme_color_override("font_color", Palette.TEXT)
 	plate_row.add_child(_title)
 	_badge = Label.new()
 	_badge.add_theme_font_override("font", UITheme.ui_font())
-	_badge.add_theme_font_size_override("font_size", BADGE_FONT)
+	_badge.add_theme_font_size_override("font_size", UITheme.ui_px(BADGE_FONT))
 	_badge.add_theme_color_override("font_color", Palette.TEXT)
 	plate_row.add_child(_badge)
 
@@ -75,7 +81,7 @@ func _init() -> void:
 	var body_margin := MarginContainer.new()
 	body_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for side in ["left", "right"]:
-		body_margin.add_theme_constant_override("margin_" + side, 12)
+		body_margin.add_theme_constant_override("margin_" + side, int(BODY_MARGIN))
 	body_margin.add_theme_constant_override("margin_top", 8)
 	body_margin.add_theme_constant_override("margin_bottom", 4)
 	col.add_child(body_margin)
@@ -85,8 +91,8 @@ func _init() -> void:
 	_body.fit_content = true
 	_body.scroll_active = false
 	_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_body.custom_minimum_size = Vector2(WIDTH - 24.0, 0)
-	_body.add_theme_font_size_override("normal_font_size", BODY_FONT)
+	_body.custom_minimum_size = Vector2(WIDTH - BODY_MARGIN * 2.0, 0)
+	_body.add_theme_font_size_override("normal_font_size", UITheme.text_px(BODY_FONT))
 	_body.add_theme_color_override("default_color", Palette.TEXT)
 	body_margin.add_child(_body)
 
@@ -110,6 +116,23 @@ func setup(portrait: Texture2D, title: String, badge: String, body: String, leve
 	_max_level = max_level
 	_pips.visible = max_level > 0
 	_pips.queue_redraw()
+
+# Ширина и кегль текста, при которых карточка не выше max_height (самая узкая из подходящих; ничего не
+# подошло — самая широкая с самым мелким текстом). Высота текста — по его ширине сразу, без кадра раскладки
+func fit(max_height: float) -> void:
+	var chrome := get_combined_minimum_size().y - _body.get_combined_minimum_size().y   # шапка, поля, ромбики
+	for font in BODY_FONT_STEPS:
+		_body.add_theme_font_size_override("normal_font_size", UITheme.text_px(font))
+		for w in WIDTHS:
+			_set_width(w)
+			if chrome + _body.get_content_height() <= max_height:
+				return
+	# Ничего не подошло — остаётся самое компактное (последнее)
+
+func _set_width(w: float) -> void:
+	custom_minimum_size.x = w
+	_body.custom_minimum_size.x = w - BODY_MARGIN * 2.0
+	_body.size.x = w - BODY_MARGIN * 2.0
 
 func _draw_pips() -> void:
 	var w := _pips.size.x

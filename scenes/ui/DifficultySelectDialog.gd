@@ -51,7 +51,7 @@ func _make_card(level: int) -> Control:
 	card.add_child(box)
 	var num = UITheme.make_label(str(level), "TitleLabel")
 	var name_label = UITheme.make_label(d["name"], "HeaderLabel")
-	name_label.add_theme_font_size_override("font_size", NAME_FONT_SIZE)
+	name_label.add_theme_font_size_override("font_size", UITheme.ui_px(NAME_FONT_SIZE))
 	var info = UITheme.make_label("Враги ×%.2f\nСильные ×%.2f" % [d["enemies"], d["strong_weight"]] if open
 		else "Победите босса на %d" % (level - 1), "SmallLabel" if open else "DimLabel")
 	for l in [num, name_label, info]:
@@ -64,6 +64,7 @@ func _make_card(level: int) -> Control:
 	for c in box.get_children():
 		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ModalOverlay.fit_card_to_content(card, box, CARD_PADDING)
 	return card
 
 # Выбор уровня; закрытый выбрать нельзя

@@ -76,6 +76,7 @@ func _make_card(f: Dictionary) -> Control:
 	box.add_child(desc)
 	for c in box.get_children():
 		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ModalOverlay.fit_card_to_content(card, box, CARD_PADDING)
 	return card
 
 # Выбор расы; закрытую выбрать нельзя

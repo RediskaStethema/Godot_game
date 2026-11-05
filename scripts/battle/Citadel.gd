@@ -21,9 +21,17 @@ const BLOCKS = [
 	[KEEP, 0, 0, 1], [KEEP, 0, 0, 2], [KEEP, 0, 0, 3],
 	[WALL, 0, 1, 1], [WALL, 1, 0, 1], [WALL, 1, 1, 1],
 ]
+# Полоска HP — в стиле полосок отрядов (SquadBar, решение пользователя 24.10.2026: была голая черта): подложка,
+# стальная кромка, заливка, потерянное — тёмно-красным, деления по четвертям, справа — число HP
 const HP_BAR_SIZE = Vector2(90, 7)
 const HP_BAR_GAP: float = 14.0
+const HP_BAR_TICKS: int = 4
+const HP_FONT_SIZE: int = 20      # крупный кегль, уменьшенный HP_FONT_SCALE — мелкий рассыпается
+const HP_FONT_SCALE: float = 0.5
 const SHIELD_BAR_HEIGHT: float = 4.0
+# Контур спрайта — как у зданий (Building.OUTLINE_WORLD_PX, Palette.BUILDING_OUTLINE), решение пользователя 24.10.2026;
+# в свет местности — как здания (тема "building_env": оттенок, насыщенность, приглушение светов, затемнение
+# к основанию, мягкий контур), решение пользователя 25.10.2026: новые кадры ярче зданий и грунта
 const SHIELD_COLOR = UITheme.SHIELD_BLUE
 # Враг атакует цитадель, когда до её центра не больше его дальности + HIT_RADIUS
 const HIT_RADIUS: float = 50.0
@@ -63,6 +71,9 @@ var _sheet: Dictionary = {}
 var _pending_shot: Dictionary = {}
 # Вспышка попадания: один материал на крепость (блоки — сам узел, лист — спрайт; HP-бар без него)
 var _flash_material: ShaderMaterial
+# Спрайт листа — шейдер бойцов (контур + вспышка; Soldier.unit_shader), свой материал: вспышка — только этой крепости
+var _sprite_material: ShaderMaterial = null
+var _env: Dictionary = {}   # тема "building_env" (пусто — без света местности)
 var _siege_shown: bool = false   # тревога штурма показана (цитадель — новая на каждый бой)
 var _flash_left: float = 0.0   # сек до конца вспышки попадания (гаснет в _process, не Tween на удар)
 
@@ -71,6 +82,7 @@ func _ready() -> void:
 	material = _get_flash_material()
 	apply_theme(FactionTheme.current().get("citadel", {}))
 	_hp_bar = Node2D.new()
+	_hp_bar.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR   # число — не пиксельным фильтром мира
 	_hp_bar.draw.connect(_draw_hp_bar)
 	add_child(_hp_bar)
 	BattleManager.citadel_hp_changed.connect(_on_hp_changed)
@@ -115,12 +127,33 @@ func apply_theme(citadel_theme: Dictionary) -> void:
 	_sprite.position = -Vector2(_sheet.get("anchor", Vector2(frame.x / 2.0, frame.y))) * k
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_sprite.modulate = _sheet.get("tint", Color.WHITE)   # вспышка попадания — modulate узла, не спрайта
-	_sprite.material = _get_flash_material()
+	_sprite_material = ShaderMaterial.new()
+	_sprite_material.shader = Soldier.unit_shader()
+	_env = FactionTheme.current().get("building_env", {})
+	var outline_px: float = _env.get("outline_px", Building.OUTLINE_WORLD_PX)
+	_sprite_material.set_shader_parameter("outline_px", float(maxi(1, roundi(outline_px / maxf(k, 0.01)))))
+	_sprite_material.set_shader_parameter("outline_color", Color(Palette.BUILDING_OUTLINE, _env.get("outline_alpha", 1.0)))
+	_sprite_material.set_shader_parameter("env_sat", _env.get("sat", 1.0))
+	_sprite_material.set_shader_parameter("env_knee", _env.get("knee", 0.0))
+	_sprite_material.set_shader_parameter("ao_strength", _env.get("ao", 0.0))
+	_sprite.material = _sprite_material
 	_sprite.animation_finished.connect(_on_sprite_animation_finished)
+	_sprite.animation_changed.connect(_update_env_ao)
 	add_child(_sprite)
 	move_child(_sprite, 0)   # под HP-баром
 	_sprite.play("idle" if BattleManager.citadel_hp > 0.0 else "fall")
+	_update_env_ao()
 	queue_redraw()
+
+# Затемнение к основанию — в UV листа целиком (кадр — AtlasTexture): полоса у anchor в ряду текущей анимации
+func _update_env_ao() -> void:
+	if _sprite == null or not _sheet["rows"].has(_sprite.animation):
+		return
+	var fh: float = Vector2i(_sheet["frame_size"]).y
+	var sheet_h: float = FactionTheme.load_texture(_sheet["sheet"]).get_height()
+	var base: float = int(_sheet["rows"][_sprite.animation][0]) * fh + Vector2(_sheet.get("anchor", Vector2(0, fh))).y
+	_sprite_material.set_shader_parameter("ao_from", (base - Building.ENV_AO_HEIGHT * fh) / sheet_h)
+	_sprite_material.set_shader_parameter("ao_to", (base + Building.ENV_AO_BELOW * fh) / sheet_h)
 
 func has_sprite() -> bool:
 	return _sprite != null
@@ -145,10 +178,10 @@ func _on_sprite_animation_finished() -> void:
 
 func _process(delta: float) -> void:
 	if _sprite:
-		_sprite.self_modulate = self_modulate
+		_sprite.self_modulate = self_modulate * _env.get("tint", Color.WHITE)
 	if _flash_left > 0.0:
 		_flash_left = maxf(_flash_left - delta, 0.0)
-		_flash_material.set_shader_parameter("flash", HIT_FLASH_STRENGTH * _flash_left / HIT_FLASH_TIME)
+		_set_flash(HIT_FLASH_STRENGTH * _flash_left / HIT_FLASH_TIME)
 
 func _draw() -> void:
 	Building.draw_ground_shadow(self, Vector2.ZERO, IsoGrid.TILE_WIDTH * SHADOW_WIDTH)
@@ -201,9 +234,23 @@ func get_occlusion_rect() -> Rect2:
 # Рисуется в дочернем узле _hp_bar (координаты те же — узел в начале цитадели)
 func _draw_hp_bar() -> void:
 	var rect = Rect2(Vector2(-HP_BAR_SIZE.x / 2.0, _top_y() - HP_BAR_GAP - HP_BAR_SIZE.y), HP_BAR_SIZE)
-	_hp_bar.draw_rect(rect.grow(1.5), Color(0, 0, 0, 0.8))
+	_hp_bar.draw_rect(rect.grow(2.0), Palette.OUTLINE)
+	_hp_bar.draw_rect(rect.grow(1.0), Palette.GOLD_DIM, false, 1.0)
 	var ratio = clampf(float(BattleManager.citadel_hp) / BattleManager.CITADEL_MAX_HP, 0.0, 1.0)
+	_hp_bar.draw_rect(rect, Palette.RED.darkened(0.55))   # потерянное
 	_hp_bar.draw_rect(Rect2(rect.position, Vector2(rect.size.x * ratio, rect.size.y)), UITheme.GOLD)
+	_hp_bar.draw_rect(Rect2(rect.position, Vector2(rect.size.x * ratio, 1.0)), Palette.GOLD_BRIGHT)   # блик сверху
+	for i in range(1, HP_BAR_TICKS):
+		var x: float = rect.position.x + rect.size.x * i / HP_BAR_TICKS
+		_hp_bar.draw_line(Vector2(x, rect.position.y), Vector2(x, rect.end.y), Palette.OUTLINE, 1.0)
+	var text := str(ceili(BattleManager.citadel_hp))
+	var font := UITheme.world_font()
+	var fs := UITheme.world_px(HP_FONT_SIZE)
+	var h := font.get_ascent(fs) * HP_FONT_SCALE
+	_hp_bar.draw_set_transform(Vector2(rect.end.x + 5.0, rect.get_center().y + h * 0.35), 0.0, Vector2(HP_FONT_SCALE, HP_FONT_SCALE))
+	_hp_bar.draw_string_outline(font, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Palette.OUTLINE)
+	_hp_bar.draw_string(font, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Palette.GOLD_BRIGHT)
+	_hp_bar.draw_set_transform(Vector2.ZERO)
 	# Щит от стен — синяя полоска над HP (доля от максимального HP)
 	if BattleManager.citadel_shield > 0.0:
 		var srect = Rect2(rect.position - Vector2(0, SHIELD_BAR_HEIGHT + 3.0), Vector2(rect.size.x, SHIELD_BAR_HEIGHT))
@@ -303,8 +350,13 @@ func _get_flash_material() -> ShaderMaterial:
 # Белая вспышка попадания: новый удар начинает её заново; гаснет счётчиком в _process — на штурме по
 # цитадели бьют десятки врагов, Tween на каждый удар был бы лишним объектом (как у Soldier)
 func _flash_hit() -> void:
-	_get_flash_material().set_shader_parameter("flash", HIT_FLASH_STRENGTH)
+	_set_flash(HIT_FLASH_STRENGTH)
 	_flash_left = HIT_FLASH_TIME
+
+func _set_flash(v: float) -> void:
+	_get_flash_material().set_shader_parameter("flash", v)
+	if _sprite_material:
+		_sprite_material.set_shader_parameter("flash", v)
 
 func get_hit_flash() -> float:
 	return _get_flash_material().get_shader_parameter("flash")

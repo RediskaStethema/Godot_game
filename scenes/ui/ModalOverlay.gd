@@ -27,7 +27,7 @@ func build_frame(width: float) -> void:
 	var panel = UITheme.make_panel("WindowPanel")
 	panel.custom_minimum_size = Vector2(width, 0)
 	center.add_child(panel)
-	_add_frame_eagle(panel)
+	add_frame_eagle(panel)
 	content = VBoxContainer.new()
 	content.add_theme_constant_override("separation", 12)
 	panel.add_child(content)
@@ -54,8 +54,9 @@ static func _make_vignette() -> TextureRect:
 	r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	return r
 
-# Аквила рамки — по центру верхней кромки окна (9-slice её бы растянул — рисуется отдельно)
-func _add_frame_eagle(panel: PanelContainer) -> void:
+# Аквила рамки — по центру верхней кромки окна (9-slice её бы растянул — рисуется отдельно).
+# Static — рамку окна берут и сцены без затемнения (EventScene)
+static func add_frame_eagle(panel: PanelContainer) -> void:
 	if not ResourceLoader.exists(UITheme.WINDOW_EAGLE):
 		return
 	var eagle: Texture2D = load(UITheme.WINDOW_EAGLE)
@@ -74,8 +75,13 @@ func add_title(text: String, variation: String = "TitleLabel") -> Label:
 # Разделитель с черепом (лист UI_assets.png) под заголовком окна — как в главном меню
 const DIVIDER_HEIGHT: float = 22.0
 func _add_divider() -> void:
+	var d := make_divider()
+	if d:
+		content.add_child(d)
+
+static func make_divider() -> TextureRect:
 	if not ResourceLoader.exists(UITheme.DIVIDER_SKULL):
-		return
+		return null
 	var d = TextureRect.new()
 	d.name = "TitleDivider"
 	d.texture = load(UITheme.DIVIDER_SKULL)
@@ -84,7 +90,18 @@ func _add_divider() -> void:
 	d.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	d.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	d.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	content.add_child(d)
+	return d
+
+# Карточка выбора (кнопка, внутри VBox на всю площадь с отступом pad): текст выше карточки — карточка растёт
+# по нему, а не обрезает (25.10.2026: описание ордена / бога вылезало за низ). Звать после add_child карточки —
+# высота текста с переносом считается по шрифту темы в дереве; соседи в ряду HBox тянутся до той же высоты
+static func fit_card_to_content(card: Control, box: Control, pad: float) -> void:
+	box.offset_top = pad
+	box.offset_bottom = -pad
+	(func():
+		if is_instance_valid(card) and is_instance_valid(box):
+			card.custom_minimum_size.y = maxf(card.custom_minimum_size.y,
+				box.get_combined_minimum_size().y + pad * 2.0)).call_deferred()
 
 func add_button(text: String, on_pressed: Callable, variation: String = "") -> Button:
 	var b = UITheme.make_button(text, variation, on_pressed)

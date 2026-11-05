@@ -163,7 +163,22 @@ const EFFECTS = {
 	"siege_alarm":   {"sheet": FX_DIR + "siege_alarm/spritesheet.png", "size": Vector2i(352, 256), "frames": 7,
 		"fps": 12.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(176, 128), "flat": true},
 	# ромб клетки под картой и купленная клетка — TileGlow (шейдер по клетке, не лист)
+	# окопался (Devastator, Soldier._tick_entrench): бруствер растёт у ног и стоит, пока боец не сдвинется (hold —
+	# последний кадр держится, снимает Vfx.dismiss); перед ногами, поверх голеней
+	"entrench":      {"sheet": FX_DIR + "entrench/spritesheet.png", "size": Vector2i(64, 32), "frames": 6,
+		"fps": 12.0, "loop": false, "hold": true, "scale": 1.4, "pivot": Vector2(34, 22)},
+	# --- Интерфейс (spawn_over: рамка листа "frame" — по прямоугольнику карты; фильтр сглаженный) ---
+	# карта сыграна на поле (Bench) — сгорает рамкой; продана в магазине — сгорает, угли уносит вверх
+	"card_burn":     {"sheet": FX_DIR + "card_burn/spritesheet.png", "size": Vector2i(180, 252), "frames": 8,
+		"fps": 16.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(95, 164.5),
+		"frame": Vector2(142, 171)},
+	"card_sell":     {"sheet": "res://assets/ui/fx/card_sell.png", "size": Vector2i(180, 252), "frames": 8,
+		"fps": 16.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(89, 152), "frame": Vector2(154, 194)},
+	# не хватает Req — вспышка у цены
+	"no_money":      {"sheet": "res://assets/ui/fx/no_money.png", "size": Vector2i(64, 32), "frames": 4,
+		"fps": 12.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(32, 19)},
 }
+const Z_INDEX_UI: int = 100   # эффекты интерфейса — поверх карт и панелей своего слоя
 # Частые эффекты попаданий (каждый удар и снаряд) — под лимитом, как FloatingText: в сшибке сотен бойцов
 # узел на каждый удар съедал тик (test_performance). Лишние не создаются — бой от этого не меняется
 const HIT_EFFECTS = ["blood", "blood_1", "blood_2", "blood_3", "blood_4", "blood_5", "slash", "hit_spark", "ricochet"]
@@ -209,6 +224,7 @@ var _base_scale := Vector2.ONE
 var _fade_in := 0.0
 var _age := 0.0
 var _dismiss_left := -1.0
+var _hold := false   # разовый, но держит последний кадр, пока не снимут (dismiss)
 
 # Разовый эффект в мировой точке. size — множитель масштаба, angle — поворот (радианы)
 static func spawn(parent: Node, kind: String, at: Vector2, size: float = 1.0, angle: float = 0.0) -> Vfx:
@@ -227,6 +243,19 @@ static func spawn(parent: Node, kind: String, at: Vector2, size: float = 1.0, an
 		_hits_alive += 1
 		_hits_this_frame += 1
 		v.tree_exited.connect(_free_hit_slot)
+	return v
+
+# Эффект интерфейса поверх прямоугольника rect (экран): рамка листа ("frame", вокруг pivot) — по rect, без
+# "frame" — масштаб size в центре rect. Фильтр сглаженный — интерфейс мельче листа
+static func spawn_over(parent: Node, kind: String, rect: Rect2, size: float = 1.0) -> Vfx:
+	var v := spawn(parent, kind, rect.get_center(), size)
+	if v == null:
+		return null
+	v.z_index = Z_INDEX_UI
+	v.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	if EFFECTS[kind].has("frame"):
+		v._base_scale = rect.size / Vector2(EFFECTS[kind]["frame"]) / _sheet_scale.get(kind, 1.0)
+		v._apply_fade()
 	return v
 
 # Вариант эффекта по расе: "<вид>_chaos", если он есть и раса — Хаос; faction "" — раса игрока забега.
@@ -315,9 +344,10 @@ static func _make(kind: String, size: float) -> Vfx:
 	v._base_alpha = v.modulate.a
 	v._base_scale = v.scale
 	v._fade_in = LOOP_FADE_IN if e["loop"] else FADE_IN
+	v._hold = e.get("hold", false)
 	if e.get("add", false):
 		v.material = _add_material()
-	if not e["loop"]:
+	if not e["loop"] and not e.get("hold", false):
 		v.animation_finished.connect(v.queue_free)
 	FrameBlend.attach(v, e.get("add", false))   # кадры перетекают; ADD — родитель гаснет на ту же долю
 	v.play("play")
@@ -351,14 +381,14 @@ func _apply_fade() -> void:
 			scale = _base_scale * lerpf(POP_SCALE, 1.0, ease(t, 0.4))   # ease < 1 — быстрый рост, мягкий конец
 	else:
 		scale = _base_scale
-	if not loop:
+	if not loop and not _hold:
 		var count := sprite_frames.get_frame_count("play")
 		var tail := maxf(count * FADE_TAIL, 1.0)
 		a *= clampf((count - frame - frame_progress) / tail, 0.0, 1.0)
 	if _dismiss_left >= 0.0:
 		a *= _dismiss_left / FADE_OUT
 	modulate.a = _base_alpha * a
-	if loop and _age >= _fade_in and _dismiss_left < 0.0:
+	if (loop or _hold) and _age >= _fade_in and _dismiss_left < 0.0:
 		set_process(false)   # постоянный проявился — дальше ничего не считаем (статусы на сотнях бойцов)
 
 # Все листы — заранее (BattleScene._ready): иначе первый эффект каждого вида читает лист посреди боя

@@ -7,7 +7,14 @@ extends Control
 #   * клик по своему отряду на расстановке — справка-карточка InfoCard (решение пользователя 23.10.2026, образец
 #     9 Kings): портрет, имя, бойцы, описание карты, статы бойца, способность, бонусы, улучшения, ряд; синергий
 #     в ней нет — они в справке цитадели (клик по цитадели); в бою справки нет (только подпись при наведении);
-#     повторный клик или клик мимо — закрыть.
+#     повторный клик или клик мимо — закрыть;
+#   * клик по своему зданию на расстановке — такая же карточка (решение пользователя 24.10.2026): иллюстрация
+#     карты, название, ур. N/3 ромбиками, что делает с текущими цифрами, можно ли улучшить; пока открыта —
+#     здание не гаснет и его зона действия подсвечена (BattleScene._update_building_hover). Здание — только
+#     по его клетке, как подсказка при наведении (building_finder).
+# Карточка — между top_limit (низ плашки сообщения) и bottom_limit (рука на расстановке), не выше этого места
+# (InfoCard.fit); подписи при наведении не ложатся на открытую карточку (_place_clear: сбоку от неё или скрыть),
+# подсказки здания при открытой справке здания нет — всё уже в карточке (25.10.2026: налезали друг на друга).
 # Опрос мыши и обновление текста — REFRESH_INTERVAL раз в секунду, не каждый кадр.
 
 const HOVER_NAME_DELAY: float = 0.5
@@ -22,8 +29,14 @@ var enabled: bool = true
 # true — клик забран другим (залп орудия игрока): справку не открывать и не закрывать.
 # Справка получает клик раньше сцены, поэтому спрашивает её заранее
 var click_blocker: Callable
+# Здание игрока на клетке под точкой мира или null (задаёт BattleScene — знает сетку)
+var building_finder: Callable
+# Верх и низ места для справки на экране (задаёт BattleScene: плашка сообщения, рука); не заданы — шапка и низ экрана
+var top_limit: Callable
+var bottom_limit: Callable
 var info_squad: Squad = null
 var info_citadel: bool = false   # открыта справка цитадели
+var info_building: Building = null
 
 var _hover_panel: PanelContainer
 var _hover_text: Label
@@ -111,6 +124,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		info_citadel = not was
 		_update_info()
 		return
+	var building: Building = building_finder.call(world) if building_finder.is_valid() else null
+	if building != null:
+		var same_building := building == info_building
+		close_info()
+		if not same_building:
+			info_building = building
+			_update_info()
+		return
 	close_info()
 
 # -------------------------------------------------------
@@ -126,6 +147,7 @@ func citadel_at(world_pos: Vector2) -> bool:
 func close_info() -> void:
 	info_squad = null
 	info_citadel = false
+	info_building = null
 	_card.hide()
 
 func is_info_visible() -> bool:
@@ -133,14 +155,12 @@ func is_info_visible() -> bool:
 
 # Подсказка по зданию (Building.describe) у точки экрана; пустой текст — скрыть
 func show_building_hover(text: String, screen_pos: Vector2) -> void:
-	if text == "" or not enabled:
+	if text == "" or not enabled or info_building != null:
 		_building_panel.hide()
 		return
 	_building_text.text = text
 	_building_panel.reset_size()
-	var pos = screen_pos + Vector2(16, 12)
-	_building_panel.position = pos.clamp(Vector2.ZERO, get_viewport_rect().size - _building_panel.size)
-	_building_panel.show()
+	_place_clear(_building_panel, screen_pos + Vector2(16, 12))
 
 func is_building_hover_visible() -> bool:
 	return _building_panel.visible
@@ -162,15 +182,32 @@ func show_hover(squad: Squad, screen_pos: Vector2) -> void:
 	_hover_text.add_theme_color_override("font_color",
 		UITheme.GOLD_BRIGHT if squad.team == GameConstants.TEAM_PLAYER else UITheme.RED_BRIGHT)
 	_hover_panel.reset_size()
-	var pos = screen_pos + Vector2(14, -_hover_panel.size.y - 6)
-	_hover_panel.position = pos.clamp(Vector2.ZERO, get_viewport_rect().size - _hover_panel.size)
-	_hover_panel.show()
+	_place_clear(_hover_panel, screen_pos + Vector2(14, -_hover_panel.size.y - 6))
+
+const CLEAR_GAP: float = 6.0   # подпись сбоку от открытой карточки — с зазором
+
+# Подпись у точки в пределах экрана; на открытую карточку не ложится — сбоку от неё, не влезла — скрыта
+func _place_clear(panel: Control, pos: Vector2) -> void:
+	var limit := get_viewport_rect().size - panel.size
+	panel.position = pos.clamp(Vector2.ZERO, limit)
+	panel.show()
+	if not _card.visible:
+		return
+	var card := Rect2(_card.position, _card.size).grow(CLEAR_GAP)
+	if not card.intersects(Rect2(panel.position, panel.size)):
+		return
+	for x in [card.position.x - panel.size.x, card.end.x]:
+		var p := Vector2(x, panel.position.y).clamp(Vector2.ZERO, limit)
+		if not card.intersects(Rect2(p, panel.size)):
+			panel.position = p
+			return
+	panel.hide()
 
 # -------------------------------------------------------
 # СПРАВКА
 # -------------------------------------------------------
 func _update_info() -> void:
-	if info_squad == null and not info_citadel:
+	if info_squad == null and not info_citadel and info_building == null:
 		return
 	if BattleManager.is_battle_running():
 		close_info()
@@ -182,17 +219,35 @@ func _update_info() -> void:
 			return
 		_show_citadel_card()
 		anchor = _world_to_screen(BattleManager.citadel.global_position)
+	elif info_building != null:
+		if not is_instance_valid(info_building):
+			close_info()
+			return
+		_show_building_card(info_building)
+		anchor = _world_to_screen(info_building.global_position)
 	else:
 		if not is_instance_valid(info_squad) or not info_squad.is_alive() or info_squad.soldiers.is_empty():
 			close_info()
 			return
 		_show_squad_card(info_squad)
 		anchor = _world_to_screen(info_squad.soldiers[0].global_position)
+	var screen := get_viewport_rect().size
+	var top: float = top_limit.call() + CLEAR_GAP if top_limit.is_valid() else UITheme.HUD_HEIGHT
+	var bottom: float = bottom_limit.call() - CLEAR_GAP if bottom_limit.is_valid() else screen.y
+	_card.fit(bottom - top)
 	_card.reset_size()
 	_card.show()
-	# Справа от отряда / цитадели, в пределах экрана
+	# Справа от отряда / цитадели / здания, между top и bottom; выше места — от top
 	var pos = anchor + Vector2(30, -_card.size.y / 2.0)
-	_card.position = pos.clamp(Vector2(0, UITheme.HUD_HEIGHT), get_viewport_rect().size - _card.size)
+	pos.x = clampf(pos.x, 0.0, maxf(screen.x - _card.size.x, 0.0))
+	pos.y = maxf(minf(pos.y, bottom - _card.size.y), top)
+	_card.position = pos
+	# Подписи, открытые раньше карточки, — с неё
+	for panel in [_hover_panel, _building_panel]:
+		if panel.visible:
+			_place_clear(panel, panel.position)
+	if info_building != null:
+		_building_panel.hide()
 
 func _show_squad_card(squad: Squad) -> void:
 	var d = squad.data
@@ -209,6 +264,19 @@ func _show_citadel_card() -> void:
 		tex = UITheme.ui_icon("hud", "citadel_hp")
 	_card.setup(tex, "Цитадель", "%d/%d" % [ceili(BattleManager.citadel_hp), roundi(BattleManager.CITADEL_MAX_HP)],
 		describe_citadel(), 0, 0, Palette.GOLD)
+
+func _show_building_card(b: Building) -> void:
+	var tex := squad_portrait(b.card)
+	if tex == null and b.sprite:
+		tex = b.sprite.sprite_frames.get_frame_texture("idle", 0)
+	_card.setup(tex, b.card.title, "", describe_building(b), b.card.building_level, CardData.MAX_BUILDING_LEVEL,
+		UITheme.rarity_color(b.card.rarity))
+
+# Текст справки здания (BBCode): что делает с текущими цифрами, можно ли улучшить
+static func describe_building(b: Building) -> String:
+	return "%s
+
+%s" % [InfoCard.color_numbers(b.effect_text(), Palette.AMBER_LIGHT), b.upgrade_text()]
 
 # Портрет справки: лицо иллюстрации карты; арта нет — кадр бойца по силуэту
 static func squad_portrait(card: CardData) -> Texture2D:
@@ -290,6 +358,8 @@ static func describe(squad: Squad) -> String:
 	var ability := ability_text(d)
 	if ability != "":
 		lines.append("Способность: " + InfoCard.color_numbers(ability, Palette.AMBER_LIGHT))
+	if squad.team == GameConstants.TEAM_PLAYER and "chaos" in d.tags and d.get_god() != "":   # бог отряда (ChaosGods)
+		lines.append(InfoCard.color_numbers(ChaosGods.describe(d.get_god(), d.blessings, d.tags), Palette.AMBER_LIGHT))
 	if not d.applied_upgrades.is_empty():
 		lines.append("Улучшения: " + ", ".join(d.applied_upgrades))
 	var pos = SynergyManager.get_squad_position_bonus(squad)

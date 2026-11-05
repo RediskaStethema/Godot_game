@@ -102,6 +102,7 @@ func _main() -> void:
 	rm.player_chapter = "imperial_fists"
 	rm.difficulty = 5
 	bm.armed_events.append("orbital_strike")
+	bm.armed_tiles.append(Vector2i(2, 1))
 	root.get_node("MetaProgress").run_minibosses = 2
 	sv.save_run()
 	bm.reset_run()
@@ -120,7 +121,7 @@ func _main() -> void:
 		and is_equal_approx(lt.hp_multiplier, 1.5) and is_equal_approx(lt.damage_multiplier, 1.2) \
 		and is_equal_approx(lt.attack_speed_multiplier, 1.15) and lt.applied_upgrades == ["Blessed Armour"] \
 		and lt.saved_hp == [1.0, 0.35] and lt.squad_size == 2 and bm.player_placements.get(lt) == Vector2i(1, 1))
-	_check("раненый отряд на купленной клетке, щит / стимуляторы / знамя, заряд удара", ls.saved_hp == [0.5] 		and bm.player_placements.get(ls) == Vector2i(3, 0) and is_equal_approx(ls.shield_ratio, 0.3) 		and is_equal_approx(ls.move_speed_multiplier, 1.2) and is_equal_approx(ls.banner_aura_bonus, 0.15) 		and Array(bm.armed_events) == ["orbital_strike"])
+	_check("раненый отряд на купленной клетке, щит / стимуляторы / знамя, заряд удара и его клетка", ls.saved_hp == [0.5] 		and bm.player_placements.get(ls) == Vector2i(3, 0) and is_equal_approx(ls.shield_ratio, 0.3) 		and is_equal_approx(ls.move_speed_multiplier, 1.2) and is_equal_approx(ls.banner_aura_bonus, 0.15) 		and Array(bm.armed_events) == ["orbital_strike"] and Array(bm.armed_tiles) == [Vector2i(2, 1)])
 	var bkeys = bm.player_buildings.keys()
 	_check("здания (уровень 2) и рука", bkeys.size() == 1 and bkeys[0].id == "fortress_wall" and bkeys[0].building_level == 2 \
 		and bm.player_buildings[bkeys[0]] == bm.WALL_TILE and _ids(bm.pending_cards) == "battle_fury,tactical_squad")

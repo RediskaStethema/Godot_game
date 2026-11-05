@@ -426,11 +426,15 @@ static func special_card(id: String) -> CardData:
 			return _building_card(id, "Vulkan's Forge", "Соседние отряды +10% урона. После боя чинит цитадель на 50 HP.",
 				"space_marines", 8, "vulkan_forge", {"damage_bonus": 0.1, "repair": 50.0}, {"damage_bonus": 0.5, "repair": 0.5})
 		"skull_altar":
-			return _building_card(id, "Altar of Skulls", "Каждый убитый враг: +1% урона всей армии до конца боя (до +30%).",
-				"chaos", 8, "skull_altar", {"per_kill": 0.01, "max_bonus": 0.3}, {"per_kill": 0.25, "max_bonus": 0.25})
+			# отрядам Кхорна — ещё +5% за убийство (решение пользователя 25.10.2026)
+			return _building_card(id, "Altar of Skulls", "Каждый убитый враг: +1% урона всей армии, отрядам Кхорна ещё +5%, до конца боя (до +30%).",
+				"chaos", 8, "skull_altar", {"per_kill": 0.01, "khorne_per_kill": 0.05, "max_bonus": 0.3},
+				{"per_kill": 0.25, "khorne_per_kill": 0.25, "max_bonus": 0.25})
 		"plague_cauldron":
-			return _building_card(id, "Plague Cauldron", "Травит врагов рядом: яд 4 ур/с в круге 140 px.",
-				"chaos", 8, "plague_cauldron", {"poison": 4.0, "poison_radius": 140.0}, {"poison": 0.3, "poison_radius": 0.2})
+			# атаки соседей — с ядом (решение пользователя 25.10.2026)
+			return _building_card(id, "Plague Cauldron", "Травит врагов рядом: яд 4 ур/с в круге 140 px. Атаки отрядов на соседних клетках отравляют (2 ур/с).",
+				"chaos", 8, "plague_cauldron", {"poison": 4.0, "poison_radius": 140.0, "neighbour_poison": 2.0},
+				{"poison": 0.3, "poison_radius": 0.2, "neighbour_poison": 0.3})
 		"warp_spire":
 			return _building_card(id, "Warp Spire", "Молния варпа по ближайшему врагу: 30 урона и оглушение 0.6 с, раз в 2.5 с.",
 				"chaos", 9, "warp_spire", {"damage": 30.0, "attack_speed": 0.4, "stun": 0.6}, {"damage": 0.25, "attack_speed": 0.2})
@@ -511,6 +515,44 @@ static func hellbrute_card() -> CardData:
 
 static func chaos_lord_card() -> CardData:
 	return _chaos_squad("chaos_lord", "Chaos Lord", "Командир: +15% урона всей армии", 16, "epic", "chaos_lord_player", 2)
+
+# Благословения богов Хаоса (решение пользователя 25.10.2026, ChaosGods): «Blessing of <бог>» — на отряд этого бога
+# (до 3 раз), «Chaos Gods' Blessing» — сменить бога отряда (бог — на выбор игрока в окне). Во всех забегах Хаоса
+const BLESSING_TEXT = {
+	"khorne": ["Blessing of Khorne", "Отряд Кхорна: +15% урона бойцам ближнего боя, не отступает. До 3 раз"],
+	"nurgle": ["Blessing of Nurgle", "Отряд Нургла: +20% HP, атаки отравляют (2 ур/с), −10% урона. До 3 раз"],
+	"tzeentch": ["Blessing of Tzeentch", "Стрелки Тзинча: +15% дальности, +5 урона, −10% скорострельности. До 3 раз"],
+	"slaanesh": ["Blessing of Slaanesh", "Отряд Слаанеш: шанс поработить врага при попадании (3 / 5 / 10%), все статы −5 / −8 / −10%. До 3 раз"],
+}
+const BLESSING_COPIES: int = 1
+const CHANGE_GOD_COPIES: int = 2
+
+static func god_blessing(god: String) -> CardData:
+	var c = CardData.new()
+	c.id = "blessing_" + god
+	c.title = BLESSING_TEXT[god][0]
+	c.description = BLESSING_TEXT[god][1]
+	c.faction = "chaos"
+	c.cost = 7
+	c.rarity = "rare"
+	c.card_type = "upgrade"
+	c.upgrade_type = "blessing"
+	c.affects_tag = "chaos"
+	c.blessing_god = god
+	return c
+
+static func chaos_gods_blessing() -> CardData:
+	var c = CardData.new()
+	c.id = "chaos_gods_blessing"
+	c.title = "Chaos Gods' Blessing"
+	c.description = "Любой отряд Хаоса (и Common) служит богу на ваш выбор; прежние благословения пропадают"
+	c.faction = "chaos"
+	c.cost = 5
+	c.rarity = "rare"
+	c.card_type = "upgrade"
+	c.upgrade_type = "change_god"
+	c.affects_tag = "chaos"
+	return c
 
 # Общие карты (здания, улучшения, события) — механика Космодесанта, свои id и названия:
 # id Космодесанта → [id, название, описание]. Улучшения — на свои отряды (тег chaos)
@@ -692,8 +734,8 @@ static func _space_marine_pool() -> Array:
 	for i in range(2): pool.append(chapter_master_card())
 	return pool
 
-# Хаос: те же доли ~60/30/10 (27 / 16 / 4): Common — 3 отряда (как у Космодесанта), Rare — 3 отряда
-# по 2 копии вместо 6 по одной; общие карты — тем же числом копий
+# Хаос: 27 / 22 / 4 (53): Common — 3 отряда (как у Космодесанта), Rare — 3 отряда по 2 копии вместо 6 по одной;
+# общие карты — тем же числом копий; + благословения богов (4 по одной) и смена бога (2) — 25.10.2026
 static func _chaos_pool() -> Array:
 	var pool = []
 	for i in range(8): pool.append(chaos_marines())
@@ -707,4 +749,9 @@ static func _chaos_pool() -> Array:
 	for card in _space_marine_pool():   # без особых карт ордена — у них нет версии Хаоса
 		if card.card_type != "squad":
 			pool.append(_chaos_version(card))
+	for god in ChaosGods.GODS:
+		for i in BLESSING_COPIES:
+			pool.append(god_blessing(god))
+	for i in CHANGE_GOD_COPIES:
+		pool.append(chaos_gods_blessing())
 	return pool

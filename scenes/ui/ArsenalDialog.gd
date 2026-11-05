@@ -7,6 +7,7 @@ extends ModalOverlay
 
 const ROW_GAP: float = 6.0
 const LIST_HEIGHT: float = 420.0
+const WINDOW_CHROME: float = 300.0   # рамка, заголовки и «Закрыть» вокруг списка — список вписан в экран по высоте
 const BUTTON_WIDTH: float = 190.0
 
 var glory_label: Label = null
@@ -25,7 +26,7 @@ func _rebuild() -> void:
 	glory_label = add_title("Слава: %d — за каждый забег, даже проигранный" % MetaProgress.get_glory(), "HeaderLabel")
 	glory_label.add_theme_color_override("font_color", UITheme.GOLD_BRIGHT)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, LIST_HEIGHT)
+	scroll.custom_minimum_size = Vector2(0, minf(LIST_HEIGHT, get_viewport_rect().size.y - WINDOW_CHROME))
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	content.add_child(scroll)
 	var list := VBoxContainer.new()

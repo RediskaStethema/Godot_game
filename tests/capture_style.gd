@@ -103,7 +103,8 @@ func _battle(faction: String) -> void:
 	if faction == "space_marines":
 		# Баннеры итога (подложки пакета интерфейса) и экран расширения — поверх боя
 		for r in [["ПОБЕДА", true, "result_victory"], ["ПОРАЖЕНИЕ", false, "result_defeat"]]:
-			current_scene.hud.show_result(r[0], "+24 Req · Лучший отряд: Tactical Squad", r[1])
+			current_scene.hud.show_result(r[0], "+24 Req
+Лучший отряд: Tactical Squad — 412 урона · Потери: 6 из 31 бойцов", r[1])
 			await create_timer(0.4, true, false, true).timeout
 			await _shot(r[2])
 		current_scene.hud.result_banner.queue_free()

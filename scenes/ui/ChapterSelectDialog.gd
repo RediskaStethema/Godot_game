@@ -78,6 +78,7 @@ func _make_card(c: Dictionary) -> Control:
 			box.add_child(_wrapped_label("Особые: " + ", ".join(specials), "DimLabel"))
 	for child in box.get_children():
 		child.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ModalOverlay.fit_card_to_content(card, box, CARD_PADDING)
 	return card
 
 func _wrapped_label(text: String, variation: String) -> Label:

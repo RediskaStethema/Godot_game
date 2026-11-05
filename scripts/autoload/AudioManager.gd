@@ -49,6 +49,7 @@ const EVENTS = {
 	"reroll":       {"volume": -6.0,  "max_per_sec": 6,  "pitch": 0.0},
 	"place":        {"volume": -8.0,  "max_per_sec": 8,  "pitch": 0.05},
 	"tile_bought":  {"volume": -6.0,  "max_per_sec": 4,  "pitch": 0.0},
+	"building_level_up": {"volume": -6.0, "max_per_sec": 4, "pitch": 0.0},
 	"wall_hit":     {"volume": -10.0, "max_per_sec": 6,  "pitch": 0.08},   # удар по стене владений (KingdomWall)
 	"wall_break":   {"volume": -4.0,  "max_per_sec": 3,  "pitch": 0.05},   # звено стены разбито
 	"pause":        {"volume": -8.0,  "max_per_sec": 4,  "pitch": 0.0},

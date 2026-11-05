@@ -6,6 +6,10 @@ extends ModalOverlay
 # выбор, смену и лимит руки обрабатывает ShopScene.
 
 const SHOP_SLOT_SCENE = preload("res://scenes/shop/ShopSlot.tscn")
+# Карта выбора выше своего минимума — во вставке видно описание (по минимуму 330 вставка сжималась в полоску);
+# не выше, чем позволяет экран вокруг рамки, заголовков и кнопок (WINDOW_CHROME)
+const SLOT_HEIGHT: float = 390.0
+const WINDOW_CHROME: float = 275.0
 
 signal picked(index: int)
 signal reroll_requested
@@ -41,6 +45,8 @@ func refresh(offers: Array, rerolls_left: int, hand_full: bool) -> void:
 		var slot = SHOP_SLOT_SCENE.instantiate()
 		_slots.add_child(slot)
 		slot.setup(offers[i], i, true)
+		slot.custom_minimum_size.y = maxf(slot.custom_minimum_size.y,
+			minf(SLOT_HEIGHT, get_viewport_rect().size.y - WINDOW_CHROME))
 		slot.set_hand_full(hand_full)
 		slot.purchase_requested.connect(func(index): emit_signal("picked", index))
 	_reroll_button.text = "Поменять набор · %d" % rerolls_left

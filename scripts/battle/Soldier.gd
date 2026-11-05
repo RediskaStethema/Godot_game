@@ -24,8 +24,8 @@ const SHADOW_FLATTEN: float = 0.5
 const SHADOW_COLOR = Color(0, 0, 0, 0.35)
 const SHADOW_SOFT = Color(0, 0, 0, 0.16)   # мягкий край тени: шире и прозрачнее
 const SHADOW_SOFT_SCALE: float = 1.45
-const RING_WIDTH: float = 1.5
-const RING_ALPHA: float = 0.6
+const RING_WIDTH: float = 2.0   # кольцо стороны под бойцом (решение пользователя 24.10.2026: было 1.5 / 0.6 — еле видно)
+const RING_ALPHA: float = 0.85
 # Всплывающие цифры (FloatingText) — только в схватке: удар не меньше FLOAT_MIN_DAMAGE
 # (герои, техника, орудие; не каждый болт и не яд / огонь), лечение — порциями FLOAT_HEAL_STEP
 const FLOAT_MIN_DAMAGE: float = 20.0
@@ -71,8 +71,6 @@ const JUMP_STAGGER: float = 0.5
 # Стрельба на ходу (UnitData.mobile_fire): скорость кружения — доля бега, дистанция — доля дальности
 const MOBILE_FIRE_SPEED: float = 0.6
 const MOBILE_FIRE_DISTANCE: float = 0.8
-# Окопавшийся (UnitData.entrench_time) — бруствер перед бойцом
-const SANDBAG_COLOR = Color(0.62, 0.52, 0.36, 0.9)
 
 # -------------------------------------------------------
 # ДАННЫЕ
@@ -119,6 +117,7 @@ var _leap_prev: float = 1.0       # … и до него
 var _jump_trail: Vfx = null       # шлейф ранца в полёте (только вид)
 # Окапывание (Devastator): сколько стоит на месте; _moved — сдвинулся в этом тике
 var _still_time: float = 0.0
+var _entrench_vfx: Vfx = null       # бруствер окопавшегося (только вид)
 var _moved: bool = false
 var wall_segment: Node2D = null   # звено стены владений, в которое упёрся враг (KingdomWall.Segment) — ломает его
 var _orbit_sign: float = 1.0      # стрельба на ходу: в какую сторону кружит (по номеру в отряде)
@@ -130,6 +129,10 @@ var extra_on_hit_status_duration: float = 0.0
 # Особые бонусы и минусы ордена / бога и их зданий (решение пользователя 18.10.2026) — на этот бой:
 var damage_taken_mult: float = 1.0   # множитель получаемого урона (Slaanesh: ×1.1)
 var lifesteal: float = 0.0           # доля урона ближнего боя, которая лечит бойца (Чаша крови)
+# Благословения богов Хаоса и Котёл Нургла (решение пользователя 25.10.2026, ChaosGods) — на этот бой:
+var bonus_poison_power: float = 0.0  # яд в атаках поверх своего эффекта, ур/с (ChaosGods.POISON_TIME)
+var charm_chance: float = 0.0        # шанс поработить цель при попадании (Слаанеш)
+var charmed: bool = false            # порабощён: бьётся за отряд, который поработил, после боя — не боец отряда
 # Эффекты на бойце (Vfx) — только вид: статусы, оглушение / каст, лечение
 var _status_vfx: Dictionary = {}   # статус → Vfx
 var _state_vfx: Vfx
@@ -165,9 +168,12 @@ func setup(unit_data: UnitData, team_id: int, squad: Squad, offset: Vector2, sta
 	current_hp = max_hp * clampf(start_hp_ratio, 0.01, 1.0)
 	current_move_speed = data.get_move_speed()
 	shield = max_hp * data.shield_ratio
-	current_attack_range = data.attack_range
+	current_attack_range = data.get_attack_range()
 	current_attack_speed = data.get_attack_speed()
 	current_heal_per_second = data.heal_per_second
+	bonus_poison_power = ChaosGods.poison_power(data.get_god(), data.blessings)
+	charm_chance = ChaosGods.charm_chance(data.get_god(), data.blessings)
+	charmed = false
 	formation_offset = offset
 	attack_timer = 0.0
 	attack_stagger = fmod(squad.soldiers.size() * GOLDEN_RATIO_FRAC, 1.0) if squad else 0.0
@@ -225,6 +231,13 @@ uniform float rim_strength = 0.5;
 uniform float outline_px = 0.0;
 uniform vec4 outline_color : source_color = vec4(0.0, 0.0, 0.0, 0.85);
 uniform float flash = 0.0;
+// Здания в свет местности (Building.apply_environment; у бойцов — по умолчанию, без изменений): насыщенность,
+// приглушение светов, затемнение к основанию (UV.y от ao_from до ao_to — к ao_strength)
+uniform float env_sat = 1.0;
+uniform float env_knee = 0.0;
+uniform float ao_strength = 0.0;
+uniform float ao_from = 1.0;
+uniform float ao_to = 1.0;
 varying vec4 tint;
 vec3 rgb2hsv(vec3 c) {
 	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -253,6 +266,15 @@ void fragment() {
 		float around = min(min(texture(TEXTURE, UV + vec2(d.x, 0.0)).a, texture(TEXTURE, UV - vec2(d.x, 0.0)).a),
 			min(texture(TEXTURE, UV + vec2(0.0, d.y)).a, texture(TEXTURE, UV - vec2(0.0, d.y)).a));
 		c.rgb = mix(c.rgb, rim_color, (1.0 - around) * step(0.5, c.a) * rim_strength);
+	}
+	if (env_sat != 1.0 || env_knee > 0.0 || ao_strength > 0.0) {
+		float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+		c.rgb = mix(vec3(l), c.rgb, env_sat);
+		// светлое приглушается, огонь и свечение (яркое и насыщенное) — нет
+		float mx = max(c.r, max(c.g, c.b));
+		float glow = smoothstep(0.45, 0.75, (mx - min(c.r, min(c.g, c.b))) / max(mx, 1e-4)) * smoothstep(0.35, 0.6, mx);
+		c.rgb *= 1.0 - env_knee * smoothstep(0.25, 0.9, l) * (1.0 - glow);
+		c.rgb *= 1.0 - ao_strength * smoothstep(ao_from, ao_to, UV.y);
 	}
 	c.rgb = mix(c.rgb, vec3(1.0), flash);
 	// Выборки — в ветке по параметру материала (одинаков для всех пикселей): в ветке по прозрачности пикселя
@@ -535,7 +557,12 @@ func _tick_entrench(delta: float) -> void:
 	else:
 		_still_time = minf(_still_time + delta, data.entrench_time)
 	if is_entrenched() != was:
-		queue_redraw()
+		_show_entrench(is_entrenched())
+
+# Бруствер (лист entrench, пакет художника; было — дуга кодом в _draw): вырастает у ног и стоит, сдвинулся — тает
+func _show_entrench(on: bool) -> void:
+	Vfx.dismiss(_entrench_vfx)
+	_entrench_vfx = Vfx.attach(self, "entrench", data.sprite_scale * EFFECT_SCALE) if on else null
 
 func is_entrenched() -> bool:
 	return data.entrench_time > 0.0 and _still_time >= data.entrench_time - TIMER_EPSILON
@@ -777,7 +804,10 @@ func refresh_stats_from_data() -> void:
 	current_damage = data.get_damage()
 	current_attack_speed = data.get_attack_speed()
 	current_move_speed = data.get_move_speed()
+	current_attack_range = data.get_attack_range()
 	shield = max_hp * data.shield_ratio
+	bonus_poison_power = ChaosGods.poison_power(data.get_god(), data.blessings)
+	charm_chance = ChaosGods.charm_chance(data.get_god(), data.blessings)
 
 func heal(amount: float) -> void:
 	if current_state == State.DEAD:
@@ -803,12 +833,8 @@ func heal(amount: float) -> void:
 func _draw() -> void:
 	if data == null or current_state == State.DEAD or max_hp <= 0.0:
 		return
-	# Тень и кольцо стороны — общий слой SoldierShadows (один вызов на всех; здесь пакет рвался на каждом бойце)
-	if is_entrenched():   # окопался (Devastator) — бруствер дугой перед ногами
-		var r := SHADOW_RADIUS * data.sprite_scale
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, SHADOW_FLATTEN))
-		draw_arc(Vector2.ZERO, r * 1.4, 0.15 * PI, 0.85 * PI, 10, SANDBAG_COLOR, RING_WIDTH * 2.0)
-		draw_set_transform(Vector2.ZERO)
+	# Тень и кольцо стороны — общий слой SoldierShadows (один вызов на всех; здесь пакет рвался на каждом бойце).
+	# Бруствер окопавшегося — Vfx "entrench" (_show_entrench)
 	# Статус-эффекты — точки над головой, по точке на стак
 	var stacks := 0
 	for effect in status_effects:
@@ -900,6 +926,8 @@ func _do_attack() -> void:
 		shot.status = st[0]
 		shot.status_power = st[1]
 		shot.status_duration = st[2]
+		shot.poison_power = bonus_poison_power
+		shot.charm_chance = charm_chance
 		return
 	var frames := sprite.sprite_frames
 	if frames and frames.has_meta("hit_frame"):
@@ -1008,6 +1036,44 @@ func _apply_on_hit_effects() -> void:
 				EFFECT_SCALE, (target.global_position - global_position).angle())
 	if data.on_hit_knockback > 0.0:
 		target.apply_knockback(target.global_position - global_position, data.on_hit_knockback)
+	apply_blessing_hit(target, bonus_poison_power, charm_chance, parent_squad)
+
+# Яд благословения / Котла и порабощение Слаанеш при попадании (удар — здесь, снаряд — Projectile._impact)
+static func apply_blessing_hit(victim: Soldier, poison: float, charm: float, by: Squad) -> void:
+	if not is_instance_valid(victim) or victim.current_state == State.DEAD:
+		return
+	if poison > 0.0:
+		victim.apply_status(StatusEffects.POISONED, poison, ChaosGods.POISON_TIME)
+	if charm > 0.0 and randf() < charm and victim.can_be_charmed(by):   # случайность боя, как разброс урона
+		victim.charm(by)
+
+# Порабощать нельзя элиту, командиров и боссов; уже порабощённого и бойца своей стороны
+func can_be_charmed(by: Squad) -> bool:
+	return is_instance_valid(by) and by.is_alive() and team != by.team and not charmed 		and not ("elite" in data.tags or "commander" in data.tags)
+
+# Порабощён (благословение Слаанеш): уходит из своего отряда в отряд, который его поработил, и бьётся за него до
+# конца боя; после выигранного боя порабощённые возвращают павших этого отряда или лечат его
+# (BattleManager.apply_thralls). Бойцом отряда не становится — sync_army_from_squads его пропускает
+const CHARM_TINT = Color(1.0, 0.72, 0.92)
+func charm(by: Squad) -> void:
+	if parent_squad:
+		parent_squad.release_soldier(self)
+	charmed = true
+	team = by.team
+	target = null
+	_hit_target = null
+	_hit_timer = 0.0
+	parent_squad = by
+	reparent(by)
+	by.adopt_soldier(self)
+	sprite.flip_h = team == GameConstants.TEAM_ENEMY
+	sprite.self_modulate = CHARM_TINT
+	SoldierRegistry.mark_dirty()
+	SoldierRegistry.invalidate_grid()
+	BattleManager.add_thrall(by.data)
+	_float_text("Порабощён!", Palette.SLAANESH)
+	if current_state not in [State.STUNNED, State.KNOCKBACK]:
+		transition_to(State.MOVE)
 
 # Эффект попадания: свой у юнита (Plague Marine, Havoc), иначе от ордена
 func _on_hit_status() -> Array:
@@ -1050,7 +1116,7 @@ func take_damage(amount: float, flash: bool = true) -> void:
 			return
 		_die()
 		return
-	if not has_retreated and current_hp / max_hp < data.retreat_hp_threshold and _leap_time <= 0.0 \
+	if not has_retreated and current_hp / max_hp < data.get_retreat_threshold() and _leap_time <= 0.0 \
 			and current_state not in [State.IDLE, State.STUNNED, State.KNOCKBACK]:
 		has_retreated = true
 		retreat_timer = data.retreat_duration
@@ -1071,6 +1137,27 @@ func _apply_chapter_colors() -> void:
 	_base_material = _unit_material(false)
 	_unit_material(true)   # вспышка — заранее, не на первом попадании в бою
 	sprite.material = _base_material
+
+# Общий шейдер бойца (UNIT_SHADER) — и для своих материалов вне кэша (цитадель: своя вспышка попадания)
+static func unit_shader() -> Shader:
+	if _unit_shader == null:
+		_unit_shader = Shader.new()
+		_unit_shader.code = UNIT_SHADER
+	return _unit_shader
+
+# Только тёмный контур, как у бойцов (решение пользователя 24.10.2026: здания — с той же обводкой):
+# world_px px мира при масштабе спрайта sprite_scale, цвет color; материал общий из того же кэша
+static func outline_material(sprite_scale: float, world_px: float = OUTLINE_WORLD_PX,
+		color: Color = Palette.OUTLINE) -> ShaderMaterial:
+	var px := maxi(1, roundi(world_px / maxf(sprite_scale, 0.01)))
+	var key := "|0|%d|false|%s" % [px, color.to_html()]
+	if not _unit_materials.has(key):
+		var m := ShaderMaterial.new()
+		m.shader = unit_shader()
+		m.set_shader_parameter("outline_px", float(px))
+		m.set_shader_parameter("outline_color", color)
+		_unit_materials[key] = m
+	return _unit_materials[key]
 
 func _unit_material(flashing: bool) -> ShaderMaterial:
 	var key := "%s|%d|%d|%s" % [_armor_chapter, _rim_px, _outline_px, flashing]
@@ -1361,6 +1448,7 @@ func _on_state_enter(state: State) -> void:
 		State.DEAD:
 			sprite.stop()
 			sprite.play("death")
+			_show_entrench(false)
 			var pool := Vfx.attach(self, "splatter", data.sprite_scale * EFFECT_SCALE)
 			if pool:
 				pool.material = Vfx.blood_material(data.get_blood())   # лужа — цвета крови павшего

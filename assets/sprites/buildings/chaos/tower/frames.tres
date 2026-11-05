@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" load_steps=10 format=3]
+[gd_resource type="SpriteFrames" load_steps=28 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/idle/0.png" id="idle_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/idle/1.png" id="idle_1"]
@@ -10,7 +10,33 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack/3.png" id="attack_3"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack/4.png" id="attack_4"]
 
+
+
+
+
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/idle_2/0.png" id="idle_2_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/idle_2/1.png" id="idle_2_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/idle_2/2.png" id="idle_2_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/idle_2/3.png" id="idle_2_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack_2/0.png" id="attack_2_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack_2/1.png" id="attack_2_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack_2/2.png" id="attack_2_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack_2/3.png" id="attack_2_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack_2/4.png" id="attack_2_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/idle_3/0.png" id="idle_3_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/idle_3/1.png" id="idle_3_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/idle_3/2.png" id="idle_3_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/idle_3/3.png" id="idle_3_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack_3/0.png" id="attack_3_0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack_3/1.png" id="attack_3_1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack_3/2.png" id="attack_3_2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack_3/3.png" id="attack_3_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/tower/attack_3/4.png" id="attack_3_4"]
+
 [resource]
+metadata/level_shift = {2: Vector2(-17, -2), 3: Vector2(-1, -2)}
+metadata/level_scale = {2: 1.055, 3: 1.027}
+metadata/level_static = ["idle_2", "attack_2", "idle_3", "attack_3"]
 metadata/muzzle = Vector2(188.0, -252.2)
 metadata/shot_frame = 1
 metadata/muzzle_color = Color(1.000, 0.246, 0.020, 1)
@@ -50,5 +76,79 @@ animations = [{
 }],
 "loop": false,
 "name": &"attack",
+"speed": 16.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("idle_2_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_3")
+}],
+"loop": true,
+"name": &"idle_2",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("attack_2_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_2_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_2_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_2_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_2_4")
+}],
+"loop": false,
+"name": &"attack_2",
+"speed": 16.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("idle_3_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_3")
+}],
+"loop": true,
+"name": &"idle_3",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("attack_3_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_3_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_3_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_3_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_3_4")
+}],
+"loop": false,
+"name": &"attack_3",
 "speed": 16.0
 }]

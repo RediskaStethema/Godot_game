@@ -140,8 +140,8 @@ func _main() -> void:
 	citadel.apply_theme(sm_cit)   # выше проверялась пустая тема — башня из блоков
 	await _frames(2)
 	var sm_frames: SpriteFrames = citadel._sprite.sprite_frames
-	var counts_ok = sm_frames.get_frame_count("idle") == 1 and sm_frames.get_frame_count("attack") == 9 \
-		and sm_frames.get_frame_count("hit") == 3 and sm_frames.get_frame_count("fall") == 12 \
+	var counts_ok = sm_frames.get_frame_count("idle") == 1 and sm_frames.get_frame_count("attack") == 10 \
+		and sm_frames.get_frame_count("hit") == 10 and sm_frames.get_frame_count("fall") == 10 \
 		and is_equal_approx(sm_frames.get_animation_speed("attack"), 12.0)
 	var shots_before = bm.projectiles.size()
 	citadel._fire_at(citadel.global_position + Vector2(200, 0))
@@ -150,20 +150,32 @@ func _main() -> void:
 		citadel.tick(0.1)
 	var shot = bm.projectiles.back() if bm.projectiles.size() > shots_before else null
 	var muzzle = citadel.to_global(citadel._sprite.position + sm_cit["muzzle"] * citadel._sprite.scale)
-	_check("цитадель Космодесанта: 1/9/3/12 кадров (стоит неподвижно), снаряд — на кадре вспышки, из ствола",
+	_check("цитадель Космодесанта: 1/10/10/10 кадров (стоит неподвижно), снаряд — на кадре вспышки, из ствола",
 		counts_ok and none_yet and shot != null and shot.global_position.distance_to(muzzle) < 1.0)
 	bm.clear_projectiles()
+	# Цитадель Хаоса (кадры пользователя 25.10.2026) — те же ряды: выстрел, попадание, обрушение
+	var ch_cit: Dictionary = chaos["citadel"]
+	citadel.apply_theme(ch_cit)
+	await _frames(2)
+	var ch_frames: SpriteFrames = citadel._sprite.sprite_frames
+	_check("цитадель Хаоса: 1/10/10/10 кадров, выстрел из ворот на кадре %d" % ch_cit["shot_frame"],
+		ch_frames.get_frame_count("idle") == 1 and ch_frames.get_frame_count("attack") == 10
+		and ch_frames.get_frame_count("hit") == 10 and ch_frames.get_frame_count("fall") == 10 and ch_cit.has("muzzle"))
+	citadel.apply_theme(sm_cit)
+	await _frames(2)
 
 	# 3в. Попадание по цитадели — белая вспышка на спрайте (как у бойца), гаснет сама
 	citadel.take_hit(0.0)
 	var flash_peak: float = citadel.get_hit_flash()
-	var on_sprite = citadel._sprite.material != null and citadel._sprite.material == citadel.material
+	# У спрайта свой материал — шейдер бойцов: контур как у зданий + та же вспышка (решение пользователя 24.10.2026)
+	var sm: ShaderMaterial = citadel._sprite.material
+	var on_sprite = sm != null and sm.get_shader_parameter("flash") > 0.5 and sm.get_shader_parameter("outline_px") > 0.0
 	for i in range(600):   # твин гаснет по времени кадров: ждём, пока погаснет (не дольше 600 кадров)
 		if citadel.get_hit_flash() < 0.01:
 			break
 		await _frames(1)
-	_check("попадание по цитадели: белеет %.2f и гаснет до %.2f" % [flash_peak, citadel.get_hit_flash()],
-		flash_peak > 0.5 and on_sprite and citadel.get_hit_flash() < 0.01)
+	_check("попадание по цитадели: белеет %.2f и гаснет до %.2f, на спрайте с контуром" % [flash_peak, citadel.get_hit_flash()],
+		flash_peak > 0.5 and on_sprite and citadel.get_hit_flash() < 0.01 and sm.get_shader_parameter("flash") < 0.01)
 
 	# 4. Цитадель: лист кадров → анимации, состояния, область перекрытия
 	citadel.apply_theme({"sheet": SHEET_PATH, "frame_size": Vector2i(FRAME, FRAME),

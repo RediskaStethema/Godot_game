@@ -116,18 +116,55 @@ const BANNER_RADIUS: float = 107.0   # 23.10.2026 (решение пользов
 # Доля прежнего бойца (пехота — 1 / UnitFactory.SQUAD_SPLIT, остальные — 1): столько юнитов боец
 # значит в синергиях и такую долю получает урона по площади и от яда / огня. Из UnitFactory, не сохраняется
 var unit_weight: float = 1.0
+# Возрождён после боя (respawn_after_wipe) — на расстановке следующего боя свет появления; не сохраняется
+var respawned: bool = false
+
+# Бог-покровитель отряда Хаоса (ChaosGods; решение пользователя 25.10.2026): "" — по юниту (по лору), у Common
+# бога нет. Карта «Chaos Gods' Blessing» меняет его, благословения (blessings, до ChaosGods.MAX_BLESSINGS) — только
+# своего бога, при смене бога пропадают. Сохраняются
+@export var god: String = ""
+@export var blessings: int = 0
+
+func get_god() -> String:
+	return god if god != "" else ChaosGods.default_god(factory_id)
+
+# Прибавки благословений бога отряда (множители и +урон) — в статах ниже
+func _blessing() -> Dictionary:
+	return ChaosGods.stat_mods(get_god(), blessings, tags, unit_weight)
 
 func get_max_hp() -> float:
-	return hp * hp_multiplier
+	return hp * hp_multiplier * _blessing()["hp"]
 
 func get_damage() -> float:
-	return damage * damage_multiplier
+	var b := _blessing()
+	return (damage * damage_multiplier + b["flat_damage"]) * b["damage"]
 
 func get_attack_speed() -> float:
-	return attack_speed * attack_speed_multiplier
+	return attack_speed * attack_speed_multiplier * _blessing()["attack_speed"]
 
 func get_move_speed() -> float:
-	return move_speed * move_speed_multiplier
+	return move_speed * move_speed_multiplier * _blessing()["move_speed"]
+
+func get_attack_range() -> float:
+	return attack_range * _blessing()["range"]
+
+# Порог отступления: благословение Кхорна — не отступает
+func get_retreat_threshold() -> float:
+	return 0.0 if ChaosGods.no_retreat(get_god(), blessings) else retreat_hp_threshold
+
+# Благословение бога: только отряд этого бога (у Common бога нет — сначала «Chaos Gods' Blessing»), не больше
+# MAX_BLESSINGS; Тзинч — только стрелкам
+func can_bless(card_god: String) -> bool:
+	return card_god != "" and card_god == get_god() and blessings < ChaosGods.MAX_BLESSINGS 		and (card_god != "tzeentch" or "ranged" in tags)
+
+# Смена бога отряда (карта «Chaos Gods' Blessing»): любой отряд Хаоса, в том числе Common без бога (решение
+# пользователя 25.10.2026) — получает выбранного бога; благословения пропадают
+func can_change_god() -> bool:
+	return "chaos" in tags
+
+func change_god(new_god: String) -> void:
+	god = new_god
+	blessings = 0
 
 # Цвет крови (Vfx.BLOOD_COLORS): свой blood или по тегам — техника масло, Космодесант тёмно-красная,
 # Космодесант Хаоса фиолетовая, остальные (люди) красная
@@ -179,6 +216,8 @@ func respawn_after_wipe() -> void:
 	for i in range(maxi(squad_size, 1)):
 		hp_list.append(1.0)
 	saved_hp = hp_list
+	blessings = 0   # благословения — карты-улучшения: сбрасываются, бог остаётся
+	respawned = true
 
 # Сохранение отряда игрока: тип (factory_id) + состояние между боями.
 # Базовые статы не храним — берутся из UnitFactory (правки баланса применяются)
@@ -197,6 +236,8 @@ func save_state() -> Dictionary:
 		"squad_size": squad_size,
 		"level": squad_level,
 		"growth": squad_growth,
+		"god": god,
+		"blessings": blessings,
 	}
 
 static func from_save_state(d: Dictionary) -> UnitData:
@@ -222,6 +263,8 @@ static func from_save_state(d: Dictionary) -> UnitData:
 	u.squad_size = int(d["squad_size"])
 	u.squad_level = int(d["level"])
 	u.squad_growth = int(d.get("growth", 0))
+	u.god = str(d.get("god", ""))
+	u.blessings = int(d.get("blessings", 0))
 	# Сохранение до пехоты ×SQUAD_SPLIT: бойцов втрое больше с той же долей HP, состав растёт с уровнем
 	if not d.has("growth") and u.factory_id in UnitFactory.SPLIT_UNITS:
 		u.squad_growth = UnitFactory.SQUAD_GROWTH
@@ -246,12 +289,21 @@ static func _split_hp(hp: Array[float], n: int) -> Array[float]:
 func can_apply_upgrade(card: CardData) -> bool:
 	if card.card_type != "upgrade" or not (card.affects_tag == "" or card.affects_tag in tags):
 		return false
+	if card.upgrade_type == "blessing":   # благословение бога — только отряду этого бога
+		return can_bless(card.blessing_god)
+	if card.upgrade_type == "change_god":
+		return can_change_god()
 	# Знамя не складывается — второе такое же на отряд ничего бы не дало
 	return not (card.upgrade_type == "banner" and banner_aura_bonus >= card.upgrade_value)
 
 # Улучшение отряда — множитель накапливается (две карты = ×1.2 × 1.2)
 func apply_upgrade(card: CardData) -> void:
 	match card.upgrade_type:
+		"blessing":   # благословение бога — счётчик (ChaosGods), в список улучшений не идёт: пропадает со сменой бога
+			blessings += 1
+			return
+		"change_god":   # бога выбирает игрок — BattleScene зовёт change_god
+			return
 		"hp_boost":
 			hp_multiplier *= 1.0 + card.upgrade_value
 		"damage_boost":

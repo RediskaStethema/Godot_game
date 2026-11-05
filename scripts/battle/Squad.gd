@@ -253,6 +253,23 @@ func is_wounded() -> bool:
 	return false
 
 # -------------------------------------------------------
+# ПОРАБОЩЕНИЕ (благословение Слаанеш, Soldier.charm)
+# -------------------------------------------------------
+# Боец уходит из отряда: последний ушёл — отряд пал (бой кончается, когда у стороны нет отрядов)
+func release_soldier(soldier: Soldier) -> void:
+	if soldier.died.is_connected(_on_soldier_died):
+		soldier.died.disconnect(_on_soldier_died)
+	soldiers.erase(soldier)
+	if soldiers.is_empty() and current_state != State.DEAD:
+		current_state = State.DEAD
+		emit_signal("squad_wiped", self)
+
+# Порабощённый боец бьётся в этом отряде до конца боя (тикает с ним; в армию не сохраняется — charmed)
+func adopt_soldier(soldier: Soldier) -> void:
+	soldiers.append(soldier)
+	soldier.died.connect(_on_soldier_died)
+
+# -------------------------------------------------------
 # СМЕРТЬ БОЙЦОВ
 # -------------------------------------------------------
 func _on_soldier_died(soldier: Soldier) -> void:

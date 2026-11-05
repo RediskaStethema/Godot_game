@@ -49,9 +49,6 @@ metadata/hit_frame = 7
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": ExtResource("idle_0")
-}, {
-"duration": 1.0,
 "texture": ExtResource("idle_1")
 }, {
 "duration": 1.0,
@@ -61,26 +58,17 @@ animations = [{
 "texture": ExtResource("idle_3")
 }, {
 "duration": 1.0,
-"texture": ExtResource("idle_4")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_5")
-}, {
-"duration": 1.0,
 "texture": ExtResource("idle_6")
 }, {
 "duration": 1.0,
-"texture": ExtResource("idle_7")
+"texture": ExtResource("idle_3")
 }, {
 "duration": 1.0,
-"texture": ExtResource("idle_8")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_9")
+"texture": ExtResource("idle_2")
 }],
 "loop": true,
 "name": &"idle",
-"speed": 8.0
+"speed": 5.0
 }, {
 "frames": [{
 "duration": 1.0,

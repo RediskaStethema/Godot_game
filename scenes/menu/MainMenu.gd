@@ -119,7 +119,7 @@ func _make_title_block() -> VBoxContainer:
 	box.add_child(eagle)
 	var title = UITheme.make_label("WH40KINGS", "TitleLabel")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 42)
+	title.add_theme_font_size_override("font_size", UITheme.ui_px(42))
 	title.add_theme_color_override("font_color", UITheme.TEXT)
 	box.add_child(title)
 	var sub = UITheme.make_label("———  УДЕРЖИТЕ ЦИТАДЕЛЬ 15 ВОЛН  ———", "DimLabel")

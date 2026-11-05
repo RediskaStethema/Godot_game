@@ -78,6 +78,28 @@ const SLOW_AURA_LINE = Color(UITheme.SLOW_BLUE, 0.30)
 const LEVEL_PIP_SIZE: float = 5.0
 const LEVEL_PIP_GAP: float = 14.0
 const LEVEL_PIP_COLOR = UITheme.AMBER_LIGHT
+# Уровень здания видно на модели (решение пользователя 24.10.2026: были только ромбики; листов по уровням нет —
+# ASSETS_NEEDED P2): здание крупнее (LEVEL_SCALES по уровню) и кольцо у основания в цвете расы — на 2-м одно,
+# на 3-м двойное со свечением. Только вид. Есть свои кадры уровня (idle_2 / idle_3) — рост из листа (_level_scale)
+const LEVEL_SCALES: Array[float] = [1.0, 1.06, 1.12]
+const LEVEL_UP_GROW_TIME: float = 0.55   # эффект улучшения: рост из прежнего масштаба
+const LEVEL_UP_FLASH: float = 0.85       # белая вспышка (как попадание по бойцу) и её угасание, сек
+const LEVEL_UP_FLASH_TIME: float = 0.6
+# Неживые ряды уровня (metadata/level_static, tools/building_levels_add.py: пакет 26.10.2026 — стойка из копий одного
+# кадра, выстрел и пополнение без движения здания) оживляются кодом до настоящих кадров (решение пользователя
+# 26.10.2026): стойка в бою дышит (рост и ширина в противофазе), выстрел — отдача прочь от цели и приседание,
+# пополнение / щит — толчок. Только вид, время кадра (не тик боя)
+const BREATH: float = 0.012              # доля роста
+const BREATH_PERIOD: float = 2.6         # сек
+const KICK_TIME: float = 0.28            # отдача выстрела гаснет
+const KICK_PX: float = 5.0               # px мира прочь от цели
+const KICK_SQUASH: float = 0.04
+const PULSE_TIME: float = 0.5            # толчок пополнения / щита
+const PULSE_SCALE: float = 0.04
+const LEVEL_RING_RADIUS: float = 0.47      # доля клетки — по краю ромба основания
+const LEVEL_RING_GAP: float = 7.0          # между кольцами 3-го уровня, px
+const LEVEL_RING_ALPHA: float = 0.6
+const LEVEL_RING_GLOW_ALPHA: float = 0.13
 # Свой спрайт здания (готов к ассетам): <SPRITES_DIR>/<building_type>/frames.tres — лист кадров
 # (tools/sheet_to_frames.py, ноги — основание здания по центру низа кадра). Анимации: idle (цикл),
 # attack — выстрел (турель, орудие; muzzle / shot_frame по оранжевой вспышке), refill — Казармы
@@ -93,6 +115,13 @@ const SPRITE_MAX_HEIGHT: float = 1.25
 # стоял нижний пиксель кадра — передний угол основания, и здание съезжало на клетку назад
 const BASE_ZONE: float = 0.4
 const BASE_ALPHA: float = 0.5
+# Контур спрайта, px мира: шейдер бойцов, но толще их 0.9 и непрозрачный (Palette.BUILDING_OUTLINE) —
+# здание вчетверо крупнее бойца, и тонкая линия пропадала на тёмном грунте Хаоса (решение пользователя 24.10.2026).
+# Тема с "building_env" задаёт свой контур (мягче — здание в свет местности, apply_environment)
+const OUTLINE_WORLD_PX: float = 2.2
+const ENV_AO_HEIGHT: float = 0.22   # затемнение к основанию — доля высоты кадра над точкой основания
+const ENV_AO_BELOW: float = 0.04    # и чуть ниже неё (подножие)
+static var _env_materials: Dictionary = {}   # "раса/тип|px" → ShaderMaterial (вид здания в свет местности)
 static var _frames_cache: Dictionary = {}   # "раса/building_type" → SpriteFrames или null (листа нет)
 
 var card: CardData
@@ -106,7 +135,13 @@ var cooldown_left: float = 0.0            # орудие: сек до готов
 var _explosion_point: Vector2             # орудие: где показать вспышку взрыва
 var _explosion_id: int = 0
 var _recoil: float = 0.0                  # орудие: 1 — ствол откачен, гаснет к 0 (только вид)
+var _base_scale: float = 1.0   # масштаб спрайта 1-го уровня (ширина основания — SPRITE_WIDTH клетки)
 var sprite: AnimatedSprite2D = null         # свой спрайт (если есть лист), иначе null — блоки
+var _level_k: float = 1.0      # масштаб спрайта уровня (_apply_level_scale); на экране — с ростом и оживлением
+var _grow: float = 1.0         # рост из прежнего масштаба при улучшении (play_level_up)
+var _kick: float = 0.0         # отдача неживого выстрела: 1 — только что, гаснет к 0
+var _kick_wait: float = 0.0    # до кадра вспышки, сек
+var _pulse: float = 0.0        # толчок неживого пополнения / щита
 
 func setup(building_card: CardData, grid_tile: Vector2i) -> void:
 	card = building_card
@@ -119,9 +154,95 @@ func setup(building_card: CardData, grid_tile: Vector2i) -> void:
 # Статы по уровню карты (после улучшения — пересчитать)
 func refresh_stats() -> void:
 	stats = Chapters.apply_building_stats(card.get_building_stats(), RunManager.player_chapter)
-	if sprite and sprite.animation.begins_with("idle"):
-		sprite.play(_level_anim("idle"))   # улучшили — вид нового уровня
+	if sprite:
+		_apply_level_scale()
+		if sprite.animation.begins_with("idle"):
+			sprite.play(_level_anim("idle"))   # улучшили — вид нового уровня
 	queue_redraw()
+
+# Масштаб спрайта по уровню и контур под него — толщина в px мира та же
+func _apply_level_scale() -> void:
+	var k := _base_scale * _level_scale()
+	_level_k = k
+	sprite.scale = Vector2(k, k)
+	var env: Dictionary = FactionTheme.current().get("building_env", {})
+	if env.is_empty():
+		sprite.material = Soldier.outline_material(k, OUTLINE_WORLD_PX, Palette.BUILDING_OUTLINE)   # контур как у бойцов
+		return
+	sprite.self_modulate = env.get("tint", Color.WHITE)
+	sprite.material = _environment_material(env, k)
+
+# Рост уровня: есть свои кадры уровня — metadata/level_scale листа (кадры уровня в масштабе, при котором здание
+# на LEVEL_GROWTH выше прежнего уровня — tools/building_levels_add.py; решение пользователя 26.10.2026: улучшенное
+# здание чуть выше прежнего, пусть и шире), нет — LEVEL_SCALES
+func _level_scale() -> float:
+	if _level_anim("idle") != "idle":
+		return float(sprite.sprite_frames.get_meta("level_scale", {}).get(card.building_level, 1.0))
+	return LEVEL_SCALES[clampi(card.building_level, 1, LEVEL_SCALES.size()) - 1]
+
+# Эффект улучшения (решение пользователя 26.10.2026): здание вспыхивает белым — под вспышкой уже кадры нового
+# уровня — и с пружинкой вырастает из прежнего масштаба (from_scale — sprite.scale до refresh_stats); свет,
+# кольца и шевроны — BuildingLevelUp. Только вид
+func play_level_up(from_scale: Vector2) -> void:
+	BuildingLevelUp.play(self, card.building_level, _visual_height(), card.faction)
+	if sprite == null:
+		return
+	var shared := sprite.material
+	var flash := shared.duplicate() as ShaderMaterial if shared is ShaderMaterial else null
+	if flash:
+		sprite.material = flash
+	_grow = from_scale.y / maxf(_level_k, 0.001)
+	_apply_motion(0.0)
+	var tw := create_tween().set_parallel()
+	tw.tween_property(self, "_grow", 1.0, LEVEL_UP_GROW_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if flash:
+		tw.tween_method(func(v: float): flash.set_shader_parameter("flash", v), LEVEL_UP_FLASH, 0.0, LEVEL_UP_FLASH_TIME)
+		tw.chain().tween_callback(func():
+			if sprite.material == flash:   # контур и свет местности — снова общий материал
+				sprite.material = shared)
+
+# Рост здания над основанием, px мира (кадр стойки уровня; блоки — по прямоугольнику блоков)
+func _visual_height() -> float:
+	if sprite == null:
+		return global_position.y - get_occlusion_rect().position.y
+	var tex: Texture2D = sprite.sprite_frames.get_frame_texture(_level_anim("idle"), 0)
+	var img := tex.get_image()
+	var top := float(img.get_used_rect().position.y) if img else 0.0
+	return (-sprite.offset.y - top) * _level_k
+
+# Здание в свет местности (тема "building_env"): шейдер бойцов — мягкий контур, насыщенность, приглушение
+# светов, затемнение к основанию (по точке основания листа). Материал общий для зданий одного листа и масштаба
+func _environment_material(env: Dictionary, k: float) -> ShaderMaterial:
+	var px := maxi(1, roundi(env.get("outline_px", OUTLINE_WORLD_PX) / maxf(k, 0.01)))
+	var key := "%s/%s|%d" % [card.faction, building_type, px]
+	if not _env_materials.has(key):
+		var m := ShaderMaterial.new()
+		m.shader = Soldier.unit_shader()
+		m.set_shader_parameter("outline_px", float(px))
+		m.set_shader_parameter("outline_color", Color(Palette.BUILDING_OUTLINE, env.get("outline_alpha", 1.0)))
+		m.set_shader_parameter("env_sat", env.get("sat", 1.0))
+		m.set_shader_parameter("env_knee", env.get("knee", 0.0))
+		var tex: Texture2D = sprite.sprite_frames.get_frame_texture("idle", 0)
+		var base: Vector2 = sprite.sprite_frames.get_meta("base_point", tex.get_size())
+		var bv := base.y / tex.get_height()
+		m.set_shader_parameter("ao_strength", env.get("ao", 0.0))
+		m.set_shader_parameter("ao_from", bv - ENV_AO_HEIGHT)
+		m.set_shader_parameter("ao_to", bv + ENV_AO_BELOW)
+		_env_materials[key] = m
+	return _env_materials[key]
+
+# Кольцо уровня у основания (под спрайтом — он рисуется поверх, кольцо видно спереди и по бокам)
+func _draw_level_ring() -> void:
+	if card.building_level < 2:
+		return
+	var col: Color = Palette.LEVEL_RING_CHAOS if card.faction == "chaos" else Palette.GOLD
+	var r := IsoGrid.TILE_WIDTH * LEVEL_RING_RADIUS
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))   # изометрия: круг на земле — эллипс 2:1
+	if card.building_level >= 3:
+		draw_circle(Vector2.ZERO, r, Color(col, LEVEL_RING_GLOW_ALPHA))
+		draw_arc(Vector2.ZERO, r + LEVEL_RING_GAP, 0.0, TAU, 64, Color(col, LEVEL_RING_ALPHA * 0.6), 2.0, true)
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 64, Color(col, LEVEL_RING_ALPHA), 2.5, true)
+	draw_set_transform(Vector2.ZERO)
 
 # -------------------------------------------------------
 # СВОЙ СПРАЙТ (если есть лист кадров)
@@ -151,13 +272,14 @@ func _load_sprite() -> void:
 		frames.set_meta("body_width", float(used) if used > 0 else size.x)
 		frames.set_meta("base_point", find_base(img) if img else Vector2(size.x / 2.0, size.y))
 	_set_flip(false)
-	var k: float = minf(IsoGrid.TILE_WIDTH * SPRITE_WIDTH / maxf(frames.get_meta("body_width"), 1.0),
+	_base_scale = minf(IsoGrid.TILE_WIDTH * SPRITE_WIDTH / maxf(frames.get_meta("body_width"), 1.0),
 			IsoGrid.TILE_WIDTH * SPRITE_MAX_HEIGHT / size.y)
-	sprite.scale = Vector2(k, k)
+	_apply_level_scale()
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	sprite.animation_finished.connect(func():
 		_set_flip(false)   # выстрел влево отразил спрайт — стойка снова как нарисована
 		sprite.play(_level_anim("idle")))
+	sprite.animation_changed.connect(_update_offset)   # у рядов уровня свой сдвиг (level_shift)
 	add_child(sprite)
 	sprite.play(_level_anim("idle"))
 
@@ -185,10 +307,23 @@ static func find_base(img: Image) -> Vector2:
 
 # Отражение спрайта (выстрел влево) — основание остаётся в точке здания
 func _set_flip(on: bool) -> void:
+	sprite.flip_h = on
+	_update_offset()
+
+func _update_offset() -> void:
 	var size := sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
 	var base: Vector2 = sprite.sprite_frames.get_meta("base_point", Vector2(size.x / 2.0, size.y))
-	sprite.flip_h = on
-	sprite.offset = Vector2(-(size.x - base.x) if on else -base.x, -base.y)
+	var shift := _level_shift(sprite.animation)
+	sprite.offset = Vector2(-(size.x - base.x) - shift.x if sprite.flip_h else -base.x + shift.x, -base.y + shift.y)
+
+# Кадры уровня (ряды idle_2, attack_3, …) художник нарисовал со сдвигом здания по холсту: metadata/level_shift
+# {уровень: Vector2} — на сколько px холста их подвинуть, чтобы постамент совпал с 1-м уровнем
+# (tools/building_levels_add.py). Сдвиг — по анимации: ряда уровня нет — играет ряд 1-го, без сдвига
+func _level_shift(anim: StringName) -> Vector2:
+	var parts := String(anim).rsplit("_", true, 1)
+	if parts.size() < 2 or not parts[1].is_valid_int():
+		return Vector2.ZERO
+	return sprite.sprite_frames.get_meta("level_shift", {}).get(parts[1].to_int(), Vector2.ZERO)
 
 # Анимация с учётом уровня: idle_3, нет такой — idle
 func _level_anim(base: String) -> String:
@@ -205,7 +340,41 @@ func play_once(base: String) -> bool:
 	_set_flip(base == "attack" and aim.x < 0.0)
 	sprite.stop()
 	sprite.play(anim)
+	if _is_static(anim):   # неживой ряд уровня — оживить кодом
+		if base == "attack":
+			_kick = 1.0
+			_kick_wait = _shot_delay()
+		else:
+			_pulse = 1.0
 	return true
+
+func _is_static(anim: StringName) -> bool:
+	return sprite.sprite_frames.get_meta("level_static", []).has(String(anim))
+
+# Масштаб и сдвиг спрайта на экране: уровень × рост улучшения × оживление неживых рядов (дыхание, отдача, толчок)
+func _apply_motion(delta: float) -> void:
+	var sx := 1.0
+	var sy := 1.0
+	var pos := Vector2.ZERO
+	if BattleManager.is_battle_running() and sprite.animation.begins_with("idle") and _is_static(sprite.animation):
+		var b := sin(Time.get_ticks_msec() / 1000.0 * TAU / BREATH_PERIOD + float(hash(tile) % 628) / 100.0)
+		sy += BREATH * b
+		sx -= BREATH * 0.5 * b
+	if _kick_wait > 0.0:
+		_kick_wait -= delta
+	elif _kick > 0.0:
+		_kick = maxf(0.0, _kick - delta / KICK_TIME)
+		var e := _kick * _kick
+		pos = -aim.normalized() * KICK_PX * e
+		sy *= 1.0 - KICK_SQUASH * e
+		sx *= 1.0 + KICK_SQUASH * 0.75 * e
+	if _pulse > 0.0:
+		_pulse = maxf(0.0, _pulse - delta / PULSE_TIME)
+		var e := sin(PI * (1.0 - _pulse))
+		sx *= 1.0 + PULSE_SCALE * e
+		sy *= 1.0 + PULSE_SCALE * e
+	sprite.scale = Vector2(sx, sy) * _level_k * _grow
+	sprite.position = pos
 
 # Точка ствола спрайта (мир): метаданные muzzle кадров, отражение — когда целится влево
 func _sprite_muzzle() -> Vector2:
@@ -213,9 +382,11 @@ func _sprite_muzzle() -> Vector2:
 	var m: Vector2 = sprite.sprite_frames.get_meta("muzzle", Vector2(0, -size.y * 0.6))
 	var base: Vector2 = sprite.sprite_frames.get_meta("base_point", Vector2(size.x / 2.0, size.y))
 	var p := Vector2(size.x / 2.0 + m.x, size.y + m.y) - base   # muzzle — от центра низа кадра (sheet_to_frames)
+	# вспышка в кадрах уровня — там же на холсте, что у 1-го уровня: ствол едет вместе с рядом уровня
+	p += _level_shift(_level_anim("attack"))
 	if aim.x < 0.0:   # выстрел влево — спрайт отразится (play_once), основание на месте
 		p.x = -p.x
-	return to_global(p * sprite.scale)
+	return to_global(p * _level_k)
 
 # Задержка снаряда до кадра выстрела листа (metadata shot_frame) — как у бойцов
 func _shot_delay() -> float:
@@ -226,10 +397,11 @@ func _shot_delay() -> float:
 
 # Прозрачность OcclusionFader (self_modulate) — и на спрайт: дочерний узел self_modulate не наследует.
 # Вне схватки стойка — один кадр (hold_idle_outside_battle)
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if sprite:
 		sprite.modulate.a = self_modulate.a
 		hold_idle_outside_battle(sprite)
+		_apply_motion(delta)
 	if _aura_ring != null and not BattleManager.is_battle_running():
 		if is_instance_valid(_aura_ring):
 			_aura_ring.dismiss()
@@ -252,6 +424,7 @@ static func hold_idle_outside_battle(s: AnimatedSprite2D) -> void:
 # -------------------------------------------------------
 func _draw() -> void:
 	draw_ground_shadow(self, Vector2.ZERO, IsoGrid.TILE_WIDTH * GROUND_SHADOW_WIDTH)
+	_draw_level_ring()
 	if _aura_ring == null and stats.get("slow_radius", 0.0) > 0.0:   # в бою — кольцо ауры (_show_aura)
 		draw_circle(Vector2.ZERO, stats["slow_radius"], SLOW_AURA_COLOR)
 		draw_arc(Vector2.ZERO, stats["slow_radius"], 0.0, TAU, 48, SLOW_AURA_LINE, 1.5, true)
@@ -323,6 +496,7 @@ const EFFECT_AREAS = {
 	"blood_chalice": AREA_CROSS,  # вампиризм соседним отрядам
 	"wolf_totem": AREA_CROSS,     # клич соседним отрядам в начале боя
 	"vulkan_forge": AREA_CROSS,   # +урон соседним отрядам
+	"plague_cauldron": AREA_CROSS,   # атаки соседних отрядов отравляют
 }
 
 static func get_effect_tiles(type: String, at: Vector2i) -> Array[Vector2i]:
@@ -333,7 +507,15 @@ static func get_effect_tiles(type: String, at: Vector2i) -> Array[Vector2i]:
 
 # Подсказка: название и уровень, что делает (с текущими цифрами), можно ли улучшить
 func describe() -> String:
-	var lines: Array[String] = ["%s · ур. %d/%d" % [card.title, card.building_level, CardData.MAX_BUILDING_LEVEL]]
+	return "\n".join(["%s · ур. %d/%d" % [card.title, card.building_level, CardData.MAX_BUILDING_LEVEL],
+		effect_text(), upgrade_text()])
+
+func upgrade_text() -> String:
+	return "Такая же карта — уровень +1" if card.can_level_up_building() else "Максимальный уровень"
+
+# Что делает здание — с текущими цифрами (подсказка describe и справка SquadInspector)
+func effect_text() -> String:
+	var lines: Array[String] = []
 	match building_type:
 		"tower":
 			lines.append("Стреляет в ближайшего врага на всём поле: %d урона, %.1f выстр./с" % [
@@ -371,10 +553,12 @@ func describe() -> String:
 			lines.append("Отряды на соседних клетках (подсвечены) +%d%% урона. После боя чинит цитадель на %d HP" % [
 				roundi(stats.get("damage_bonus", 0.0) * 100.0), stats.get("repair", 0.0)])
 		"skull_altar":
-			lines.append("Каждый убитый враг: +%.1f%% урона всей армии до конца боя (до +%d%%)" % [
-				stats.get("per_kill", 0.0) * 100.0, roundi(stats.get("max_bonus", 0.0) * 100.0)])
+			lines.append("Каждый убитый враг: +%.1f%% урона всей армии, отрядам Кхорна ещё +%.1f%%, до конца боя (до +%d%%)" % [
+				stats.get("per_kill", 0.0) * 100.0, stats.get("khorne_per_kill", 0.0) * 100.0,
+				roundi(stats.get("max_bonus", 0.0) * 100.0)])
 		"plague_cauldron":
-			lines.append("Травит врагов в круге %d px: яд %.1f ур/с" % [stats.get("poison_radius", 0.0), stats.get("poison", 0.0)])
+			lines.append("Травит врагов в круге %d px: яд %.1f ур/с. Атаки отрядов на соседних клетках (подсвечены) отравляют: %.1f ур/с" % [
+				stats.get("poison_radius", 0.0), stats.get("poison", 0.0), stats.get("neighbour_poison", 0.0)])
 		"warp_spire":
 			lines.append("Молния варпа по ближайшему врагу: %d урона, оглушение %.1f с, %.1f выстр./с" % [
 				stats.get("damage", 0.0), stats.get("stun", 0.0), stats.get("attack_speed", 0.0)])
@@ -383,7 +567,8 @@ func describe() -> String:
 				roundi((1.0 - stats.get("slow_mult", 1.0)) * 100.0), stats.get("slow_radius", 0.0)])
 		_:
 			lines.append(card.description)
-	lines.append("Такая же карта — уровень +1" if card.can_level_up_building() else "Максимальный уровень")
+	if not special_active():
+		lines.append("Не ваш %s — особый эффект не действует" % ("бог" if card.faction == "chaos" else "орден"))
 	return "\n".join(lines)
 
 
@@ -531,9 +716,17 @@ func _tick_poison_aura() -> void:
 # пересчитывается отношением, когда растёт счёт)
 var _enemies_at_start: int = 0
 var _altar_bonus: float = 0.0
+var _altar_khorne_bonus: float = 0.0   # отрядам Кхорна — сверх прибавки армии (решение пользователя 25.10.2026)
 
 func _tick_skull_altar() -> void:
 	var kills := maxi(_enemies_at_start - SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY).size(), 0)
+	var khorne := minf(kills * stats.get("khorne_per_kill", 0.0), stats.get("max_bonus", 0.0)) if special_active() else 0.0
+	if khorne > _altar_khorne_bonus:
+		var kk := (1.0 + khorne) / (1.0 + _altar_khorne_bonus)
+		_altar_khorne_bonus = khorne
+		for s in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER):
+			if not s.charmed and s.data.get_god() == "khorne":
+				s.current_damage *= kk
 	var bonus := minf(kills * stats.get("per_kill", 0.0), stats.get("max_bonus", 0.0))
 	if bonus <= _altar_bonus:
 		return
@@ -545,6 +738,12 @@ func _tick_skull_altar() -> void:
 	for s in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER):
 		s.current_damage *= k
 
+# Особый эффект здания ордена / бога (на соседние отряды, прибавка отрядам Кхорна у Алтаря) — только когда игрок играет
+# за этого бога / орден (решение пользователя 25.10.2026); общие здания — всегда. Основное действие (аура, выстрел) — всегда
+func special_active() -> bool:
+	var owner := Chapters.building_owner(card.id)
+	return owner == "" or owner == RunManager.player_chapter
+
 # Начало боя (BattleScene._on_start_pressed, после бонусов ордена): эффекты зданий на отряды соседних
 # клеток (щит, вампиризм, клич, +урон) и отсчёт алтаря
 static func apply_battle_start() -> void:
@@ -555,9 +754,12 @@ static func apply_battle_start() -> void:
 			continue
 		b._enemies_at_start = enemies
 		b._altar_bonus = 0.0
+		b._altar_khorne_bonus = 0.0
 		b._show_aura()
 		if b.stats.get("shield", 0.0) > 0.0:
 			b.play_once("shield")   # стена подняла щит цитадели (ряд листа, если есть)
+		if not b.special_active():
+			continue   # здание чужого бога / ордена — эффект на соседей не действует
 		var area := get_effect_tiles(b.building_type, b.tile)
 		for sq in squads:
 			if sq.tile in area:
@@ -589,6 +791,8 @@ func _apply_start_effect(s: Soldier) -> void:
 			s.apply_status(StatusEffects.EMPOWERED, stats.get("empower", 0.0), stats.get("duration", 0.0), false)
 		"vulkan_forge":
 			s.current_damage *= 1.0 + stats.get("damage_bonus", 0.0)
+		"plague_cauldron":
+			s.bonus_poison_power += stats.get("neighbour_poison", 0.0)
 
 # Шанс поднять павшего бойца игрока в точке: самый сильный Apothecarion рядом.
 # Возвращает {"chance", "hp"} (доля HP после подъёма); нет — chance 0

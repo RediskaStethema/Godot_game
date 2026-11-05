@@ -53,6 +53,9 @@ var next_battle_note: String = ""
 # Заряженные карты-события (id карт): разыгрываются на расстановке, срабатывают
 # в начале боя (fire_armed_events). Сохраняются — «Продолжить» их не теряет
 var armed_events: Array[String] = []
+# Клетки, куда сыграны заряженные карты (метка Orbital Strike на расстановке; на удар не влияют) — сохраняются:
+# после «Продолжить» метка снова на клетке
+var armed_tiles: Array[Vector2i] = []
 
 # Здания: стоят между раундами на своих клетках (CardData → Vector2i)
 var player_buildings: Dictionary = {}
@@ -84,6 +87,7 @@ func start_battle() -> void:
 	if phase == BattlePhase.RUNNING:
 		return  # защита от двойного запуска
 	damage_by_unit.clear()
+	thralls.clear()
 
 	phase = BattlePhase.RUNNING
 	winner_team = -1
@@ -184,6 +188,11 @@ func clear_projectiles() -> void:
 # Урон отрядов игрока за бой (UnitData → урон по HP: без щита и перебора сверх HP цели) — итоги боя.
 # По UnitData, а не по узлу: отряд, павший целиком, тоже в итогах. Яд и огонь не считаются
 var damage_by_unit: Dictionary = {}
+# Порабощённые за бой (благословение Слаанеш, Soldier.charm): отряд (UnitData) → сколько — apply_thralls после победы
+var thralls: Dictionary = {}
+
+func add_thrall(data: UnitData) -> void:
+	thralls[data] = thralls.get(data, 0) + 1
 func credit_damage(source, amount: float) -> void:
 	if amount <= 0.0 or not is_instance_valid(source) or source.team != GameConstants.TEAM_PLAYER:
 		return
@@ -297,6 +306,7 @@ func _check_catch_up() -> void:
 func reset_run() -> void:
 	battle_in_progress = false
 	armed_events.clear()
+	armed_tiles.clear()
 	catch_up_pending = false
 	next_battle_enemy_hp = 1.0
 	next_battle_note = ""
@@ -324,6 +334,8 @@ func sync_army_from_squads(squads: Array) -> void:
 		var hp_list: Array[float] = []
 		var kinds: Array[String] = []
 		for soldier in squad.soldiers:
+			if soldier.charmed:
+				continue   # порабощённый (Слаанеш) — не боец отряда: после боя он вернёт павшего (apply_thralls)
 			hp_list.append(clampf(soldier.current_hp / soldier.max_hp, 0.01, 1.0))
 			kinds.append(soldier.convert_kind)
 		if not kinds.any(func(k): return k != ""):
@@ -341,7 +353,8 @@ func sync_army_from_squads(squads: Array) -> void:
 func store_survivors(alive_squads: Array, at_start: Array) -> Array[String]:
 	player_units.clear()
 	player_placements.clear()
-	sync_army_from_squads(alive_squads)
+	# Отряд, где остались одни порабощённые, — пал (возрождается ниже)
+	sync_army_from_squads(alive_squads.filter(func(sq): return sq.soldiers.any(func(x): return not x.charmed)))
 	var revived: Array[String] = []
 	for entry in at_start:
 		var data: UnitData = entry["data"]
@@ -358,6 +371,25 @@ func store_survivors(alive_squads: Array, at_start: Array) -> Array[String]:
 # пользователя 21.10.2026). Святилище культа Хаоса (та же карта, раса chaos) не лечит; если среди соседей есть
 # отряд бога Хаоса, павшие ДРУГИХ соседей встают бойцами этого бога (UnitData.saved_kinds, сила — по редкости
 # отряда, UnitFactory.convert_fighter), иначе — свои. Не больше squad_size. Возвращает, сколько бойцов вернулось
+# Порабощённые (благословение Слаанеш) после выигранного боя, после store_survivors: за каждого — павший боец
+# отряда возвращается с полным HP; павших не хватило — отряд лечится на ChaosGods.SLAANESH_HEAL (раз за бой)
+# (решение пользователя 25.10.2026). Возвращает, сколько было порабощено
+func apply_thralls() -> int:
+	var total := 0
+	for d in thralls:
+		if not player_units.has(d):
+			continue
+		var n: int = thralls[d]
+		total += n
+		var missing: int = maxi(d.squad_size - d.saved_hp.size(), 0)
+		for i in range(mini(n, missing)):
+			d.saved_hp.append(1.0)
+		if n > missing:
+			for i in d.saved_hp.size():
+				d.saved_hp[i] = minf(d.saved_hp[i] + ChaosGods.SLAANESH_HEAL, 1.0)
+	thralls.clear()
+	return total
+
 const NEIGHBOUR_TILES: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
 func refill_from_barracks() -> int:
@@ -436,6 +468,7 @@ func save_state() -> Dictionary:
 		"next_enemy_hp": next_battle_enemy_hp,
 		"next_note": next_battle_note,
 		"armed_events": Array(armed_events.duplicate()),
+		"armed_tiles": armed_tiles.map(_v2i_to_arr),
 	}
 
 func load_state(d: Dictionary) -> void:
@@ -468,6 +501,9 @@ func load_state(d: Dictionary) -> void:
 	armed_events.clear()
 	for id in d.get("armed_events", []):
 		armed_events.append(str(id))
+	armed_tiles.clear()
+	for t in d.get("armed_tiles", []):
+		armed_tiles.append(_arr_to_v2i(t))
 	emit_signal("citadel_hp_changed", citadel_hp)
 
 static func _v2i_to_arr(v: Vector2i) -> Array:
@@ -493,6 +529,7 @@ func fire_armed_events() -> Array:
 				hits.append({"pos": pos, "radius": r})
 				AudioManager.play("orbital_strike")
 	armed_events.clear()
+	armed_tiles.clear()
 	return hits
 
 # Точка удара: боец врага, вокруг которого в радиусе больше всего врагов

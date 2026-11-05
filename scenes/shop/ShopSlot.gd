@@ -12,6 +12,8 @@ const PORTRAIT_HEIGHT = 156.0
 # Есть иллюстрация карты (assets/ui/card_art) — вместо портрета и заголовка лицо игральной карты
 # (UITheme.make_card_face: название на плашке рамки, цена и масть в медальонах)
 const CARD_FACE_WIDTH = 180.0
+const DESC_FONT: int = 12          # кегль описания под карты (прежней разметки, через UITheme.text_px)
+const DESC_LINE_SPACING: int = -3
 # Сноски «на поле» и синергий — над кнопкой «Купить», не на портрете (решение пользователя)
 const NOTE_GAP = 4.0
 const NOTE_SIDE = 8.0
@@ -42,6 +44,10 @@ func setup(data: CardData, index: int, is_free: bool = false) -> void:
 	_fill_body(data)
 	buy_button.custom_minimum_size = Vector2(0, 42)
 	buy_button.pressed.connect(_on_buy_pressed)
+	# Неактивная кнопка (не хватает Req, рука полна) — клик всё равно отвечает: ShopScene скажет почему
+	buy_button.gui_input.connect(func(e: InputEvent):
+		if buy_button.disabled and e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+			_on_buy_pressed())
 	EconomyManager.requisition_changed.connect(_on_requisition_changed)
 	_refresh_button()
 	_build_owned_note()
@@ -59,6 +65,7 @@ func _on_mouse_exited() -> void:
 	add_theme_stylebox_override("panel", UITheme.card_style(card_data.rarity))
 	owned_note.hide()
 	synergy_note.hide()
+	card_desc.get_parent().modulate.a = 1.0
 
 # Сноска поверх портрета: такой отряд / здание уже на поле — уровень (ShopManager.get_owned_note).
 # Текст — в момент наведения: армия могла измениться, пока магазин открыт
@@ -69,6 +76,8 @@ func show_owned_note() -> void:
 	var syn := ShopManager.get_synergy_note(card_data)
 	_synergy_label.text = syn
 	synergy_note.visible = syn != ""
+	# Сноски — вместо описания во вставке: текст под ними не проглядывает (прокрутка — его родитель)
+	card_desc.get_parent().modulate.a = 0.0 if owned_note.visible or synergy_note.visible else 1.0
 	_place_notes()
 	_place_notes.call_deferred()   # показ в первый кадр слота — раскладка ещё не построена
 
@@ -92,16 +101,17 @@ func _build_owned_note() -> void:
 	notes.offset_right = -NOTE_SIDE
 	notes.grow_vertical = Control.GROW_DIRECTION_BEGIN   # растёт вверх от кнопки
 	_notes = notes
+	# Сноски — во вставку описания, тем же мелким кеглем (25.10.2026: крупные и зелёные лезли на арт карты)
 	owned_note = UITheme.make_panel("HudPanel", true)
-	owned_note.add_theme_stylebox_override("panel", UITheme.panel_style(UITheme.BG_DEEP, UITheme.GOLD, 1, 4, 4))
+	owned_note.add_theme_stylebox_override("panel", UITheme.panel_style(UITheme.BG_DEEP, UITheme.GOLD, 1, 4, 3))
 	owned_note.hide()
 	notes.add_child(owned_note)
 	synergy_note = UITheme.make_panel("HudPanel", true)
-	synergy_note.add_theme_stylebox_override("panel", UITheme.panel_style(UITheme.BG_DEEP, UITheme.GREEN, 1, 4, 4))
+	synergy_note.add_theme_stylebox_override("panel", UITheme.panel_style(UITheme.BG_DEEP, UITheme.GOLD_DIM, 1, 4, 3))
 	synergy_note.hide()
 	notes.add_child(synergy_note)
 	_synergy_label = UITheme.make_label("", "SmallLabel")
-	_synergy_label.add_theme_color_override("font_color", UITheme.GREEN)
+	_synergy_label.add_theme_color_override("font_color", Palette.AMBER_LIGHT)
 	_synergy_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_synergy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_synergy_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -112,6 +122,9 @@ func _build_owned_note() -> void:
 	_owned_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_owned_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	owned_note.add_child(_owned_label)
+	for l in [_synergy_label, _owned_label]:
+		l.add_theme_font_size_override("font_size", UITheme.text_px(DESC_FONT))
+		l.add_theme_constant_override("line_spacing", DESC_LINE_SPACING)
 
 # Редкость · тип, портрет, название
 func _fill_header(data: CardData) -> void:
@@ -151,6 +164,9 @@ func _fill_body(data: CardData) -> void:
 		lines.append("(в бою: %s)" % data.get_play_hint())
 	card_desc.text = "\n".join(lines)
 	card_desc.theme_type_variation = "SmallLabel"
+	# Пиксельный RetroSans выше Play на строку — мельче и плотнее, чтобы во вставке было видно 3–4 строки
+	card_desc.add_theme_font_size_override("font_size", UITheme.text_px(DESC_FONT))
+	card_desc.add_theme_constant_override("line_spacing", DESC_LINE_SPACING)
 	card_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	card_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	# Длинное описание прокручивается, а не растягивает карту — иначе она налезает на руку под магазином
@@ -221,6 +237,12 @@ func _refresh_button() -> void:
 
 func _on_buy_pressed() -> void:
 	emit_signal("purchase_requested", slot_index)
+
+# Не хватает Req — красная вспышка у цены (медальон лица карты, без арта — кнопка «Купить»)
+const NO_MONEY_SIZE: float = 1.2
+func flash_no_money() -> void:
+	var at: Control = _face_cost if _face_cost else buy_button
+	Vfx.spawn_over(self, "no_money", at.get_global_rect(), NO_MONEY_SIZE)
 
 func _on_requisition_changed(_new_amount: int) -> void:
 	if card_data:

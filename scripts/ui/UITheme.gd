@@ -53,18 +53,36 @@ const UI_ART_DIR = "res://assets/ui/"
 const BUTTON_TEXTURE_MARGIN = Vector4(16, 14, 16, 14)
 const BUTTON_CONTENT_MARGIN = Vector4(18, 8, 18, 8)
 const WINDOW_FRAME_MARGIN = Vector4(48, 44, 48, 44)
-const WINDOW_CONTENT_MARGIN = Vector4(26, 30, 26, 24)
+# Отступ содержимого — за уголками рамки и под аквилой (25.10.2026: кнопки и текст налезали на уголки)
+const WINDOW_CONTENT_MARGIN = Vector4(38, 48, 38, 38)
 const WINDOW_EAGLE = "res://assets/ui/frame_eagle.png"
 const DIVIDER_SKULL = "res://assets/ui/divider_skull.png"
 
-# Шрифты пакета интерфейса (assets/fonts, OFL; решение пользователя 20.10.2026): Play — гротеск интерфейса,
-# Cormorant Garamond — заголовки, Press Start 2P — надписи над полем. Файла нет — системный, как раньше
+# Шрифты — пиксельные шрифты пользователя (assets/fonts/pixel, решение пользователя 23.10.2026; из 19 файлов
+# кириллица есть у 10): ImpactfulBits — шапки, кнопки, заголовки окон, названия карт и надписи над полем,
+# RetroSans — основной текст (описания, справки, подсказки). Было: Play / Play Bold, антиква Cormorant Garamond,
+# Press Start 2P. Файла нет — системный, как раньше
 const FONT_DIR = "res://assets/fonts/"
-const FONT_UI = FONT_DIR + "Play-Regular.ttf"
-const FONT_UI_BOLD = FONT_DIR + "Play-Bold.ttf"
-const FONT_SERIF = FONT_DIR + "CormorantGaramond-Variable.ttf"
-const FONT_WORLD = FONT_DIR + "PressStart2P-Regular.ttf"
-const SERIF_WEIGHT: int = 600
+const FONT_UI = FONT_DIR + "pixel/RetroSans.ttf"
+const FONT_UI_BOLD = FONT_DIR + "pixel/ImpactfulBits.ttf"
+const FONT_WORLD = FONT_DIR + "pixel/ImpactfulBits.ttf"
+# Заглавные у пиксельных шрифтов ниже доли кегля, чем у Play (0.70): ImpactfulBits 0.54, RetroSans 0.41 — кегли
+# прежней разметки × множитель: заглавные чуть ниже прежних, строки почти той же ширины (иначе текст не влезает
+# в кнопки и плашки: при той же высоте заглавных ImpactfulBits шире на 10%, RetroSans — на 27%).
+# Надписи над полем — цифры той же высоты, что у Press Start 2P (у него заглавные — весь кегль)
+const UI_FONT_SCALE: float = 1.2       # ImpactfulBits: шапки, кнопки, заголовки
+const TEXT_FONT_SCALE: float = 1.45    # RetroSans: основной текст
+const WORLD_FONT_SCALE: float = 1.85   # ImpactfulBits над полем
+
+# Кегль прежней разметки (под Play) → кегль пиксельного шрифта
+static func ui_px(size: int) -> int:
+	return roundi(size * UI_FONT_SCALE)
+
+static func text_px(size: int) -> int:
+	return roundi(size * TEXT_FONT_SCALE)
+
+static func world_px(size: float) -> int:
+	return roundi(size * WORLD_FONT_SCALE)
 
 # Иконки пакета интерфейса — assets/ui/<группа>/<имя>.png, нарезка tools/ui_atlas_slice.py:
 # cards (карты улучшений и событий по id), emblems (ордены и боги по id Chapters), synergy, hud, ribbon,
@@ -84,24 +102,23 @@ static func get_theme() -> Theme:
 
 static func _build() -> Theme:
 	var t = Theme.new()
-	t.default_font_size = 16
+	t.default_font_size = text_px(16)
 	if ResourceLoader.exists(FONT_UI):
 		t.default_font = load(FONT_UI)
 
-	var serif = serif_font()
 	var sans = ui_font()
 
 	# --- Label ---
 	t.set_color("font_color", "Label", TEXT)
 	t.set_color("font_outline_color", "Label", Color(0, 0, 0, 0.8))
 
-	# Заголовки окон и экранов — антиква, как «WH40KINGS» в меню; шапки и цифры — гротеск кнопок меню
-	_label_variation(t, "TitleLabel", serif, 30, TEXT, 4)
-	_label_variation(t, "HeaderLabel", sans, 20, GOLD, 2)
-	_label_variation(t, "CardTitleLabel", serif, 24, GOLD_BRIGHT, 3)   # название карты магазина
-	_label_variation(t, "ValueLabel", sans, 19, GOLD_BRIGHT, 2)
-	_label_variation(t, "DimLabel", null, 13, TEXT_DIM, 0)
-	_label_variation(t, "SmallLabel", null, 14, TEXT, 0)
+	# Заголовки окон и экранов, шапки и цифры — шрифт кнопок (ImpactfulBits); остальное — основной (RetroSans)
+	_label_variation(t, "TitleLabel", sans, ui_px(30), TEXT, 4)
+	_label_variation(t, "HeaderLabel", sans, ui_px(20), GOLD, 2)
+	_label_variation(t, "CardTitleLabel", sans, ui_px(24), GOLD_BRIGHT, 3)   # название карты магазина
+	_label_variation(t, "ValueLabel", sans, ui_px(19), GOLD_BRIGHT, 2)
+	_label_variation(t, "DimLabel", null, text_px(13), TEXT_DIM, 0)
+	_label_variation(t, "SmallLabel", null, text_px(14), TEXT, 0)
 
 	# --- Панели: тёмный металл, стальная рамка, срезанные углы ---
 	# Текстуры пластин tools/ui_panels_gen.py (стилизация 20.10.2026) поверх плоских, если файлы на месте
@@ -116,9 +133,9 @@ static func _build() -> Theme:
 	t.set_stylebox("panel", "HudPanel", hud_tex if hud_tex else hud)
 
 	# --- Кнопки: сталь (обычная) и янтарь (главное действие) ---
-	_button_styles(t, "Button", Color(BG_DEEP, 0.92), GOLD_DIM, 16, sans, 0.0)
+	_button_styles(t, "Button", Color(BG_DEEP, 0.92), GOLD_DIM, ui_px(16), sans, 0.0)
 	t.set_type_variation("PrimaryButton", "Button")
-	_button_styles(t, "PrimaryButton", Color("2b1d0d"), GOLD, 19, sans, 0.25)
+	_button_styles(t, "PrimaryButton", Color("2b1d0d"), GOLD, ui_px(19), sans, 0.25)
 	_primary_button_textures(t)
 	_menu_button_styles(t)
 	_select_card_styles(t)
@@ -163,7 +180,7 @@ const MENU_TEXT     = Color("b9c0c8")
 const MENU_AMBER    = GOLD_BRIGHT
 const MENU_AMBER_DIM = Color("a8742a")
 
-# Шрифт кнопок и шапок (гротеск, как в концепте): Play Bold, без файла — системный
+# Шрифт кнопок, шапок, заголовков и названий карт: ImpactfulBits, без файла — системный
 static func ui_font() -> Font:
 	if ResourceLoader.exists(FONT_UI_BOLD):
 		return load(FONT_UI_BOLD)
@@ -172,20 +189,8 @@ static func ui_font() -> Font:
 	font.font_weight = 600
 	return font
 
-# Заголовки окон и экранов — антиква (Cormorant Garamond, переменный шрифт — толщина SERIF_WEIGHT)
-static func serif_font() -> Font:
-	if ResourceLoader.exists(FONT_SERIF):
-		var v = FontVariation.new()
-		v.base_font = load(FONT_SERIF)
-		v.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): SERIF_WEIGHT}
-		return v
-	var serif = SystemFont.new()
-	serif.font_names = PackedStringArray(["Cambria", "Georgia", "Times New Roman", "serif"])
-	serif.font_weight = SERIF_WEIGHT
-	return serif
-
-# Шрифт надписей в мире (цифры урона, счётчики отрядов, цены клеток) — пиксельный Press Start 2P (пакет
-# интерфейса: «пиксельные числа над полем»), без файла — гротеск интерфейса; один на всех: рисуется каждый кадр
+# Шрифт надписей в мире (цифры урона, счётчики отрядов, цены клеток) — ImpactfulBits, кегли — world_px;
+# без файла — шрифт интерфейса; один на всех: рисуется каждый кадр
 static var _world_font: Font
 
 static func world_font() -> Font:
@@ -229,6 +234,24 @@ static func icon_row(group: String, name: String, label: Control, height: float 
 	return row
 
 const HUD_ICON_SIZE: float = 26.0
+const CHAPTER_BADGE_SIZE: float = 42.0
+
+# Значок бога / ордена забега (решение пользователя 25.10.2026) — первым в шапке боя и магазина: эмблема
+# (пакет интерфейса emblems), под курсором — название, бонус и минус. Ордена нет — null
+static func make_chapter_badge() -> Control:
+	var c: Dictionary = Chapters.get_chapter(RunManager.player_chapter)
+	if c.is_empty():
+		return null
+	var badge := make_icon("emblems", c["id"], CHAPTER_BADGE_SIZE)
+	if badge == null:
+		return null
+	badge.name = "ChapterBadge"
+	badge.mouse_filter = Control.MOUSE_FILTER_STOP
+	var tip: String = "%s — %s" % [c["name"], c.get("desc", "")]
+	if c.has("malus_desc"):
+		tip += "\nМинус: " + c["malus_desc"]
+	badge.tooltip_text = tip
+	return badge
 
 static func menu_button_style(bg: Color, border: Color, glow: float) -> StyleBoxFlat:
 	var s = panel_style(bg, border, 2, 12, 10)
@@ -261,7 +284,7 @@ static func _menu_button_styles(t: Theme) -> void:
 		disabled.modulate_color = Color(0.55, 0.55, 0.6, 0.8)
 		t.set_stylebox("disabled", type, disabled)
 	t.set_font("font", type, ui_font())
-	t.set_font_size("font_size", type, 18)
+	t.set_font_size("font_size", type, ui_px(18))
 	t.set_color("font_color", type, MENU_TEXT)
 	t.set_color("font_hover_color", type, MENU_AMBER)
 	t.set_color("font_focus_color", type, MENU_AMBER)
@@ -580,8 +603,14 @@ const CARD_FRAME_LAYOUT = {
 const CARD_ART_BLEED: float = 10.0          # арт заходит под брусья рамки (px арта)
 const CARD_INK = Color("2b1c10")            # надписи на костяных плашках
 const CARD_PLATE_FONT: float = 0.82         # кегль надписи плашки — доля её высоты
-const CARD_CAP_HEIGHT: float = 0.7          # высота заглавных Play — доля кегля
+const CARD_CAP_HEIGHT: float = 0.54         # высота заглавных ImpactfulBits — доля кегля (у Play было 0.7)
 const CARD_PLATE_MIN_FONT: int = 7          # меньше — уже не читается: длинное название обрезается
+# Маленькая карта (скамейка, перетаскивание): на плашке кегль вышел бы мельче CARD_PLATE_READABLE — пиксельный
+# шрифт не читается (решение пользователя 24.10.2026); название — на тёмной полосе под плашкой во всю ширину арта
+const CARD_PLATE_READABLE: int = 11
+const CARD_STRIP_FONT_MAX: int = 12
+const CARD_STRIP_FONT_MIN: int = 8
+const CARD_STRIP_BG = Color(0.02, 0.02, 0.03, 0.78)
 const CARD_COST_COLOR = GOLD_BRIGHT
 
 # Иллюстрация карты или null (арта нет — карта показывается портретом, как раньше)
@@ -636,7 +665,14 @@ static func make_card_face(card: CardData, width: float, cost_text: String = "")
 		f.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		face.add_child(f)
 		f.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	face.add_child(_plate_label("Title", card.title, Rect2(layout["title"].position * k, layout["title"].size * k)))
+	var title_rect := Rect2(layout["title"].position * k, layout["title"].size * k)
+	if ui_px(int(title_rect.size.y * CARD_PLATE_FONT)) >= CARD_PLATE_READABLE:
+		face.add_child(_plate_label("Title", card.title, title_rect))
+	else:
+		# под плашкой и под медальоном цены (иначе он закрывает начало названия)
+		var strip_y := maxf(title_rect.end.y, (layout["cost"].y + layout["medallion"]) * k)
+		face.add_child(_title_strip(card.title, Rect2(layout["window"].position.x * k, strip_y,
+			layout["window"].size.x * k, 0.0)))
 	if layout.has("footer"):
 		var kind: String = TYPE_NAMES.get(card.card_type, "")
 		if card.card_type == "squad" and card.unit_count > 0:
@@ -647,7 +683,7 @@ static func make_card_face(card: CardData, width: float, cost_text: String = "")
 	cost.name = "Cost"
 	cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cost.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	cost.add_theme_font_size_override("font_size", maxi(int(r * 1.15), 9))
+	cost.add_theme_font_size_override("font_size", maxi(ui_px(int(r * 1.15)), 9))
 	cost.add_theme_color_override("font_color", CARD_COST_COLOR)
 	cost.position = layout["cost"] * k - Vector2(r, r)
 	cost.size = Vector2(r, r) * 2.0
@@ -695,7 +731,7 @@ static func _plate_label(name: String, text: String, rect: Rect2) -> Label:
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	var font := ui_font()
-	var size := int(rect.size.y * CARD_PLATE_FONT)
+	var size := ui_px(int(rect.size.y * CARD_PLATE_FONT))   # заглавные — почти той же высоты, что у Play
 	var room := rect.size.x * 0.92
 	while size > CARD_PLATE_MIN_FONT and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > room:
 		size -= 1
@@ -713,6 +749,42 @@ static func _plate_label(name: String, text: String, rect: Rect2) -> Label:
 	l.size = Vector2(rect.size.x, font.get_height(size))
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
+
+# Кегль не больше max_size, при котором text шрифтом font влезает в width (не меньше min_size)
+static func fit_font_size(font: Font, text: String, width: float, max_size: int, min_size: int) -> int:
+	var size := max_size
+	while size > min_size and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > width:
+		size -= 1
+	return size
+
+# Название маленькой карты: светлые буквы с обводкой на тёмной полосе (rect — левый верх и ширина полосы)
+static func _title_strip(text: String, rect: Rect2) -> Control:
+	var font := ui_font()
+	var size := fit_font_size(font, text, rect.size.x - 6.0, ui_px(CARD_STRIP_FONT_MAX), ui_px(CARD_STRIP_FONT_MIN))
+	var strip := Panel.new()
+	strip.name = "TitleStrip"
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = CARD_STRIP_BG
+	strip.add_theme_stylebox_override("panel", sb)
+	strip.position = rect.position
+	strip.size = Vector2(rect.size.x, font.get_height(size) + 2.0)
+	var l := Label.new()
+	l.name = "Title"
+	l.text = text
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.clip_text = true
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l.add_theme_font_override("font", font)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", GOLD_BRIGHT)
+	l.add_theme_color_override("font_outline_color", OUTLINE)
+	l.add_theme_constant_override("outline_size", 3)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strip.add_child(l)
+	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	return strip
 
 # Фон-виньетка: холодная ночь — светлее в центре, к краям в черноту
 static func make_background() -> TextureRect:

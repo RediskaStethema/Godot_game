@@ -71,7 +71,7 @@ func _main() -> void:
 	await process_frame
 	var rm = root.get_node("RunManager")
 
-	# 1. Пул карт Хаоса: 47 копий, доли 27 / 16 / 4, своих отрядов 8, id не пересекаются с Космодесантом
+	# 1. Пул карт Хаоса: 53 копии (с благословениями богов 25.10.2026), доли 27 / 22 / 4, своих отрядов 8, id не пересекаются с Космодесантом
 	var pool: Array = CardFactory.build_pool("chaos")
 	var sm_ids: Array = CardFactory.ids_of(CardFactory.build_pool("space_marines"))
 	var by_rarity = {"common": 0, "rare": 0, "epic": 0}
@@ -89,7 +89,7 @@ func _main() -> void:
 		if c.card_type == "upgrade":
 			upgrades_ok = upgrades_ok and c.affects_tag == "chaos"
 	_check("пул Хаоса: %d карт (%s), отрядов %d, id свои, улучшения — на отряды Хаоса" % [pool.size(), by_rarity, squads.size()],
-		pool.size() == 47 and by_rarity == {"common": 27, "rare": 16, "epic": 4} and squads.size() == 8
+		pool.size() == 53 and by_rarity == {"common": 27, "rare": 22, "epic": 4} and squads.size() == 8
 		and ids_ok and factions_ok and upgrades_ok)
 	rm.player_faction = "space_marines"
 	var found = CardFactory.create("warp_strike")
@@ -147,10 +147,11 @@ func _main() -> void:
 		"Path to Glory" in base["panel"] and base["income"] == 2 and "Chaos: 5" in base["panel"])
 	var k = await _battle("khorne")
 	await _finish()
-	# Минус бога (решение пользователя 18.10.2026): Кхорн презирает стрелков — их урон −20%
-	_check("Кхорн: +20% урона Raptors (ближний бой), Chaos Marines −20% (минус бога), в панели «Метка Khorne»",
+	# Минус бога (решение пользователя 25.10.2026; было −20% урона): Кхорн презирает стрелков — их HP −10%
+	_check("Кхорн: +20% урона Raptors (ближний бой), Chaos Marines −10% HP (минус бога), в панели «Метка Khorne»",
 		_near(k["chaos_raptor"]["damage"], base["chaos_raptor"]["damage"] * 1.2)
-		and _near(k["chaos_marine"]["damage"], base["chaos_marine"]["damage"] * 0.8) and "Метка Khorne" in k["panel"])
+		and _near(k["chaos_marine"]["damage"], base["chaos_marine"]["damage"])
+		and _near(k["chaos_marine"]["hp"], base["chaos_marine"]["hp"] * 0.9) and "Метка Khorne" in k["panel"])
 	var n = await _battle("nurgle")
 	await _finish()
 	_check("Нургл: +15% HP всем", _near(n["chaos_marine"]["hp"], base["chaos_marine"]["hp"] * 1.15)

@@ -27,7 +27,10 @@ const DRAG_CARD_WIDTH: float = 96.0
 const DRAG_FIELD_SCALE: float = 0.55   # над полем карта мельче — видна клетка под ней
 const DRAG_TILT: float = 0.0012        # наклон (рад) на px/сек горизонтального хода
 const DRAG_TILT_MAX: float = 0.22
-const DROP_TIME: float = 0.16          # сыграна — сжимается в клетку
+# Сыграна — сгорает (Vfx "card_burn" по контуру карты) и чуть сжимается к клетке: рамка огня остаётся на месте
+# карты, сама карта гаснет за первые кадры огня (было: сжималась в точку за 0.16 с)
+const BURN_TIME: float = 0.22
+const BURN_SHRINK: float = 0.8
 const RETURN_TIME: float = 0.2         # не сыграна — летит обратно в руку
 const PEEK: float = UITheme.BENCH_PEEK   # видимая часть опущенной карты
 const CARD_GAP: float = 10.0
@@ -200,9 +203,12 @@ func _on_drop(screen_pos: Vector2) -> void:
 		return
 	var tw := preview.create_tween().set_parallel(true).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	if not bench_cards.has(card):
-		tw.tween_property(preview, "global_position", screen_pos - _grab, DROP_TIME)
-		tw.tween_property(preview, "scale", Vector2(0.15, 0.15), DROP_TIME)
-		tw.tween_property(preview, "modulate:a", 0.0, DROP_TIME)
+		# Сгорает огненной рамкой по своему контуру (лист card_burn), пока сжимается в клетку
+		var face_rect := Rect2(preview.get_global_transform() * Vector2.ZERO, preview.size * preview.scale)
+		Vfx.spawn_over(self, "card_burn", face_rect)
+		tw.tween_property(preview, "global_position", screen_pos - _grab, BURN_TIME)
+		tw.tween_property(preview, "scale", preview.scale * BURN_SHRINK, BURN_TIME)
+		tw.tween_property(preview, "modulate:a", 0.0, BURN_TIME)
 	else:
 		# Назад на место в руке, в размер карты руки (масштаб — вокруг точки захвата)
 		var back := BenchCardScript.CARD_WIDTH / DRAG_CARD_WIDTH

@@ -41,9 +41,16 @@ func _main() -> void:
 	# Турель: такая же карта на неё — уровень +1, статы растут
 	var dmg1: float = tower.stats["damage"]
 	var spd1: float = tower.stats["attack_speed"]
+	var h1: float = tower._visual_height()
 	var ok2 = battle._play_building_card(CardFactory.bolter_turret(), Vector2i(0, 0))
 	_check("турель → ур.2: +25% урона, +20% скорострельности", ok2 and tower.card.building_level == 2 \
 		and is_equal_approx(tower.stats["damage"], dmg1 * 1.25) and is_equal_approx(tower.stats["attack_speed"], spd1 * 1.2))
+	var glows: Array = tower.get_children().filter(func(c): return c.get_script() != null \
+		and c.get_script().get_global_name() == "BuildingLevelUp")
+	await create_timer(0.8).timeout   # рост из прежнего масштаба и вспышка доиграли; рост — +6% по плотному силуэту (tools/building_levels_add.py), _visual_height считает и полупрозрачный верх
+	_check("улучшение: свет и вспышка, кадры 2-го уровня, здание выше прежнего (%.0f → %.0f px)" % [
+		h1, tower._visual_height()], glows.size() == 2 and tower.sprite.animation == &"idle_2" \
+		and tower._visual_height() >= h1 * 1.03 and not tower.sprite.material.get_shader_parameter("flash"))   # вспышка погасла (общий материал — без неё)
 	var ok3 = battle._play_building_card(CardFactory.bolter_turret(), Vector2i(0, 0))
 	var ok4 = battle._play_building_card(CardFactory.bolter_turret(), Vector2i(0, 0))
 	_check("турель → ур.3 (множители копятся), 4-я карта не тратится", ok3 and not ok4 \
@@ -71,6 +78,22 @@ func _main() -> void:
 	var shield_expected = shield1 * 1.5
 	_check("щит цитадели в бою — по уровню стены", bm.citadel_shield <= shield_expected + 0.01 \
 		and bm.citadel_shield > 0.0)
+
+	# Неживые ряды уровня (пакет — копии одного кадра) оживляет код: стойка дышит, выстрел — отдача
+	var ys := []
+	for i in 12:
+		ys.append(tower.sprite.scale.y / tower._level_k)
+		await create_timer(0.1).timeout
+	tower.aim = Vector2(1, 0)
+	tower.play_once("attack")
+	# Пик отдачи за окно выстрела: турель в бою стреляет и сама (может перезапустить отдачу) — направление не сверяем
+	var kicked := 0.0
+	var until: float = Time.get_ticks_msec() + (tower._shot_delay() + 0.4) * 1000.0
+	while Time.get_ticks_msec() < until:
+		kicked = maxf(kicked, tower.sprite.position.length())
+		await process_frame
+	_check("неживой ряд уровня: стойка дышит (%.3f..%.3f), выстрел — отдача (%.1f px)" % [ys.min(), ys.max(), kicked],
+		ys.max() - ys.min() > 0.01 and kicked > 1.0)
 
 	bm.stop_battle()
 

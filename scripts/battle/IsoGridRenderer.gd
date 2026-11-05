@@ -21,10 +21,18 @@ const LINE_PLAYER    = Color(UITheme.PLAYER_SIDE, 0.45)
 const BORDER_PLAYER  = Color(UITheme.PLAYER_SIDE, 0.95)
 # --- Закрытые клетки рамки королевства ---
 const LINE_LOCKED    = Color(UITheme.PLAYER_SIDE, 0.12)
-const COLOR_BUYABLE  = Color(0.32, 0.50, 0.30, 0.22)   # можно купить
-const COLOR_BUYABLE_HOVER = Color(0.45, 0.72, 0.42, 0.42)
-const LINE_BUYABLE   = Color(0.55, 0.78, 0.5, 0.80)
+# Можно купить (решение пользователя 24.10.2026: была плоская бледно-зелёная заливка — выбивалась из стиля):
+# янтарная пунктирная кромка — «будущая» клетка своих, под курсором — сплошная и ярче; цена — на тёмной плашке
+# со значком Req, не хватает Req — число красным
+const COLOR_BUYABLE  = Color(UITheme.PLAYER_SIDE, 0.07)
+const COLOR_BUYABLE_HOVER = Color(UITheme.PLAYER_SIDE, 0.24)
+const LINE_BUYABLE   = Color(UITheme.AMBER_LIGHT, 0.7)
+const LINE_BUYABLE_HOVER = Color(UITheme.AMBER_LIGHT, 1.0)
+const BUYABLE_DASH: float = 7.0
 const PRICE_FONT_SIZE: int = 15
+const PRICE_ICON: float = 14.0       # значок Req на плашке цены, px мира
+const PRICE_PAD = Vector2(5, 3)
+const PRICE_PLATE = Color(0.03, 0.035, 0.05, 0.85)
 
 # --- Платформа ---
 const FLOOR_PAD_TILES: int = 5          # поле шире раскладки на столько тайлов (камера в бою отъезжает)
@@ -104,6 +112,8 @@ func setup(iso_grid: IsoGrid) -> void:
 	_floor = Node2D.new()
 	_floor.show_behind_parent = true
 	_floor.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # пиксель-арт без размытия
+	var lift: float = theme.get("floor_brightness", 1.0)   # тема: грунт светлее, объекты на нём — нет
+	_floor.modulate = Color(lift, lift, lift)
 	_floor.draw.connect(_draw_floor)
 	add_child(_floor)
 	_mist = Node2D.new()
@@ -663,17 +673,39 @@ func _draw_kingdom() -> void:
 		if grid.is_valid_tile(tile):
 			_draw_diamond(grid.tile_to_screen(tile, false), COLOR_EFFECT, LINE_EFFECT, 2.5)
 
-	var font = UITheme.world_font()
 	for tile in expansion_tiles:
-		var center = grid.tile_to_screen(tile, false)
-		var color = COLOR_BUYABLE_HOVER if tile == hovered_tile else COLOR_BUYABLE
-		_draw_diamond(center, color, LINE_BUYABLE)
-		var text = "+ %d Req" % expansion_cost
-		var w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, PRICE_FONT_SIZE).x
-		draw_string_outline(font, center + Vector2(-w / 2.0, PRICE_FONT_SIZE * 0.35), text,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, PRICE_FONT_SIZE, 4, UITheme.OUTLINE)
-		draw_string(font, center + Vector2(-w / 2.0, PRICE_FONT_SIZE * 0.35), text,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, PRICE_FONT_SIZE, LINE_BUYABLE)
+		_draw_buyable(tile)
+
+# Клетка на продажу: заливка, пунктирная кромка (под курсором — сплошная), цена на плашке со значком Req
+func _draw_buyable(tile: Vector2i) -> void:
+	var center = grid.tile_to_screen(tile, false)
+	var hover: bool = tile == hovered_tile
+	var hw = IsoGrid.TILE_WIDTH / 2.0
+	var hh = IsoGrid.TILE_HEIGHT / 2.0
+	var pts := [center + Vector2(0, -hh), center + Vector2(hw, 0), center + Vector2(0, hh), center + Vector2(-hw, 0)]
+	draw_colored_polygon(PackedVector2Array(pts), COLOR_BUYABLE_HOVER if hover else COLOR_BUYABLE)
+	for i in 4:
+		if hover:
+			draw_line(pts[i], pts[(i + 1) % 4], LINE_BUYABLE_HOVER, 2.5, true)
+		else:
+			draw_dashed_line(pts[i], pts[(i + 1) % 4], LINE_BUYABLE, 1.5, BUYABLE_DASH, true, true)
+	var font = UITheme.world_font()
+	var text := str(expansion_cost)
+	var fs := UITheme.world_px(PRICE_FONT_SIZE)   # высота цифр — как PRICE_FONT_SIZE у прежнего шрифта
+	var text_w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var icon: Texture2D = UITheme.ui_icon("hud", "requisition")
+	var icon_w := PRICE_ICON if icon else 0.0
+	var size := Vector2(icon_w + (3.0 if icon else 0.0) + text_w, maxf(PRICE_ICON, PRICE_FONT_SIZE)) + PRICE_PAD * 2.0
+	var plate := Rect2(center - size / 2.0, size)
+	draw_rect(plate, PRICE_PLATE)
+	draw_rect(plate, LINE_BUYABLE_HOVER if hover else Color(UITheme.GOLD_DIM, 0.9), false, 1.0)
+	var x := plate.position.x + PRICE_PAD.x
+	if icon:
+		draw_texture_rect(icon, Rect2(Vector2(x, center.y - PRICE_ICON / 2.0), Vector2(icon_w, PRICE_ICON)), false)
+		x += icon_w + 3.0
+	var affordable: bool = EconomyManager.requisition >= expansion_cost
+	draw_string(font, Vector2(x, center.y + PRICE_FONT_SIZE * 0.35), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs,
+		UITheme.GOLD_BRIGHT if affordable else UITheme.RED_BRIGHT)
 
 # Контур королевства — только внешние рёбра открытых клеток
 # (после покупки клеток королевство может быть не прямоугольным)
@@ -698,8 +730,15 @@ func _draw_kingdom_border(color: Color, width: float) -> void:
 func set_expansion(tiles: Array[Vector2i], cost: int) -> void:
 	expansion_tiles = tiles
 	expansion_cost = cost
+	if not EconomyManager.requisition_changed.is_connected(_on_requisition_changed):
+		EconomyManager.requisition_changed.connect(_on_requisition_changed)
 	queue_redraw()
 	refresh_floor()
+
+# Хватает ли Req на клетку — цвет цены
+func _on_requisition_changed(_amount: int) -> void:
+	if not expansion_tiles.is_empty():
+		queue_redraw()
 
 func _draw_diamond(center: Vector2, color: Color, line_color: Color, line_width: float = 1.5) -> void:
 	var hw = IsoGrid.TILE_WIDTH / 2

@@ -127,9 +127,17 @@ func _main() -> void:
 		{CardFactory.special_card("codex_bastion"): Vector2i(1, 1), CardFactory.special_card("blood_chalice"): Vector2i(1, 2)})
 	var n0 = _soldiers_of(near)[0]
 	var d0 = _soldiers_of(diag)[0]
-	_check("Кодекс-бастион: сосед щит %.1f (25%% от %.1f), диагональ %.1f; Чаша: диагональ (сосед Чаши) вампиризм %.2f, сосед бастиона %.2f" % [
-		n0.shield, n0.max_hp, d0.shield, d0.lifesteal, n0.lifesteal],
-		absf(n0.shield - n0.max_hp * 0.25) < EPS and d0.shield < EPS and absf(d0.lifesteal - 0.2) < EPS and n0.lifesteal < EPS)
+	# Особый эффект здания — только у своего ордена (решение пользователя 25.10.2026): Чаша Blood Angels за Ultramarines — нет
+	_check("Кодекс-бастион: сосед щит %.1f (25%% от %.1f), диагональ %.1f; Чаша чужого ордена: вампиризма нет (%.2f)" % [
+		n0.shield, n0.max_hp, d0.shield, d0.lifesteal],
+		absf(n0.shield - n0.max_hp * 0.25) < EPS and d0.shield < EPS and d0.lifesteal < EPS and n0.lifesteal < EPS)
+	var ba_near = _squad("tactical_squad")
+	var ba_far = _squad("tactical_squad")
+	await _battle("space_marines", "blood_angels", {ba_near: Vector2i(2, 2), ba_far: Vector2i(2, 0)},
+		{CardFactory.special_card("blood_chalice"): Vector2i(1, 2)})
+	_check("Чаша за Blood Angels: сосед вампиризм %.2f, не сосед %.2f" % [_soldiers_of(ba_near)[0].lifesteal,
+		_soldiers_of(ba_far)[0].lifesteal],
+		absf(_soldiers_of(ba_near)[0].lifesteal - 0.2) < EPS and _soldiers_of(ba_far)[0].lifesteal < EPS)
 
 	# 5. Клич Волчьего тотема и +урон Кузни
 	var wolf_n = _squad("tactical_squad")
@@ -140,9 +148,16 @@ func _main() -> void:
 	var w0 = _soldiers_of(wolf_n)[0]
 	var f0 = _soldiers_of(forge_n)[0]
 	# Сравнение с соседом тотема: та же синергия Marine (+10% урона за 6), но без Кузни
-	_check("Тотем: сосед усилен (%d стак); Кузня: сосед урон %.2f = %.2f × 1.1" % [
+	_check("Тотем: сосед усилен (%d стак); Кузня Salamanders за Space Wolves — урон соседа прежний (%.2f = %.2f)" % [
 		w0.get_status_stacks("empowered"), f0.current_damage, w0.current_damage],
-		w0.get_status_stacks("empowered") == 1 and absf(f0.current_damage - w0.current_damage * 1.1) < EPS)
+		w0.get_status_stacks("empowered") == 1 and absf(f0.current_damage - w0.current_damage) < EPS)
+	var sal_far = _squad("tactical_squad")
+	var sal_near = _squad("tactical_squad")
+	await _battle("space_marines", "salamanders", {sal_far: Vector2i(1, 0), sal_near: Vector2i(1, 2)},
+		{CardFactory.special_card("vulkan_forge"): Vector2i(2, 2)})
+	_check("Кузня за Salamanders: сосед урон %.2f = %.2f × 1.1" % [_soldiers_of(sal_near)[0].current_damage,
+		_soldiers_of(sal_far)[0].current_damage],
+		absf(_soldiers_of(sal_near)[0].current_damage - _soldiers_of(sal_far)[0].current_damage * 1.1) < EPS)
 
 	# 6. Алтарь черепов: убитые враги — +урон армии; котёл — яд врагам в круге
 	var berz = _squad("khorne_berzerkers")
@@ -162,9 +177,10 @@ func _main() -> void:
 	var victim = enemies[5]
 	victim.global_position = cauldron.global_position + Vector2(20, 0)
 	cauldron.tick(0.1)
-	_check("алтарь: 5 убитых — урон %.2f → %.2f (+5%%); котёл: враг рядом отравлен (%d)" % [
+	# Берсерки — отряд Кхорна: армии +1% за убитого, им ещё +5% (решение пользователя 25.10.2026): ×1.05 × 1.25
+	_check("алтарь: 5 убитых — урон Берсерков %.2f → %.2f (×1.05 армии × 1.25 Кхорну); котёл: враг рядом отравлен (%d)" % [
 		dmg0, b0.current_damage, victim.get_status_stacks("poisoned")],
-		absf(b0.current_damage - dmg0 * 1.05) < EPS and victim.get_status_stacks("poisoned") == 1)
+		absf(b0.current_damage - dmg0 * 1.05 * 1.25) < EPS and victim.get_status_stacks("poisoned") == 1)
 	var ring = cauldron.get("_aura_ring")
 	_check("котёл: в бою — кольцо ауры яда на земле по радиусу %.0f" % cauldron.stats.get("poison_radius", 0.0),
 		ring != null and ring.look == "plague" and is_equal_approx(ring.radius, cauldron.stats.get("poison_radius", 0.0))

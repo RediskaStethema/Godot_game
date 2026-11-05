@@ -23,6 +23,7 @@ const GREEN        = Color("6fbf5a")
 
 # --- Мир боя: общие цвета подсветки, сигналов и надписей (новые цвета — сюда, не литералами в файлах) ---
 const OUTLINE      = Color(0.0, 0.0, 0.0, 0.85)   # обводка надписей в мире и HUD
+const BUILDING_OUTLINE = Color(0.0, 0.0, 0.0, 1.0)  # контур зданий: на тёмном грунте Хаоса 0.85 не читался
 const DIM_OVERLAY  = Color(0.0, 0.0, 0.0, 0.6)    # затемнение под окнами и баннерами
 const PLAYER_SIDE  = GOLD                         # свои: кольцо под бойцом, рамка королевства
 const ENEMY_SIDE   = RED_BRIGHT
@@ -44,6 +45,7 @@ const POISON       = Color(0.55, 0.9, 0.3)
 const POISON_DEEP  = Color("4f7a24")               # кромка ауры котла Nurgle (AuraRing)
 const SLAANESH     = Color("b8436e")               # аура святилища Slaanesh: розовое бордо (AuraRing)
 const SLAANESH_PALE = Color("f3b6cc")
+const LEVEL_RING_CHAOS = Color("d0405a")          # кольцо уровня здания у Хаоса (у Космодесанта — GOLD)
 const HEAL         = Color(0.55, 1.0, 0.55)
 const HEAL_DEEP    = Color("449458")               # кромка света лечения (Казармы — LevelUpGlow "heal")
 const SHIELD_BLUE  = Color(0.45, 0.72, 1.0)       # щит Iron Halo и щит цитадели

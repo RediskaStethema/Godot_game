@@ -76,6 +76,8 @@ var knockback: float = 0.0          # сила отбрасывания от т�
 var status: String = ""             # статус-эффект цели (StatusEffects), +1 стак
 var status_power: float = 0.0
 var status_duration: float = 0.0
+var poison_power: float = 0.0       # яд благословения Нургла / Котла поверх status (Soldier.apply_blessing_hit)
+var charm_chance: float = 0.0       # шанс поработить цель (благословение Слаанеш)
 var splash_radius: float = 0.0      # > 0 — урон всем бойцам splash_team в радиусе точки попадания
 var splash_team: int = GameConstants.TEAM_ENEMY
 var on_impact: Callable             # (точка) — вспышка взрыва у стрелка (цитадель)
@@ -249,6 +251,8 @@ func _impact() -> void:
 	elif not is_instance_valid(_target):
 		pass   # цель удалена в полёте (погибла и исчезла) — урона нет. _track_target её не обнулит:
 			# удалённый объект в Godot 4 равен null, а «is» на нём падает
+	elif _target is Soldier and is_instance_valid(source) and _target.team == source.team:
+		pass   # цель в полёте порабощена (Слаанеш) — теперь своя, не бьём
 	elif _target is Soldier:
 		var s: Soldier = _target
 		AudioManager.play("hit")
@@ -266,6 +270,7 @@ func _impact() -> void:
 			s.apply_status(status, status_power, status_duration)
 			if status == StatusEffects.BURNING:
 				Vfx.spawn(get_parent(), "flame_burst", _aim_point, Soldier.EFFECT_SCALE, rotation)
+		Soldier.apply_blessing_hit(s, poison_power, charm_chance, source)
 	elif _target.has_method("take_hit"):   # цитадель, звено стены владений (KingdomWall.Segment)
 		_target.take_hit(damage)
 		Vfx.spawn(get_parent(), "hit_spark", _aim_point, 1.0, rotation)
