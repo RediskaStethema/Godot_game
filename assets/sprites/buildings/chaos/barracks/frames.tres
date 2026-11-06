@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" load_steps=43 format=3]
+[gd_resource type="SpriteFrames" load_steps=63 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle/0.png" id="idle_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle/1.png" id="idle_1"]
@@ -19,12 +19,24 @@
 
 
 
+
+
+
+
+
+
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/0.png" id="idle_2_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/1.png" id="idle_2_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/2.png" id="idle_2_2"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/3.png" id="idle_2_3"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/4.png" id="idle_2_4"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/5.png" id="idle_2_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/6.png" id="idle_2_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/7.png" id="idle_2_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/8.png" id="idle_2_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/9.png" id="idle_2_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/10.png" id="idle_2_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_2/11.png" id="idle_2_11"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_2/0.png" id="refill_2_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_2/1.png" id="refill_2_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_2/2.png" id="refill_2_2"]
@@ -33,12 +45,22 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_2/5.png" id="refill_2_5"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_2/6.png" id="refill_2_6"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_2/7.png" id="refill_2_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_2/8.png" id="refill_2_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_2/9.png" id="refill_2_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_2/10.png" id="refill_2_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_2/11.png" id="refill_2_11"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/0.png" id="idle_3_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/1.png" id="idle_3_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/2.png" id="idle_3_2"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/3.png" id="idle_3_3"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/4.png" id="idle_3_4"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/5.png" id="idle_3_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/6.png" id="idle_3_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/7.png" id="idle_3_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/8.png" id="idle_3_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/9.png" id="idle_3_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/10.png" id="idle_3_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/idle_3/11.png" id="idle_3_11"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_3/0.png" id="refill_3_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_3/1.png" id="refill_3_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_3/2.png" id="refill_3_2"]
@@ -47,11 +69,15 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_3/5.png" id="refill_3_5"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_3/6.png" id="refill_3_6"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_3/7.png" id="refill_3_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_3/8.png" id="refill_3_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_3/9.png" id="refill_3_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_3/10.png" id="refill_3_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/barracks/refill_3/11.png" id="refill_3_11"]
 
 [resource]
-metadata/level_shift = {2: Vector2(17, 0), 3: Vector2(14, 0)}
-metadata/level_scale = {2: 1.128, 3: 1.177}
-metadata/level_static = ["idle_2", "refill_2", "idle_3", "refill_3"]
+metadata/level_shift = {2: Vector2(0, 0), 3: Vector2(-4, 0)}
+metadata/level_scale = {2: 1.084, 3: 1.177}
+metadata/level_static = []
 animations = [{
 "frames": [{
 "duration": 1.0,
@@ -123,6 +149,24 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("idle_2_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_11")
 }],
 "loop": true,
 "name": &"idle_2",
@@ -152,6 +196,18 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("refill_2_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_2_11")
 }],
 "loop": false,
 "name": &"refill_2",
@@ -175,6 +231,24 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("idle_3_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_11")
 }],
 "loop": true,
 "name": &"idle_3",
@@ -204,6 +278,18 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("refill_3_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("refill_3_11")
 }],
 "loop": false,
 "name": &"refill_3",

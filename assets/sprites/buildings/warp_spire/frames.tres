@@ -19,6 +19,7 @@
 
 
 
+
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/warp_spire/idle_2/0.png" id="idle_2_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/warp_spire/idle_2/1.png" id="idle_2_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/warp_spire/idle_2/2.png" id="idle_2_2"]
@@ -49,9 +50,11 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/warp_spire/attack_3/5.png" id="attack_3_5"]
 
 [resource]
-metadata/level_shift = {2: Vector2(0, 0), 3: Vector2(-2, 0)}
-metadata/level_scale = {2: 1.013, 3: 1.000}
-metadata/level_static = ["idle_2", "attack_2", "idle_3", "attack_3"]
+metadata/level_muzzle = {2: Vector2(1.3, -400.0), 3: Vector2(2.9, -421.0)}
+metadata/muzzle = Vector2(6.3, -352.0)
+metadata/level_shift = {2: Vector2(5, 0), 3: Vector2(4, 0)}
+metadata/level_scale = {2: 1.000, 3: 1.002}
+metadata/level_static = ["attack_2", "attack_3"]
 animations = [{
 "frames": [{
 "duration": 1.0,

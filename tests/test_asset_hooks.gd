@@ -113,6 +113,39 @@ func _main() -> void:
 	var expect_muzzle: Vector2 = t._sprite_muzzle()
 	_check("выстрел турели: анимация attack, снаряд из ствола листа на кадре вспышки",
 		t.sprite.animation == "attack" and shot != null and shot._origin.distance_to(expect_muzzle) < 0.5 and shot._delay > 0.0)
+	# У ряда выстрела уровня свои стволы (пакет 05.11.2026): metadata/level_muzzle {уровень: Vector2}
+	tower_frames.add_animation("attack_2")
+	tower_frames.set_animation_loop("attack_2", false)
+	for i in 3:
+		tower_frames.add_frame("attack_2", tower_frames.get_frame_texture("attack", i))
+	var before: Vector2 = t._sprite_muzzle()   # ряд уровня есть, точки уровня нет — ствол 1-го уровня
+	tower_frames.set_meta("level_muzzle", {2: Vector2(-30, -90)})
+	var after: Vector2 = t._sprite_muzzle()
+	var d: Vector2 = Vector2(-30 - 20, -90 + 60) * t._level_k
+	if t.aim.x < 0.0:
+		d.x = -d.x
+	var expect_delta: Vector2 = t.global_transform.basis_xform(d)
+	t.attack_timer = 0.0
+	t.tick(0.1)
+	var shot2 = bm.projectiles[-1] if not bm.projectiles.is_empty() else null
+	_check("ствол уровня: metadata/level_muzzle — снаряд из своего ствола ряда attack_2 (сдвиг %s ≈ %s)" % [after - before, expect_delta],
+		(after - before).distance_to(expect_delta) < 0.5 and t.sprite.animation == "attack_2"
+		and shot2 != null and shot2 != shot and shot2._origin.distance_to(after) < 0.5)
+	# Залп (06.11.2026): metadata/level_barrels — снаряд из каждого ствола, урон поровну, сумма прежняя
+	tower_frames.set_meta("level_barrels", {2: [Vector2(-30, -90), Vector2(-30, -70), Vector2(-10, -80)]})
+	var n_before: int = bm.projectiles.size()
+	t.attack_timer = 0.0
+	t.tick(0.1)
+	var volley: Array = bm.projectiles.slice(n_before)
+	var total := 0.0
+	var origins := {}
+	for s in volley:
+		total += s.damage
+		origins[Vector2i(s._origin.round())] = true
+	_check("залп: 3 ствола — 3 снаряда из разных точек, урон %.2f = %.2f" % [total, t.stats["damage"]],
+		volley.size() == 3 and origins.size() == 3 and is_equal_approx(total, t.stats["damage"])
+		and volley[0]._origin.distance_to(after) < 0.5)
+	tower_frames.remove_meta("level_barrels")
 	bm.stop_battle()
 
 	# 2. Казармы вернули бойцов — анимация refill

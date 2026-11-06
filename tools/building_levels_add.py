@@ -167,6 +167,15 @@ def strip_levels(dst, text):
     return re.sub(r"load_steps=\d+", f"load_steps={n + 1}", text)
 
 
+def to_canvas(img, canvas):
+    """Кадр пакета — на холст 1-го уровня, если тот расширен (по бокам поровну, сверху): низ и середина — на месте."""
+    if img.size == canvas:
+        return img
+    c = Image.new("RGBA", canvas)
+    c.paste(img, ((canvas[0] - img.width) // 2, canvas[1] - img.height), img)
+    return c
+
+
 def add_levels(name, src, dst):
     tres = dst / "frames.tres"
     text = strip_levels(dst, tres.read_text(encoding="utf-8"))
@@ -180,6 +189,7 @@ def add_levels(name, src, dst):
     ref_files = sorted(p for a in params for p in (dst / a).glob("*.png"))
     res = "res://" + dst.as_posix()
     ext, anims, shifts, heights, static = [], [], {}, {}, []
+    canvas = Image.open(dst / "idle" / "0.png").size   # кадры уровня — на холст 1-го (его могли расширить)
     ground = base_y(dst / "idle" / "0.png")   # основание 1-го уровня; у кадров уровня — со сдвигом
     heights[1] = height_of(dst / "idle" / "0.png", ground)
     for level in sorted({lv for _, lv in groups}):
@@ -194,7 +204,7 @@ def add_levels(name, src, dst):
             out.mkdir()
             refs = []
             for i in range(len(groups[(anim, level)])):
-                next(graded).save(out / f"{i}.png")
+                to_canvas(next(graded), canvas).save(out / f"{i}.png")
                 (out / f"{i}.png.import").write_text(IMPORT_PARAMS, encoding="utf-8")
                 ext.append(f'[ext_resource type="Texture2D" path="{res}/{row}/{i}.png" id="{row}_{i}"]')
                 refs.append(f'{{\n"duration": 1.0,\n"texture": ExtResource("{row}_{i}")\n}}')

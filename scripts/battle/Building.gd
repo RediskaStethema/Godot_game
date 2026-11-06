@@ -139,6 +139,8 @@ var _base_scale: float = 1.0   # масштаб спрайта 1-го уровн
 var sprite: AnimatedSprite2D = null         # свой спрайт (если есть лист), иначе null — блоки
 var _level_k: float = 1.0      # масштаб спрайта уровня (_apply_level_scale); на экране — с ростом и оживлением
 var _grow: float = 1.0         # рост из прежнего масштаба при улучшении (play_level_up)
+var _pip_key: String = ""      # ромбики уровня: для какого ряда / масштаба посчитана высота (_draw_level_pips)
+var _pip_top: float = 0.0
 var _kick: float = 0.0         # отдача неживого выстрела: 1 — только что, гаснет к 0
 var _kick_wait: float = 0.0    # до кадра вспышки, сек
 var _pulse: float = 0.0        # толчок неживого пополнения / щита
@@ -201,13 +203,25 @@ func play_level_up(from_scale: Vector2) -> void:
 			if sprite.material == flash:   # контур и свет местности — снова общий материал
 				sprite.material = shared)
 
+# Непрозрачная часть кадра стойки уровня (px кадра) — раз на ряд (get_image дорогой)
+var _used_anim: String = ""
+var _used_rect := Rect2()
+func _idle_used_rect() -> Rect2:
+	var anim := _level_anim("idle")
+	if anim != _used_anim:
+		_used_anim = anim
+		var tex: Texture2D = sprite.sprite_frames.get_frame_texture(anim, 0)
+		var img := tex.get_image()
+		_used_rect = Rect2(img.get_used_rect()) if img else Rect2(Vector2.ZERO, tex.get_size())
+		if _used_rect.size == Vector2.ZERO:
+			_used_rect = Rect2(Vector2.ZERO, tex.get_size())
+	return _used_rect
+
 # Рост здания над основанием, px мира (кадр стойки уровня; блоки — по прямоугольнику блоков)
 func _visual_height() -> float:
 	if sprite == null:
 		return global_position.y - get_occlusion_rect().position.y
-	var tex: Texture2D = sprite.sprite_frames.get_frame_texture(_level_anim("idle"), 0)
-	var img := tex.get_image()
-	var top := float(img.get_used_rect().position.y) if img else 0.0
+	var top := _idle_used_rect().position.y
 	return (-sprite.offset.y - top) * _level_k
 
 # Здание в свет местности (тема "building_env"): шейдер бойцов — мягкий контур, насыщенность, приглушение
@@ -380,10 +394,28 @@ func _apply_motion(delta: float) -> void:
 func _sprite_muzzle() -> Vector2:
 	var size := sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
 	var m: Vector2 = sprite.sprite_frames.get_meta("muzzle", Vector2(0, -size.y * 0.6))
+	# у ряда уровня свои стволы (пакет 05.11.2026): metadata/level_muzzle {уровень: Vector2} — та же мера, что
+	# muzzle, на холсте ряда уровня (tools/building_levels_muzzle.py); нет — вспышка там же, где у 1-го уровня
+	var attack := _level_anim("attack")
+	if attack != "attack":
+		m = sprite.sprite_frames.get_meta("level_muzzle", {}).get(card.building_level, m)
+	return _muzzle_to_world(m)
+
+# Все стволы для залпа (решение пользователя 06.11.2026 «залп из всех стволов»): metadata/level_barrels
+# {уровень: [Vector2, …]} — по стволу на каждую вспышку кадра выстрела (tools/building_levels_muzzle.py),
+# та же мера, что muzzle; нет записи уровня — один ствол _sprite_muzzle
+func _sprite_barrels() -> Array:
+	var points: Array = sprite.sprite_frames.get_meta("level_barrels", {}).get(card.building_level, [])
+	if points.is_empty():
+		return [_sprite_muzzle()]
+	return points.map(func(m): return _muzzle_to_world(m))
+
+# Точка листа (мера muzzle: px холста от центра низа кадра) → мир, с отражением и сдвигом ряда уровня
+func _muzzle_to_world(m: Vector2) -> Vector2:
+	var size := sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
 	var base: Vector2 = sprite.sprite_frames.get_meta("base_point", Vector2(size.x / 2.0, size.y))
 	var p := Vector2(size.x / 2.0 + m.x, size.y + m.y) - base   # muzzle — от центра низа кадра (sheet_to_frames)
-	# вспышка в кадрах уровня — там же на холсте, что у 1-го уровня: ствол едет вместе с рядом уровня
-	p += _level_shift(_level_anim("attack"))
+	p += _level_shift(_level_anim("attack"))   # ствол едет вместе с рядом уровня
 	if aim.x < 0.0:   # выстрел влево — спрайт отразится (play_once), основание на месте
 		p.x = -p.x
 	return to_global(p * _level_k)
@@ -467,7 +499,17 @@ static func draw_ground_shadow(ci: CanvasItem, center: Vector2, width: float) ->
 func _draw_level_pips() -> void:
 	if card.building_level <= 1:
 		return
-	var top = get_occlusion_rect().position.y - global_position.y - LEVEL_PIP_SIZE * 2.0
+	var top: float
+	if sprite:
+		# над моделью, не над холстом кадра (06.11.2026: у кадров уровня над зданием пустой холст — ромбики
+		# висели в воздухе или ложились на соседние здания); высота — по силуэту кадра стойки уровня, раз на ряд
+		var key := "%s|%.4f" % [_level_anim("idle"), _level_k]
+		if key != _pip_key:
+			_pip_key = key
+			_pip_top = -_visual_height()
+		top = _pip_top - LEVEL_PIP_SIZE * 2.0
+	else:
+		top = get_occlusion_rect().position.y - global_position.y - LEVEL_PIP_SIZE * 2.0
 	var x0 = -LEVEL_PIP_GAP * (card.building_level - 1) / 2.0
 	for i in range(card.building_level):
 		var c = Vector2(x0 + i * LEVEL_PIP_GAP, top)
@@ -576,8 +618,14 @@ func effect_text() -> String:
 # OcclusionFader делает здание полупрозрачным, если за ним стоит боец
 func get_occlusion_rect() -> Rect2:
 	if sprite:
-		var size: Vector2 = sprite.sprite_frames.get_frame_texture("idle", 0).get_size() * sprite.scale
-		return Rect2(global_position + sprite.offset * sprite.scale, size)
+		# по силуэту кадра стойки уровня, не по холсту (06.11.2026: холст уровня ×1.6 с пустыми полями — рамка
+		# накрывала бойцов на соседних клетках, и здание гасло на расстановке без причины)
+		var used := _idle_used_rect()
+		if sprite.flip_h:
+			var w := sprite.sprite_frames.get_frame_texture(_level_anim("idle"), 0).get_width()
+			used.position.x = w - used.end.x
+		return Rect2(global_position + sprite.position + (sprite.offset + used.position) * sprite.scale,
+			used.size * sprite.scale)
 	var rect = Rect2()
 	for b in BLOCKS.get(building_type, []):
 		var r = TerrainTiles.block_rect(_block_top(b[1], b[2], b[3]), BLOCK_SCALE)
@@ -609,15 +657,16 @@ func tick(delta: float) -> void:
 	var aim_offset = Vector2(0, -Soldier.TARGET_SPRITE_HEIGHT / 2.0)
 	aim = target.global_position + aim_offset - global_position
 	queue_redraw()
-	var barrel_end = to_global(_block_top(0.5, 0.5, TOWER_LEVELS) + aim.normalized() * BARREL_LENGTH)
+	var barrels := [to_global(_block_top(0.5, 0.5, TOWER_LEVELS) + aim.normalized() * BARREL_LENGTH)]
 	var delay := 0.0
-	if sprite:   # свой спрайт: снаряд из его ствола (на кадре вспышки, если есть ряд attack)
-		barrel_end = _sprite_muzzle()
+	if sprite:   # свой спрайт: снаряд из каждого его ствола (на кадре вспышки, если есть ряд attack)
+		barrels = _sprite_barrels()
 		if play_once("attack"):
 			delay = _shot_delay()
-	var shot = Projectile.launch(get_parent(), SHOOTERS[building_type], barrel_end, target, aim_offset, delay)
-	shot.damage = stats.get("damage", 0.0)
-	shot.stun = stats.get("stun", 0.0)
+	for barrel_end in barrels:   # залп: урон поровну, сумма — как у одного выстрела; оглушение — у каждого
+		var shot = Projectile.launch(get_parent(), SHOOTERS[building_type], barrel_end, target, aim_offset, delay)
+		shot.damage = stats.get("damage", 0.0) / barrels.size()
+		shot.stun = stats.get("stun", 0.0)
 
 func _find_target(attack_range: float) -> Soldier:
 	var best: Soldier = null
@@ -644,22 +693,27 @@ func fire_at(point: Vector2) -> bool:
 	aim = point - global_position
 	queue_redraw()
 	var base = _block_top(0.5, 0.5, ARTILLERY_LEVELS)
-	var muzzle = to_global(base + aim.normalized() * ARTILLERY_BARREL_LENGTH)
+	var barrels := [to_global(base + aim.normalized() * ARTILLERY_BARREL_LENGTH)]
 	var delay := 0.0
 	if sprite:
-		muzzle = _sprite_muzzle()
+		barrels = _sprite_barrels()
 		if play_once("attack"):
 			delay = _shot_delay()
 	var hellfire: bool = card.faction == "chaos"
-	var shot = Projectile.launch(get_parent(), HELLFIRE_PROJECTILE if hellfire else ARTILLERY_PROJECTILE,
-		muzzle, null, point, delay)
-	shot.damage = stats.get("damage", 0.0)
-	shot.splash_radius = stats.get("splash_radius", 0.0)
-	shot.splash_team = GameConstants.TEAM_ENEMY
-	shot.on_impact = _show_explosion
-	shot.impact_vfx = HELLFIRE_IMPACT_VFX if hellfire else ARTILLERY_IMPACT_VFX
-	shot.arc_height = ARTILLERY_ARC
-	_play_fire_animation(muzzle)
+	for i in barrels.size():   # залп: ракета из каждого ствола в ту же точку, урон поровну (сумма прежняя)
+		var shot = Projectile.launch(get_parent(), HELLFIRE_PROJECTILE if hellfire else ARTILLERY_PROJECTILE,
+			barrels[i], null, point, delay)
+		shot.damage = stats.get("damage", 0.0) / barrels.size()
+		shot.splash_radius = stats.get("splash_radius", 0.0)
+		shot.splash_team = GameConstants.TEAM_ENEMY
+		if i == 0:   # взрыв (огонь, дым, обломки), круг и тряска камеры — раз за залп: ракеты ложатся в одну точку
+			shot.on_impact = _show_explosion
+			shot.impact_vfx = HELLFIRE_IMPACT_VFX if hellfire else ARTILLERY_IMPACT_VFX
+		shot.arc_height = ARTILLERY_ARC
+		if delay > Soldier.TIMER_EPSILON and is_inside_tree():   # вспышка — на кадре выстрела листа, когда ствол поднят
+			get_tree().create_timer(delay, false).timeout.connect(_play_fire_animation.bind(barrels[i]))
+		else:
+			_play_fire_animation(barrels[i])
 	return true
 
 # Только вид: вспышка и дым из ствола, ствол откатывается и возвращается

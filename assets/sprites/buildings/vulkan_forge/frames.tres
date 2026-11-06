@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" load_steps=25 format=3]
+[gd_resource type="SpriteFrames" load_steps=57 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle/0.png" id="idle_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle/1.png" id="idle_1"]
@@ -13,6 +13,12 @@
 
 
 
+
+
+
+
+
+
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/0.png" id="idle_2_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/1.png" id="idle_2_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/2.png" id="idle_2_2"]
@@ -21,6 +27,22 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/5.png" id="idle_2_5"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/6.png" id="idle_2_6"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/7.png" id="idle_2_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/8.png" id="idle_2_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/9.png" id="idle_2_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/10.png" id="idle_2_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/11.png" id="idle_2_11"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/12.png" id="idle_2_12"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/13.png" id="idle_2_13"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/14.png" id="idle_2_14"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/15.png" id="idle_2_15"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/16.png" id="idle_2_16"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/17.png" id="idle_2_17"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/18.png" id="idle_2_18"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/19.png" id="idle_2_19"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/20.png" id="idle_2_20"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/21.png" id="idle_2_21"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/22.png" id="idle_2_22"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_2/23.png" id="idle_2_23"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/0.png" id="idle_3_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/1.png" id="idle_3_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/2.png" id="idle_3_2"]
@@ -29,11 +51,27 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/5.png" id="idle_3_5"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/6.png" id="idle_3_6"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/7.png" id="idle_3_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/8.png" id="idle_3_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/9.png" id="idle_3_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/10.png" id="idle_3_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/11.png" id="idle_3_11"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/12.png" id="idle_3_12"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/13.png" id="idle_3_13"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/14.png" id="idle_3_14"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/15.png" id="idle_3_15"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/16.png" id="idle_3_16"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/17.png" id="idle_3_17"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/18.png" id="idle_3_18"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/19.png" id="idle_3_19"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/20.png" id="idle_3_20"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/21.png" id="idle_3_21"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/22.png" id="idle_3_22"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/vulkan_forge/idle_3/23.png" id="idle_3_23"]
 
 [resource]
-metadata/level_shift = {2: Vector2(-29, 5), 3: Vector2(-30, 5)}
-metadata/level_scale = {2: 1.495, 3: 1.380}
-metadata/level_static = ["idle_2", "idle_3"]
+metadata/level_shift = {2: Vector2(-5, 2), 3: Vector2(-11, 0)}
+metadata/level_scale = {2: 1.349, 3: 1.333}
+metadata/level_static = []
 animations = [{
 "frames": [{
 "duration": 1.0,
@@ -88,6 +126,54 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("idle_2_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_11")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_12")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_13")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_14")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_15")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_16")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_17")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_18")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_19")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_20")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_21")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_22")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_23")
 }],
 "loop": true,
 "name": &"idle_2",
@@ -117,6 +203,54 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("idle_3_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_11")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_12")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_13")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_14")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_15")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_16")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_17")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_18")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_19")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_20")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_21")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_22")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_23")
 }],
 "loop": true,
 "name": &"idle_3",

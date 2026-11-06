@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" load_steps=37 format=3]
+[gd_resource type="SpriteFrames" load_steps=53 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/0.png" id="idle_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/1.png" id="idle_1"]
@@ -17,10 +17,24 @@
 
 
 
+
+
+
+
+
+
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/0.png" id="idle_2_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/1.png" id="idle_2_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/2.png" id="idle_2_2"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/3.png" id="idle_2_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/4.png" id="idle_2_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/5.png" id="idle_2_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/6.png" id="idle_2_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/7.png" id="idle_2_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/8.png" id="idle_2_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/9.png" id="idle_2_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/10.png" id="idle_2_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/11.png" id="idle_2_11"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack_2/0.png" id="attack_2_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack_2/1.png" id="attack_2_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack_2/2.png" id="attack_2_2"]
@@ -33,6 +47,14 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_3/1.png" id="idle_3_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_3/2.png" id="idle_3_2"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_3/3.png" id="idle_3_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_3/4.png" id="idle_3_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_3/5.png" id="idle_3_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_3/6.png" id="idle_3_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_3/7.png" id="idle_3_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_3/8.png" id="idle_3_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_3/9.png" id="idle_3_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_3/10.png" id="idle_3_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_3/11.png" id="idle_3_11"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack_3/0.png" id="attack_3_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack_3/1.png" id="attack_3_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack_3/2.png" id="attack_3_2"]
@@ -43,10 +65,11 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack_3/7.png" id="attack_3_7"]
 
 [resource]
-metadata/level_shift = {2: Vector2(-3, 1), 3: Vector2(-13, 0)}
-metadata/level_scale = {2: 1.000, 3: 1.123}
-metadata/level_static = ["idle_2", "attack_2", "idle_3", "attack_3"]
-metadata/muzzle = Vector2(116.8, -340.5)
+metadata/level_muzzle = {2: Vector2(29.0, -241.4), 3: Vector2(64.2, -250.5)}
+metadata/level_shift = {2: Vector2(-4, 1), 3: Vector2(-4, 4)}
+metadata/level_scale = {2: 1.000, 3: 1.000}
+metadata/level_static = ["idle_2", "attack_2"]
+metadata/muzzle = Vector2(18.0, -222.0)
 metadata/shot_frame = 2
 metadata/muzzle_color = Color(1.000, 0.683, 0.028, 1)
 animations = [{
@@ -108,6 +131,30 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("idle_2_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2_11")
 }],
 "loop": true,
 "name": &"idle_2",
@@ -154,6 +201,30 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("idle_3_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3_11")
 }],
 "loop": true,
 "name": &"idle_3",

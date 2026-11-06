@@ -79,7 +79,10 @@ func _main() -> void:
 	_check("щит цитадели в бою — по уровню стены", bm.citadel_shield <= shield_expected + 0.01 \
 		and bm.citadel_shield > 0.0)
 
-	# Неживые ряды уровня (пакет — копии одного кадра) оживляет код: стойка дышит, выстрел — отдача
+	# Неживые ряды уровня (пакет — копии одного кадра) оживляет код: стойка дышит, выстрел — отдача.
+	# У турели с 06.11.2026 ряды уровня живые (свои листы) — неживыми их помечает сам тест, потом метка возвращается
+	var static_was = tower.sprite.sprite_frames.get_meta("level_static", [])
+	tower.sprite.sprite_frames.set_meta("level_static", ["idle_3", "attack_3"])
 	var ys := []
 	for i in 12:
 		ys.append(tower.sprite.scale.y / tower._level_k)
@@ -94,6 +97,7 @@ func _main() -> void:
 		await process_frame
 	_check("неживой ряд уровня: стойка дышит (%.3f..%.3f), выстрел — отдача (%.1f px)" % [ys.min(), ys.max(), kicked],
 		ys.max() - ys.min() > 0.01 and kicked > 1.0)
+	tower.sprite.sprite_frames.set_meta("level_static", static_was)
 
 	bm.stop_battle()
 
