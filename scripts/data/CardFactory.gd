@@ -677,6 +677,23 @@ static func build_pool(faction: String = "") -> Array:
 	pool.append_array(chapter_pool(run_chapter(), faction))
 	return pool
 
+# Тестовый режим (RunManager.test_mode, TestPanel): все разные карты расы — пул магазина без копий + особые
+# отряды и здания всех орденов / богов этой расы; по порядку пула (Common → Rare → Epic), особые — в конце
+static func test_cards(faction: String) -> Array[CardData]:
+	var out: Array[CardData] = []
+	var seen := {}
+	var pool: Array = _chaos_pool() if faction == "chaos" else _space_marine_pool()
+	for c in Chapters.for_faction(faction):
+		for key in ["unit_card", "building_card"]:
+			var special := special_card(c.get(key, ""))
+			if special:
+				pool.append(special)
+	for card in pool:
+		if not seen.has(card.id):
+			seen[card.id] = true
+			out.append(card)
+	return out
+
 # Особые карты ордена / бога (решение пользователя 18.10.2026): юнит (Epic) и здание (Rare) по
 # SPECIAL_COPIES копий — только в магазине забега с этим орденом и только своей расы
 const SPECIAL_COPIES: int = 2

@@ -68,7 +68,7 @@ func delete_save() -> void:
 		print("SaveManager: сохранение удалено")
 
 func save_run() -> bool:
-	if not enabled or RunManager.map == null or RunManager.run_won:
+	if not enabled or RunManager.map == null or RunManager.run_won or RunManager.test_mode:
 		return false
 	var data = {"version": SAVE_VERSION}
 	for system in SYSTEMS:

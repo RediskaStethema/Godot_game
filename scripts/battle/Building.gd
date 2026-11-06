@@ -668,10 +668,17 @@ func tick(delta: float) -> void:
 		shot.damage = stats.get("damage", 0.0) / barrels.size()
 		shot.stun = stats.get("stun", 0.0)
 
+# Стрелки, которые бьют только вперёд — по полю боя (решение пользователя 06.11.2026: бастион Imperial Fists —
+# стена с пушками, не разворачивается к врагам у цитадели и в тылу); цель — не левее здания на экране
+const FORWARD_ONLY = ["fists_bastion"]
+
 func _find_target(attack_range: float) -> Soldier:
 	var best: Soldier = null
 	var best_dist: float = attack_range
+	var forward_only: bool = building_type in FORWARD_ONLY
 	for e in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY):
+		if forward_only and e.global_position.x < global_position.x:
+			continue
 		var d = global_position.distance_to(e.global_position)
 		if d <= best_dist:
 			best_dist = d

@@ -106,6 +106,7 @@ func _on_purchase_requested(slot_index: int) -> void:
 		return
 
 	# Цену (бесплатная карта 1-й волны, скидка Epic) считает ShopManager
+	var from_rect := _slot_face_rect(slot_index)   # до покупки: слот потом пересоберётся
 	var card = ShopManager.try_purchase(slot_index)
 	if not card:
 		AudioManager.play("no_money")
@@ -122,8 +123,26 @@ func _on_purchase_requested(slot_index: int) -> void:
 	_show_message("Куплено: %s" % card.title)
 
 	_refresh_hand()
+	_fly_to_hand(card, from_rect)
 	_populate_shop(ShopManager.current_offers)
 	SaveManager.save_run()
+
+# Лицо карты слота на экране (нет лица — весь слот); не найден — пусто
+func _slot_face_rect(slot_index: int) -> Rect2:
+	for slot in shop_slots.get_children():
+		if slot.get("slot_index") == slot_index:
+			var face: Control = slot.get("_face")
+			return face.get_global_rect() if face else slot.get_global_rect()
+	return Rect2()
+
+# Купленная карта летит из слота в своё место в руке (CardFlight)
+func _fly_to_hand(card: CardData, from_rect: Rect2) -> void:
+	if from_rect.size == Vector2.ZERO:
+		return
+	for node in hand_row.get_children():   # старый ряд ещё в дереве до конца кадра (queue_free) — у подсказки нет meta
+		if not node.is_queued_for_deletion() and node.has_meta("card") and node.get_meta("card") == card:
+			CardFlight.fly(self, card, from_rect, node)
+			return
 
 # -------------------------------------------------------
 # РУКА И ПРОДАЖА

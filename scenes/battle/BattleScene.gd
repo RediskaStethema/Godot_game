@@ -27,6 +27,7 @@ var pause_menu: PauseMenu = null
 var fader: OcclusionFader = null   # прозрачность построек — только на расстановке
 var reticle: ArtilleryReticle = null   # прицел орудия игрока — в бою за курсором
 var hovered_building: Building = null   # здание под курсором (_update_building_hover)
+var test_panel: TestPanel = null   # тестовый режим (RunManager.test_mode): все карты расы, волна, уровень
 const BUILDING_HIGHLIGHT = Color(1.45, 1.2, 0.7)   # здание карты под курсором на скамейке — золотом
 # Скорость боя: Engine.time_scale = базовый × GameSettings.battle_speed, только
 # пока идёт бой; базовый — тот, что был до боя (тесты гоняют с ускорением)
@@ -118,6 +119,8 @@ func _build_ui() -> void:
 	if battle_type != RunMapNode.BATTLE:
 		wave_text += " · " + UITheme.NODE_NAMES.get(battle_type, battle_type)
 	wave_text += " · " + Difficulty.level_name(RunManager.difficulty)
+	if RunManager.test_mode:
+		wave_text += " · ТЕСТ"
 	hud.setup(wave_text, result_label, start_button)
 	hud.set_message("Расставьте отряды")
 	start_button.pressed.connect(_on_start_pressed)
@@ -131,6 +134,8 @@ func _build_ui() -> void:
 	inspector.bottom_limit = func() -> float:
 		return get_viewport().get_visible_rect().size.y - (UITheme.BENCH_PEEK if is_placement_phase else 0.0)
 	$UI.add_child(inspector)
+	if RunManager.test_mode:
+		_build_test_panel()
 	pause_menu = PauseMenu.new()
 	add_child(pause_menu)
 	# Камера мышью — отдельным узлом, работает и на паузе (пробел — осмотреть поле)
@@ -192,10 +197,13 @@ func _get_play_area() -> Rect2:
 	var screen = get_viewport_rect().size
 	var top = UITheme.HUD_HEIGHT
 	var bottom = screen.y
+	var left := 0.0
 	if is_placement_phase:
 		bottom -= UITheme.BENCH_PEEK
-	return Rect2(PLAY_AREA_MARGIN, top + PLAY_AREA_MARGIN,
-		screen.x - PLAY_AREA_MARGIN * 2.0, bottom - top - PLAY_AREA_MARGIN * 2.0)
+		if test_panel:   # поле — правее панели тестового режима
+			left = TestPanel.WIDTH + TestPanel.MARGIN
+	return Rect2(left + PLAY_AREA_MARGIN, top + PLAY_AREA_MARGIN,
+		screen.x - left - PLAY_AREA_MARGIN * 2.0, bottom - top - PLAY_AREA_MARGIN * 2.0)
 
 func _fit_camera(animate: bool) -> void:
 	camera.fit(iso_grid.get_world_bounds(), _get_play_area(), is_placement_phase, animate)
@@ -470,7 +478,11 @@ func _play_squad_card(card: CardData, tile: Vector2i) -> bool:
 	var unit_data = UnitFactory.create(card.unit_factory_id)
 	unit_data.squad_size = card.unit_count
 	unit_data.squad_growth = UnitFactory.squad_growth_for(card)
-	_materialize(_spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, card.unit_count))
+	var squad := _spawn_squad(unit_data, GameConstants.TEAM_PLAYER, tile, card.unit_count)
+	if RunManager.test_mode:   # тест: отряд сразу нужного уровня (как слиянием — с пополнением бойцов)
+		for i in RunManager.test_level:
+			squad.merge_upgrade()
+	_materialize(squad)
 	return true
 
 # Улучшение бросают НА свой отряд
@@ -551,6 +563,9 @@ func _play_building_card(card: CardData, tile: Vector2i) -> bool:
 	if _is_tile_occupied(tile):
 		_show_message("Тайл занят")
 		return false
+	if RunManager.test_mode:   # тест: здание сразу нужного уровня
+		while card.building_level < 1 + RunManager.test_level and card.level_up_building():
+			pass
 	_materialize(_spawn_building(card, tile))
 	BattleManager.player_buildings[card] = tile
 	_show_message("Построено: %s" % card.title)
@@ -771,6 +786,9 @@ func _on_start_pressed(deploy: bool = true) -> void:
 	# бойцов только на этот бой и исказили бы доли HP
 	BattleManager.battle_in_progress = true
 	_save_placement()
+	if RunManager.test_mode:   # после боя — та же расстановка
+		RunManager.test_snapshot = BattleManager.save_state()
+		test_panel.visible = false
 	# Бой: прячем скамейку, камера отъезжает на всё поле
 	bench.visible = false
 	_fit_camera(true)
@@ -899,6 +917,9 @@ func _on_battle_ended(winner_team: int) -> void:
 	_battle_resolved = true
 	BattleManager.battle_in_progress = false
 	_restore_time_scale()
+	if RunManager.test_mode:
+		_end_test_battle(winner_team)
+		return
 	if BattleManager.citadel_hp <= 0:
 		_end_run(false, "Цитадель пала!")
 		return
@@ -1100,3 +1121,72 @@ func _update_synergy_preview() -> void:
 func _show_message(text: String) -> void:
 	print("BattleScene: ", text)
 	hud.set_message(text)
+
+# -------------------------------------------------------
+# ТЕСТОВЫЙ РЕЖИМ (RunManager.test_mode, решение пользователя 06.11.2026)
+# -------------------------------------------------------
+const TEST_RESULT_TIME: float = 3.0   # сек после итога — назад к расстановке
+
+func _build_test_panel() -> void:
+	test_panel = TestPanel.new()
+	$UI.add_child(test_panel)
+	test_panel.setup(RunManager.player_faction)
+	test_panel.card_picked.connect(_on_test_card_picked)
+	test_panel.wave_changed.connect(func(wave):
+		RunManager.test_wave = wave
+		_reload_test_placement())
+	test_panel.type_changed.connect(func(kind):
+		RunManager.test_battle_type = kind
+		_reload_test_placement())
+	test_panel.level_changed.connect(func(level): _show_message("Из панели: отряды ур.%d, здания ур.%d" % [level, mini(1 + level, CardData.MAX_BUILDING_LEVEL)]))
+	test_panel.clear_pressed.connect(_on_test_clear)
+
+# Карта из панели — в руку бесплатно (лимит руки тот же)
+func _on_test_card_picked(card_id: String) -> void:
+	if not is_placement_phase:
+		return
+	if bench.bench_cards.size() >= BattleManager.MAX_HAND_SIZE:
+		_show_message("Рука полна (%d) — сыграйте карту" % BattleManager.MAX_HAND_SIZE)
+		return
+	var card := CardFactory.create(card_id)
+	if card == null:
+		return
+	bench.bench_cards.append(card)
+	bench._populate()
+	_show_message("В руке: %s" % card.title)
+
+# Волна или тип боя сменились — поле как есть, враги — новые (сцена заново)
+func _reload_test_placement() -> void:
+	BattleManager.sync_army_from_squads(SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
+	RunManager.reload_test_battle()
+
+func _on_test_clear() -> void:
+	BattleManager.player_units.clear()
+	BattleManager.player_placements.clear()
+	BattleManager.player_buildings.clear()
+	BattleManager.armed_events.clear()
+	BattleManager.armed_tiles.clear()
+	RunManager.reload_test_battle()
+
+# Итог боя в тесте: баннер и итоги, без дохода, шага забега, меты и сохранения; затем расстановка как до боя
+func _end_test_battle(winner_team: int) -> void:
+	var alive_at_end := SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER).filter(func(s): return not s.charmed).size()
+	var won := winner_team == GameConstants.TEAM_PLAYER
+	hud.show_result(_result_title(winner_team), _battle_summary(alive_at_end), won)
+	hud.set_message("Тест: через %d с — снова расстановка" % int(TEST_RESULT_TIME))
+	_play_finale_slowmo()
+	SquadRegistry.clear()
+	SoldierRegistry.clear()
+	get_tree().create_timer(TEST_RESULT_TIME, false).timeout.connect(_restore_test_field)
+
+func _restore_test_field() -> void:
+	if not RunManager.test_mode or not is_inside_tree():   # за 3 с ушли в меню — тест окончен, поле не возвращать
+		return
+	if not RunManager.test_snapshot.is_empty():
+		BattleManager.player_units.clear()
+		BattleManager.player_placements.clear()
+		BattleManager.player_buildings.clear()
+		BattleManager.load_state(RunManager.test_snapshot)
+	BattleManager.battle_in_progress = false
+	BattleManager.citadel_hp = BattleManager.CITADEL_MAX_HP
+	RunManager.reload_test_battle()

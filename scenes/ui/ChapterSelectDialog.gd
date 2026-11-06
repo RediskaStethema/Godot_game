@@ -11,8 +11,10 @@ const CARD_PADDING: float = 10.0
 signal chosen(chapter: String)
 
 var _chosen: bool = false   # двойной клик в одном кадре не запустит забег дважды
+var all_open: bool = false  # тестовый режим: открыты все ордены / боги, мета-прогрессия не держит
 
-func setup(faction: String = Chapters.FACTION) -> void:
+func setup(faction: String = Chapters.FACTION, open_all: bool = false) -> void:
+	all_open = open_all
 	close_on_cancel = true
 	build_frame(860.0)
 	var text: Array = Chapters.SELECT_TEXT.get(faction, Chapters.SELECT_TEXT[Chapters.FACTION])
@@ -36,7 +38,7 @@ func _make_card(c: Dictionary) -> Control:
 	var card = Button.new()
 	card.name = "Chapter_" + c["id"]
 	card.custom_minimum_size = CARD_SIZE
-	var open := MetaProgress.is_chapter_unlocked(c["id"])
+	var open := _is_open(c["id"])
 	card.disabled = not open
 	card.theme_type_variation = "SelectCard"
 	card.pressed.connect(choose.bind(c["id"]))
@@ -89,8 +91,11 @@ func _wrapped_label(text: String, variation: String) -> Label:
 	return l
 
 func choose(chapter: String) -> void:
-	if _chosen or Chapters.get_chapter(chapter).is_empty() or not MetaProgress.is_chapter_unlocked(chapter):
+	if _chosen or Chapters.get_chapter(chapter).is_empty() or not _is_open(chapter):
 		return
 	_chosen = true
 	emit_signal("chosen", chapter)
 	close()
+
+func _is_open(chapter: String) -> bool:
+	return all_open or MetaProgress.is_chapter_unlocked(chapter)

@@ -1,0 +1,147 @@
+extends SceneTree
+
+# Тестовый режим (решение пользователя 06.11.2026): кнопка в меню только в сборке для разработки, сразу
+# расстановка с панелью всех карт расы (+ особые всех орденов), королевство 4×4, уровень из панели,
+# волна и тип боя на выбор, цитадель не падает, после боя — та же расстановка, без сохранения.
+#   godot --headless --path . -s tests/test_mode.gd
+const SAVE_PATH = "user://_test_mode_save.json"
+
+var bm
+var rm
+
+func _initialize() -> void:
+	root.get_node("SaveManager").enabled = false
+	root.get_node("GameSettings").battle_speed = 1.0
+	bm = root.get_node("BattleManager")
+	rm = root.get_node("RunManager")
+	_main()
+
+func _check(label: String, ok: bool) -> void:
+	print("%s %s" % ["PASS" if ok else "FAIL", label])
+
+func _frames(n: int) -> void:
+	for i in n:
+		await process_frame
+
+func _scene():
+	await _frames(3)
+	return current_scene
+
+func _player_squads() -> Array:
+	return root.get_node("SquadRegistry").get_alive_squads_of_team(0)
+
+func _main() -> void:
+	await process_frame
+	# 1. Меню: кнопка есть в сборке для разработки
+	var menu = load("res://scenes/menu/MainMenu.tscn").instantiate()
+	root.add_child(menu)
+	await process_frame
+	var button = menu.find_child("TestModeButton", true, false)
+	_check("меню: кнопка «ТЕСТОВЫЙ РЕЖИМ» в сборке для разработки (debug %s)" % OS.is_debug_build(),
+		(button != null) == OS.is_debug_build())
+	menu.queue_free()
+
+	# 2. Вход: сразу расстановка, панель, королевство 4×4, рука пуста; карты — все расы и особые всех орденов
+	rm.start_test_mode("space_marines", "ultramarines")
+	var scene = await _scene()
+	var panel = scene.get("test_panel")
+	var ids: Array = CardFactory.ids_of(CardFactory.test_cards("space_marines"))
+	var specials := ["honour_guard", "sanguinary_guard", "centurion_devastators", "thunderwolf_cavalry", "firedrakes",
+		"codex_bastion", "blood_chalice", "fists_bastion", "wolf_totem", "vulkan_forge"]
+	var all_special := specials.all(func(id): return id in ids)
+	var unique := ids.size() == {}.merged(_as_set(ids)).size()
+	_check("вход: расстановка с панелью, королевство %d клеток, рука пуста; карт %d без повторов, особые всех орденов, Хаоса нет" % [
+		bm.kingdom_tiles.size(), ids.size()], scene.get("is_placement_phase") and panel != null
+		and bm.kingdom_tiles.size() == 16 and bm.pending_cards.is_empty() and all_special and unique
+		and not ("chaos_marines" in ids) and "bolter_turret" in ids and "iron_halo" in ids)
+
+	var chaos_ids: Array = CardFactory.ids_of(CardFactory.test_cards("chaos"))
+	_check("набор Хаоса: свои отряды и здания, особые всех богов, благословения; карт Космодесанта нет (%d карт)" % chaos_ids.size(),
+		["chaos_marines", "hellbrute", "heretic_autocannon", "khorne_berzerkers", "rubric_marines", "warp_spire",
+		"plague_cauldron", "blessing_khorne", "chaos_gods_blessing"].all(func(id): return id in chaos_ids)
+		and not ("tactical_squad" in chaos_ids) and not ("honour_guard" in chaos_ids))
+
+	# 3. Карта из панели — в руку; уровень 3 — отряд и здание сразу 3-го уровня
+	panel.card_picked.emit("tactical_squad")
+	panel.card_picked.emit("bolter_turret")
+	var in_hand: int = scene.bench.bench_cards.size()
+	panel._set_level(3)   # 3 улучшения: отряд ур.3, здание ур.3 (предел)
+	var squad_card: CardData = scene.bench.bench_cards[0]
+	var turret_card: CardData = scene.bench.bench_cards[1]
+	var ok_s: bool = scene._play_squad_card(squad_card, Vector2i(3, 1))
+	var ok_b: bool = scene._play_building_card(turret_card, Vector2i(0, 0))
+	await _frames(2)
+	var squad = scene._get_player_squad_at(Vector2i(3, 1))
+	var turret = scene._get_player_building_at(Vector2i(0, 0))
+	_check("панель → рука (%d), уровень 3: отряд ур.%d (%d бойцов), турель ур.%d" % [in_hand,
+		squad.data.squad_level if squad else 0, squad.soldiers.size() if squad else 0, turret.card.building_level if turret else 0],
+		in_hand == 2 and ok_s and ok_b and squad != null and squad.data.squad_level == 3 and turret != null
+		and turret.card.building_level == 3 and turret.sprite != null and turret.sprite.animation == &"idle_3")
+	scene._consume_bench_card(squad_card)
+	scene._consume_bench_card(turret_card)
+
+	# 4. Волна и тип боя: сцена заново, армия на месте, враги новой волны
+	panel.wave_changed.emit(10)
+	scene = await _scene()
+	panel = scene.get("test_panel")
+	panel.type_changed.emit("boss")
+	scene = await _scene()
+	var squad2 = scene._get_player_squad_at(Vector2i(3, 1))
+	_check("волна 10, бой с боссом: сцена заново, отряд ур.3 на месте, турель стоит",
+		scene.get("battle_wave") == 10 and scene.get("battle_type") == "boss" and squad2 != null
+		and squad2.data.squad_level == 3 and scene._get_player_building_at(Vector2i(0, 0)) != null)
+
+	# 5. Без сохранения: даже с включённым SaveManager файл не пишется
+	var sm = root.get_node("SaveManager")
+	var old_path: String = sm.save_path
+	sm.save_path = SAVE_PATH
+	sm.enabled = true
+	var saved: bool = sm.save_run()
+	sm.enabled = false
+	sm.save_path = old_path
+	_check("сохранение в тесте не пишется", not saved and not FileAccess.file_exists(SAVE_PATH))
+
+	# 6. Бой: цитадель не падает; итог — та же расстановка, цитадель целая
+	scene._play_building_card(CardFactory.create("fists_bastion"), Vector2i(1, 0))
+	scene._on_start_pressed(false)
+	await _frames(2)
+	# Бастион бьёт только вперёд: враги левее (у цитадели, в тылу) — не цель, разворота нет
+	var bastion = scene._get_player_building_at(Vector2i(1, 0))
+	var enemies: Array = root.get_node("SoldierRegistry").get_alive_soldiers_of_team(1).duplicate()
+	var saved_pos := enemies.map(func(e): return e.global_position)
+	for e in enemies:
+		e.global_position = bastion.global_position + Vector2(-200, 40)
+	var behind = bastion._find_target(INF)
+	enemies[0].global_position = bastion.global_position + Vector2(300, -60)
+	var ahead = bastion._find_target(INF)
+	for i in enemies.size():
+		enemies[i].global_position = saved_pos[i]
+	_check("бастион: враги позади (у цитадели) — не цель, впереди — цель", behind == null and ahead == enemies[0])
+	bm.damage_citadel(100000.0)
+	var hp_in_battle: float = bm.citadel_hp
+	bm.surrender()
+	await create_timer(scene.TEST_RESULT_TIME + 0.6).timeout
+	scene = await _scene()
+	var squad3 = scene._get_player_squad_at(Vector2i(3, 1))
+	_check("цитадель не падает (%.0f HP), после боя — расстановка как до боя, цитадель целая, панель на месте" % hp_in_battle,
+		hp_in_battle >= 1.0 and scene.get("is_placement_phase") and scene.get("test_panel") != null
+		and squad3 != null and squad3.data.squad_level == 3 and bm.citadel_hp == bm.CITADEL_MAX_HP
+		and not bm.battle_in_progress and rm.test_mode)
+
+	# 7. Очистить поле
+	scene.get("test_panel").clear_pressed.emit()
+	scene = await _scene()
+	_check("«Очистить поле»: ни отрядов, ни зданий", _player_squads().is_empty() and bm.player_buildings.is_empty())
+
+	# 8. В главное меню — тест закончен, армия тестовая сброшена
+	rm.goto_main_menu()
+	await _frames(3)
+	_check("в меню: тестовый режим выключен, армия сброшена", not rm.test_mode and bm.player_units.is_empty()
+		and bm.kingdom_tiles.size() == 9)
+	quit()
+
+static func _as_set(a: Array) -> Dictionary:
+	var d := {}
+	for x in a:
+		d[x] = true
+	return d

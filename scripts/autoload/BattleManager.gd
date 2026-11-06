@@ -273,6 +273,8 @@ func damage_citadel(amount: float) -> void:
 	var absorbed = minf(citadel_shield, amount)
 	citadel_shield -= absorbed
 	citadel_hp = maxf(citadel_hp - (amount - absorbed), 0.0)
+	if RunManager.test_mode:   # тестовый режим: цитадель не падает
+		citadel_hp = maxf(citadel_hp, 1.0)
 	emit_signal("citadel_hp_changed", citadel_hp)
 	if citadel_hp <= 0.0:
 		print("BattleManager: цитадель пала")

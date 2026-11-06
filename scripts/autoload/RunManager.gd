@@ -37,12 +37,48 @@ var player_chapter: String = ""
 # Уровень сложности забега (Difficulty, 1..COUNT) — выбирается после ордена, новый забег его не сбрасывает
 var difficulty: int = Difficulty.DEFAULT
 
+# Тестовый режим (решение пользователя 06.11.2026, только в сборке для разработки — OS.is_debug_build):
+# сразу расстановка, панель со всеми картами расы (TestPanel), волна и тип боя на выбор, цитадель не падает,
+# королевство 4×4; после боя — та же расстановка (test_snapshot), без сохранения, Славы и открытий меты
+var test_mode: bool = false
+var test_wave: int = 1
+var test_battle_type: String = RunMapNode.BATTLE
+var test_level: int = 0                 # улучшений у отрядов (ур.N) и зданий (ур. 1 + N) из панели
+var test_snapshot: Dictionary = {}      # BattleManager.save_state() перед «В БОЙ» — после боя поле как было
+
+static func test_mode_available() -> bool:
+	return OS.is_debug_build()
+
+# Вход в тестовый режим: раса и орден выбраны в главном меню
+func start_test_mode(faction: String, chapter: String) -> void:
+	player_faction = faction
+	BattleManager.reset_run()
+	BattleManager.pending_cards.clear()   # без стартовой карты меты
+	player_chapter = chapter
+	test_mode = true
+	test_wave = 1
+	test_battle_type = RunMapNode.BATTLE
+	test_level = 0
+	test_snapshot = {}
+	BattleManager.kingdom_tiles.clear()
+	for row in IsoGrid.MAX_KINGDOM_SIZE.y:   # 4×4 = MAX_KINGDOM_TILES: расширять некуда
+		for col in IsoGrid.MAX_KINGDOM_SIZE.x:
+			BattleManager.kingdom_tiles.append(Vector2i(col, row))
+	get_tree().change_scene_to_file(BATTLE_SCENE)
+
+# Тестовый режим: новая расстановка (волна / тип боя сменились, бой кончился) — сцена боя заново
+func reload_test_battle() -> void:
+	get_tree().paused = false
+	BattleManager.stop_battle()
+	get_tree().change_scene_to_file(BATTLE_SCENE)
+
 func new_run(seed_value: int = 0) -> void:
 	if seed_value != 0:
 		rng.seed = seed_value
 	else:
 		rng.randomize()
 	map = RunMapData.generate(rng)
+	test_mode = false
 	current_node_id = -1
 	current_completed = true
 	run_won = false
@@ -106,12 +142,20 @@ func advance() -> void:
 # отряды удалённой сцены
 func goto_main_menu() -> void:
 	get_tree().paused = false
+	if test_mode:   # тест не продолжается: армия и поле — тестовые
+		test_mode = false
+		test_snapshot = {}
+		BattleManager.reset_run()
+		player_chapter = ""
 	BattleManager.stop_battle()
 	get_tree().change_scene_to_file(MENU_SCENE)
 
 # Сдача вне схватки (магазин, расстановка, итог боя) — конец забега без экрана
 # итога: сохранение удаляется, в главное меню. В схватке — BattleManager.surrender()
 func abandon_run() -> void:
+	if test_mode:   # «Сдаться» в тесте — просто выход: ни Славы, ни сохранения
+		goto_main_menu()
+		return
 	MetaProgress.on_run_end(false)   # сдача — тоже конец забега: Слава за пройденное
 	SaveManager.delete_save()
 	goto_main_menu()
@@ -171,12 +215,16 @@ func load_state(d: Dictionary) -> void:
 # -------------------------------------------------------
 # Тип текущего боя; если BattleScene запущена напрямую — обычный бой
 func get_battle_type() -> String:
+	if test_mode:
+		return test_battle_type
 	var node = get_current_node()
 	if node and node.is_battle() and not current_completed:
 		return node.type
 	return RunMapNode.BATTLE
 
 func get_battle_wave() -> int:
+	if test_mode:
+		return test_wave
 	var node = get_current_node()
 	if node and node.is_battle() and not current_completed:
 		return node.wave

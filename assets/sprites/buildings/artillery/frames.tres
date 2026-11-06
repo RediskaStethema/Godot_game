@@ -68,7 +68,7 @@
 metadata/level_muzzle = {2: Vector2(131.3, -179.3), 3: Vector2(123.1, -174.3)}
 metadata/level_barrels = {1: [Vector2(110.4, -177.4), Vector2(118.5, -147.5)], 2: [Vector2(132.7, -204.3), Vector2(133.8, -159.0)], 3: [Vector2(119.3, -222.9), Vector2(123.5, -189.0), Vector2(127.5, -152.4)]}
 metadata/level_shift = {2: Vector2(-8, 0), 3: Vector2(-2, 0)}
-metadata/level_scale = {2: 1.000, 3: 1.000}
+metadata/level_scale = {2: 0.982, 3: 1.000}
 metadata/level_static = []
 metadata/muzzle = Vector2(114.4, -150.0)
 metadata/shot_frame = 0

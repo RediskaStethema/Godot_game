@@ -50,6 +50,10 @@ func _build_layout() -> void:
 	var arsenal = _make_button("АРСЕНАЛ", "icon_skull", _on_arsenal_pressed)
 	arsenal.name = "ArsenalButton"
 	col.add_child(arsenal)
+	if RunManager.test_mode_available():   # тестовый режим — только в сборке для разработки
+		var test = _make_button("ТЕСТОВЫЙ РЕЖИМ", "icon_skull", _on_test_mode_pressed)
+		test.name = "TestModeButton"
+		col.add_child(test)
 	col.add_child(_make_button("НАСТРОЙКИ", "icon_settings", _on_settings_pressed))
 	col.add_child(_make_button("ВЫХОД", "icon_quit", _on_quit_pressed))
 
@@ -209,6 +213,21 @@ func _start_new_run(faction: String, chapter: String, level: int) -> void:
 	RunManager.difficulty = level
 	SaveManager.delete_save()
 	RunManager.advance()
+
+# Тестовый режим (решение пользователя 06.11.2026): раса → орден / бог (все открыты) → сразу расстановка;
+# сохранение забега не трогается
+func _on_test_mode_pressed() -> void:
+	var dialog = RaceSelectDialog.new()
+	add_child(dialog)
+	dialog.setup()
+	dialog.chosen.connect(func(faction):
+		if not Chapters.has_chapters(faction):
+			RunManager.start_test_mode(faction, "")
+			return
+		var chapters = ChapterSelectDialog.new()
+		add_child(chapters)
+		chapters.setup(faction, true)
+		chapters.chosen.connect(func(chapter): RunManager.start_test_mode(faction, chapter)))
 
 func _on_arsenal_pressed() -> void:
 	var dialog = ArsenalDialog.new()

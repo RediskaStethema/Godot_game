@@ -67,7 +67,7 @@
 [resource]
 metadata/level_muzzle = {2: Vector2(29.0, -241.4), 3: Vector2(64.2, -250.5)}
 metadata/level_shift = {2: Vector2(-4, 1), 3: Vector2(-4, 4)}
-metadata/level_scale = {2: 1.000, 3: 1.000}
+metadata/level_scale = {2: 1.000, 3: 0.977}
 metadata/level_static = ["idle_2", "attack_2"]
 metadata/muzzle = Vector2(18.0, -222.0)
 metadata/shot_frame = 2

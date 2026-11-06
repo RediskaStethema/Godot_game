@@ -70,7 +70,7 @@
 
 [resource]
 metadata/level_shift = {2: Vector2(-5, 2), 3: Vector2(-11, 0)}
-metadata/level_scale = {2: 1.349, 3: 1.333}
+metadata/level_scale = {2: 1.103, 3: 1.136}
 metadata/level_static = []
 animations = [{
 "frames": [{
