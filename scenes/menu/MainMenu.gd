@@ -16,7 +16,7 @@ const ART_DIR = "res://assets/ui/menu/"
 const MenuSceneArt = preload("res://scenes/menu/MenuSceneArt.gd")
 const MenuStarfield = preload("res://scenes/menu/MenuStarfield.gd")
 # Туманности за меню: [цвет (альфа — сила), центр, радиус — доли экрана]
-# Решение пользователя 08.11.2026 (образец assets/FInalUI/exampel.png): фон — почти чёрный космос без туманностей
+# Решение пользователя 08.11.2026 (образец assets/source_sheets/FInalUI/exampel.png): фон — почти чёрный космос без туманностей
 # (были NEBULA_BLUE в 0.22, 0.3 и NEBULA_WARP в 0.48, 0.85); вернуть — записи сюда
 const NEBULAE = []
 # Аквила над названием (решение пользователя 07.11.2026: logo_eagle 152×56 — мутная вырезка старого листа,
@@ -116,9 +116,6 @@ func _build_layout() -> void:
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	info_label.add_theme_color_override("font_color", UITheme.MENU_AMBER)
 	col.add_child(info_label)
-
-func _new_run_button() -> Button:
-	return find_child("NewRunButton", true, false)
 
 # Фон: космос (решение пользователя 06.11.2026) — чуть светлее за меню, к сцене справа — глубина космоса,
 # ровно цвет растворения сцены (без шва)

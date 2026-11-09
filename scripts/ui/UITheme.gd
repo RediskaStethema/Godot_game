@@ -44,7 +44,6 @@ const NODE_NAMES = {
 
 # Высота HUD сверху и панели скамейки снизу (бой) — сетки ставятся между ними
 const HUD_HEIGHT: float = 60.0
-const BENCH_HEIGHT: float = 176.0   # панель синергий на расстановке
 const BENCH_PEEK: float = 90.0      # видимая часть карт руки на расстановке (Bench) — камера вписывает поле выше
 
 # Текстуры интерфейса — лист assets/source_sheets/UI_assets.png, нарезка tools/ui_from_sheet.py. Поля 9-slice:
@@ -223,9 +222,7 @@ static func _build() -> Theme:
 # золотая окантовка с подсветкой
 # -------------------------------------------------------
 const MENU_BG       = BG_DEEP
-const MENU_BG_LIGHT = BG_MID
 const MENU_STEEL    = GOLD_DIM
-const MENU_TEXT     = Color("b9c0c8")
 const MENU_AMBER    = GOLD_BRIGHT
 const MENU_AMBER_DIM = Color("a8742a")
 
@@ -707,9 +704,8 @@ static func make_portrait_frame(card: CardData, height: float, framed: bool = fa
 		frame.add_child(l)
 	return frame
 
-# Рамка редкости (текстура 448 px по ширине, ширина / высота RARITY_FRAME_ASPECT): проём под портрет —
+# Рамка редкости (текстура 448 px по ширине, ширина / высота ≈ 1.17): проём под портрет —
 # доли окна от краёв (лево, верх, право, низ), чуть заходит под брусья
-const RARITY_FRAME_ASPECT: float = 1.17
 const RARITY_FRAME_OPENING = Vector4(0.19, 0.2, 0.19, 0.24)
 
 # Грунт поля расы игрока для фона портрета: середина верхней грани ромба плиты королевства

@@ -265,4 +265,15 @@ func _main() -> void:
 	corpse = corpse and is_instance_valid(mort2)
 	_check("вид смерти: вспышка снята, свет не белит павшего, лужа не за спрайтом, тело лежит после ряда",
 		no_flash and unlit and not pool_child and corpse)
+
+	# Сдача в миг смерти примарха (ревью 09.11.2026): итог не откладывается — иначе уход в меню стирал его,
+	# забег не заканчивался и «Продолжить» возвращало в бой
+	scene.set("_battle_resolved", false)
+	scene.set("_boss_fall_base", Engine.time_scale)
+	Engine.time_scale = Engine.time_scale * scene.BOSS_FALL_SLOWMO
+	bm.surrendered = true
+	scene._on_battle_ended(1)
+	_check("сдача во время смерти босса: итог сразу, замедление снято",
+		scene.get("_battle_resolved") and scene.get("_boss_fall_base") <= 0.0 and scene.get("_deferred_winner") == -2)
+	bm.surrendered = false
 	quit()

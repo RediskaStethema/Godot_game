@@ -105,6 +105,8 @@ const LIGHT_GAIN: float = 0.9
 static var _lights: Array = []
 # Огни-ориентиры (костёр, жаровня): [точка мира, радиус, фаза мерцания] — тени от огня (SoldierShadows, 09.11.2026)
 static var _fires: Array = []
+# Случайность вида (бурление реки) — своя: общий randf — случайность боя (урон, цели), ревью 09.11.2026
+static var _fx_rng := RandomNumberGenerator.new()
 # Вспышки света (решение пользователя 08.11.2026, только вид): выстрел, разрыв, молния, взрыв техники на миг
 # освещают землю (слой _flash_layer с ADD) и бойцов рядом (Soldier.add_flash_light — каждому в радиусе, гаснет у
 # него сам). Не больше MAX_FLASHES живых; без поля (тесты) и без «Атмосферы» — нет
@@ -193,10 +195,10 @@ func _tick_river_splash(delta: float) -> void:
 	_splash_left -= delta
 	if _splash_left > 0.0 or not _layout.has("rivers") or _layout["rivers"].is_empty():
 		return
-	_splash_left = RIVER_SPLASH_EVERY * randf_range(0.5, 1.5)
+	_splash_left = RIVER_SPLASH_EVERY * _fx_rng.randf_range(0.5, 1.5)
 	var cells: Array = _layout["rivers"].keys()
-	var c: Vector2i = cells[randi() % cells.size()]
-	var jitter := Vector2(randf_range(-20.0, 20.0), randf_range(-8.0, 8.0))
+	var c: Vector2i = cells[_fx_rng.randi() % cells.size()]
+	var jitter := Vector2(_fx_rng.randf_range(-20.0, 20.0), _fx_rng.randf_range(-8.0, 8.0))
 	var v := Vfx.spawn(self, "river_splash", to_global(grid.lattice_to_screen(c.x, c.y) + jitter))
 	if v:
 		v.z_index = 0   # на воде, под бойцами (Vfx.spawn ставит поверх)

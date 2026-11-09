@@ -101,6 +101,8 @@ var current_state: State = State.IDLE
 var previous_state: State = State.IDLE
 var attack_timer: float = 0.0
 var attack_stagger: float = 0.0   # доля сдвига первого удара [0, 1) — номер бойца в отряде
+const VISION_EVERY: int = 2       # марш: поиск врага в поле зрения раз в столько тиков (Soldier._state_move)
+var _vision_wait: int = -1        # тиков до следующего поиска; −1 — сдвиг ещё не задан (по attack_stagger)
 var cast_timer: float = 0.0
 var _hit_timer: float = 0.0       # до удара ближнего боя на кадре hit_frame (0 — удара не ждём)
 var _hit_target: Soldier = null
@@ -522,11 +524,13 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_light_left -= delta
+	var flashing := _flash_light_left > 0.0
+	if flashing:   # вспышка гаснет каждый кадр, и в кадр пересчёта отсвета (было: этот кадр пропускала)
+		_flash_light_left -= delta
 	if _light_left <= 0.0:
 		_light_left = LIGHT_EVERY
 		_update_light()
-	elif _flash_light_left > 0.0:
-		_flash_light_left -= delta
+	elif flashing:
 		_apply_light()
 	if _flash_left > 0.0:
 		_flash_left -= delta
@@ -850,6 +854,9 @@ func _tick_special(delta: float) -> void:
 			var t := clampf(1.0 - _special_release / maxf(_special_wind, GameConstants.FIXED_TICK), 0.0, 1.0)
 			global_position = _special_from.lerp(_special_to, t)
 			_moved = true
+			# рывок / прыжок примарха за тик дальше GRID_SLACK (special_range до 280, замах короче 0.5 с) —
+			# сетка поиска ближайших пересобирается (ревью 09.11.2026)
+			SoldierRegistry.invalidate_grid()
 		if _special_release <= TIMER_EPSILON:
 			_special_release = 0.0
 			global_position = _special_to
@@ -1096,11 +1103,21 @@ func _state_move(delta: float) -> void:
 			_play_animation("idle")
 		return
 
-	# Враг в поле зрения — поиск по сетке реестра; отряд уже проверил, что врагов рядом нет, — не ищем
-	if not (parent_squad and parent_squad.enemy_out_of_sight) 			and SoldierRegistry.find_nearest(1 - team, global_position, data.vision_range):
-		target = _find_target()
-		transition_to(State.CHASE)
-		return
+	# Враг в поле зрения — поиск по сетке реестра; отряд уже проверил, что врагов рядом нет, — не ищем.
+	# Обзор — раз в VISION_EVERY тиков вразнобой по номеру в отряде (профиль 09.11.2026: на первом тике боя все
+	# ~300 бойцов искали разом — выброс тика 25 мс); реакция позже не больше чем на (VISION_EVERY − 1) тик
+	if _vision_wait < 0:
+		_vision_wait = int(attack_stagger * VISION_EVERY) + 1   # половина отряда смотрит в этот тик, половина — в следующий
+	_vision_wait -= 1
+	if _vision_wait <= 0 and not (parent_squad and parent_squad.enemy_out_of_sight):
+		_vision_wait = VISION_EVERY
+		var seen := SoldierRegistry.find_nearest(1 - team, global_position, data.vision_range)
+		if seen:
+			# Ближайший в поле зрения — он же ближайший на всём поле: для цели «ближайший» второй поиск по сетке
+			# (без радиуса — шире) не нужен (09.11.2026: на первом тике боя ~280 переходов MOVE → CHASE разом)
+			target = seen if data.priority == GameConstants.PRIORITY_NEAREST else _find_target()
+			transition_to(State.CHASE)
+			return
 
 	var center = SoldierRegistry.get_team_center(1 - team)
 	# Марш строем (как в 9 Kings): цель каждого бойца — центр врага + его
@@ -1839,7 +1856,7 @@ func _tick_status_effects(delta: float) -> void:
 func _sync_status_vfx() -> void:
 	var mask := 0
 	for i in STATUS_BODY.size():
-		if status_effects.has(STATUS_BODY[i][0]) or (enraged and STATUS_BODY[i][0] == StatusEffects.EMPOWERED):
+		if status_effects.has(STATUS_BODY[i][0]) or (enraged and current_state != State.DEAD 				and STATUS_BODY[i][0] == StatusEffects.EMPOWERED):
 			mask |= 1 << i   # ярость босса — тело тлеет, как под усилением
 	if mask != _status_mask and _base_material != null:
 		_status_mask = mask

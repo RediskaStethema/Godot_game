@@ -64,7 +64,8 @@ const CHARM_LINKS: int = 9
 const FALL_TIME: float = 0.9
 
 static var _add: CanvasItemMaterial
-static var _rng := RandomNumberGenerator.new()   # своя случайность: randf — общая с боем
+static var _rng := RandomNumberGenerator.new()   # своя случайность: randf — общая с боем (вид не должен сдвигать
+# случайность боя — lifesteal и стена зовутся из боевой логики; ревью 09.11.2026)
 
 var kind := ""
 var look: Dictionary = {}
@@ -81,7 +82,6 @@ var delay := 0.0
 var height := 31.0             # телепорт: рост бойца
 var arrive := false            # телепорт: высадка (полоса раскрывается) / уход (стягивается)
 var radius := 20.0             # падение отряда: радиус кольца
-var seed_i := 0                # молнии телепорта, цепь — свой рисунок у каждого
 var _t := 0.0
 
 # --- Создание ---
@@ -109,9 +109,9 @@ static func lifesteal(s: Node2D, sprite_scale: float = 1.0) -> void:
 	fx.global_position = s.global_position
 	fx.chest = Soldier.TARGET_SPRITE_HEIGHT * 0.55 * sprite_scale
 	fx.duration = LIFESTEAL_TIME
-	for i in randi_range(2, 3):
-		fx.parts.append({"p": Vector2(randf_range(-6.0, 6.0), randf_range(-1.0, 1.0)),
-			"delay": i * 0.07, "sway": randf_range(-3.0, 3.0)})
+	for i in _rng.randi_range(2, 3):
+		fx.parts.append({"p": Vector2(_rng.randf_range(-6.0, 6.0), _rng.randf_range(-1.0, 1.0)),
+			"delay": i * 0.07, "sway": _rng.randf_range(-3.0, 3.0)})
 
 static func wall_break(parent: Node, a: Vector2, b: Vector2, chaos: bool) -> void:
 	if parent == null:
@@ -124,15 +124,15 @@ static func wall_break(parent: Node, a: Vector2, b: Vector2, chaos: bool) -> voi
 	var out := Vector2(-half.y, half.x).normalized()   # поперёк звена — камни летят на обе стороны
 	var cols := _stone_colors(chaos)
 	for i in BREAK_STONES:
-		var along := half * randf_range(-0.9, 0.9)
+		var along := half * _rng.randf_range(-0.9, 0.9)
 		var side := 1.0 if i % 2 == 0 else -1.0
-		fx.parts.append({"p": along - Vector2(0.0, randf_range(6.0, KingdomWall.HEIGHT)), "ground": along.y + randf_range(-3.0, 4.0),
-			"v": out * side * randf_range(25.0, 70.0) + half.normalized() * randf_range(-40.0, 40.0) + Vector2(0.0, randf_range(-150.0, -60.0)),
-			"size": randf_range(2.0, 4.0), "col": cols[i % cols.size()], "delay": 0.0})
+		fx.parts.append({"p": along - Vector2(0.0, _rng.randf_range(6.0, KingdomWall.HEIGHT)), "ground": along.y + _rng.randf_range(-3.0, 4.0),
+			"v": out * side * _rng.randf_range(25.0, 70.0) + half.normalized() * _rng.randf_range(-40.0, 40.0) + Vector2(0.0, _rng.randf_range(-150.0, -60.0)),
+			"size": _rng.randf_range(2.0, 4.0), "col": cols[i % cols.size()], "delay": 0.0})
 	for i in BREAK_DUST:
 		var along := half * lerpf(-0.9, 0.9, float(i) / (BREAK_DUST - 1))
-		fx.puffs.append({"p": along + Vector2(randf_range(-3.0, 3.0), randf_range(-3.0, 1.0)),
-			"r0": randf_range(4.0, 7.0), "r1": randf_range(13.0, 20.0), "col": Palette.DUST_PALE if i % 3 == 1 else Palette.DUST})
+		fx.puffs.append({"p": along + Vector2(_rng.randf_range(-3.0, 3.0), _rng.randf_range(-3.0, 1.0)),
+			"r0": _rng.randf_range(4.0, 7.0), "r1": _rng.randf_range(13.0, 20.0), "col": Palette.DUST_PALE if i % 3 == 1 else Palette.DUST})
 
 static func wall_chips(parent: Node, seg: Node2D, a: Vector2, b: Vector2, chaos: bool) -> void:
 	var now := Time.get_ticks_msec()
@@ -141,15 +141,15 @@ static func wall_chips(parent: Node, seg: Node2D, a: Vector2, b: Vector2, chaos:
 	seg.set_meta("chips_fx_ms", now)
 	var fx := _make("stones", parent, false)
 	fx.z_index = Vfx.Z_INDEX_WORLD
-	var hit := a.lerp(b, randf_range(0.2, 0.8))
-	fx.position = hit - Vector2(0.0, randf_range(5.0, KingdomWall.HEIGHT))
+	var hit := a.lerp(b, _rng.randf_range(0.2, 0.8))
+	fx.position = hit - Vector2(0.0, _rng.randf_range(5.0, KingdomWall.HEIGHT))
 	fx.duration = CHIPS_TIME
 	var cols := _stone_colors(chaos)
 	var ground := hit.y - fx.position.y
-	for i in randi_range(4, 6):
-		var ang := randf_range(PI * 1.05, PI * 1.95)   # брызги вверх и в стороны
-		fx.parts.append({"p": Vector2.ZERO, "ground": ground + randf_range(-2.0, 3.0),
-			"v": Vector2(cos(ang), sin(ang)) * randf_range(35.0, 85.0), "size": randf_range(1.2, 2.2),
+	for i in _rng.randi_range(4, 6):
+		var ang := _rng.randf_range(PI * 1.05, PI * 1.95)   # брызги вверх и в стороны
+		fx.parts.append({"p": Vector2.ZERO, "ground": ground + _rng.randf_range(-2.0, 3.0),
+			"v": Vector2(cos(ang), sin(ang)) * _rng.randf_range(35.0, 85.0), "size": _rng.randf_range(1.2, 2.2),
 			"col": cols[i % cols.size()], "delay": 0.0})
 	fx.puffs.append({"p": Vector2.ZERO, "r0": 2.0, "r1": 7.0, "col": Palette.DUST_PALE})
 

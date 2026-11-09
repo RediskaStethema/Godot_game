@@ -137,9 +137,6 @@ func set_highlighted(on: bool) -> void:
 	for s in segments:
 		s.modulate = Palette.GOLD_PALE if on else Color.WHITE
 
-func intact_count() -> int:
-	return segments.filter(func(s): return s.hp > 0.0).size()
-
 func _exit_tree() -> void:
 	for s in segments:
 		if is_instance_valid(s):

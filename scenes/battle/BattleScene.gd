@@ -1023,9 +1023,13 @@ func _on_battle_ended(winner_team: int) -> void:
 	# Итог боя обрабатывается ровно один раз: доход, round_number, шаг забега
 	if _battle_resolved:
 		return
-	if _boss_fall_base > 0.0:   # примарх ещё падает — итог после (_end_boss_fall)
-		_deferred_winner = winner_team
-		return
+	if _boss_fall_base > 0.0:
+		if not BattleManager.surrendered:   # примарх ещё падает — итог после (_end_boss_fall)
+			_deferred_winner = winner_team
+			return
+		# сдача в миг смерти примарха — итог сразу: за ней следует уход в меню, а _exit_tree стёр бы
+		# отложенный итог — забег не закончился бы и «Продолжить» вернуло бы в бой (ревью 09.11.2026)
+		_end_boss_fall()
 	_battle_resolved = true
 	BattleManager.battle_in_progress = false
 	_restore_time_scale()

@@ -13,6 +13,9 @@ const EXTENSIONS = ["ogg", "wav", "mp3"]
 const MAX_VARIANTS: int = 8
 const MAX_VOICES: int = 24
 const MUSIC_FADE: float = 1.2
+# Вариант звука и высота — своя случайность: общий randf — случайность боя (урон, цели); звук на каждый
+# выстрел сдвигал бы её (ревью 09.11.2026)
+var _rng := RandomNumberGenerator.new()
 const SFX_BUS: String = "SFX"
 const MUSIC_BUS: String = "Music"
 const HISTORY_SIZE: int = 64
@@ -109,10 +112,10 @@ func play(event: String) -> bool:
 	var voice := _free_voice()
 	if voice == null:
 		return false
-	voice.stream = streams[randi() % streams.size()]
+	voice.stream = streams[_rng.randi() % streams.size()]
 	voice.volume_db = cfg.get("volume", 0.0)
 	var jitter: float = cfg.get("pitch", 0.0)
-	voice.pitch_scale = 1.0 + randf_range(-jitter, jitter)
+	voice.pitch_scale = 1.0 + _rng.randf_range(-jitter, jitter)
 	voice.play()
 	if record_history:
 		_log(event)

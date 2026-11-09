@@ -134,12 +134,14 @@ func _main() -> void:
 	_check("бастион: враги позади (у цитадели) — не цель, впереди — цель", behind == null and ahead == enemies[0])
 	bm.damage_citadel(100000.0)
 	var hp_in_battle: float = bm.citadel_hp
-	bm.surrender()
+	# штурм проигран — бой кончается поражением сразу (09.11.2026: было 1 HP и осада минутами — бой «вставал»)
+	var siege_lost: bool = not bm.is_battle_running() and bm.winner_team == GameConstants.TEAM_ENEMY
+	bm.surrender()   # бой уже кончен — ничего не делает
 	await create_timer(scene.TEST_RESULT_TIME + 0.6).timeout
 	scene = await _scene()
 	var squad3 = scene._get_player_squad_at(Vector2i(3, 1))
-	_check("цитадель не падает (%.0f HP), после боя — расстановка как до боя, цитадель целая, панель на месте" % hp_in_battle,
-		hp_in_battle >= 1.0 and scene.get("is_placement_phase") and scene.get("test_panel") != null
+	_check("цитадель не падает (%.0f HP), штурм проигран — бой сразу кончен, после боя — расстановка как до боя, цитадель целая, панель на месте" % hp_in_battle,
+		hp_in_battle >= 1.0 and siege_lost and scene.get("is_placement_phase") and scene.get("test_panel") != null
 		and squad3 != null and squad3.data.squad_level == 3 and bm.citadel_hp == bm.CITADEL_MAX_HP
 		and not bm.battle_in_progress and rm.test_mode)
 

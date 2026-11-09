@@ -215,14 +215,6 @@ func apply_commander_bonus(soldiers: Array) -> void:
 		s.current_damage *= 1.0 + bonus
 	print("SynergyManager: командир — +%d%% урона армии" % roundi(bonus * 100.0))
 
-# Синергии, действующие на бойцов с этими тегами (без экономических)
-func get_soldier_synergy_names(tags: Array) -> Array[String]:
-	var names: Array[String] = []
-	for s in active_synergies:
-		if s["tag"] in tags and not s["bonus"].has("epic_discount"):
-			names.append(s["name"])
-	return names
-
 # -------------------------------------------------------
 # ЭКОНОМИКА
 # -------------------------------------------------------

@@ -14,6 +14,8 @@ const BLOOD_DIR = "res://assets/effects/NEw pack blood/"     # брызги по
 const GRADED_DIR = "res://assets/graded/"
 const FX_DIR = "res://assets/effects/"   # пакет художника по ТЗ EFFECTS_NEEDED.txt (tools/fx_fix.py)
 const STATUS_DIR = "res://assets/effects/status/"   # статусы на теле бойца (EFFECTS_NEEDED 7.1–7.4, 09.11.2026)
+# Случайность вида (какие брызги) — своя: общий randf — случайность боя, ревью 09.11.2026
+static var _fx_rng := RandomNumberGenerator.new()
 # sheet — файл листа, size — кадр, frames — кадров (пустые хвосты листа не берём), fps, loop,
 # scale — масштаб на бойце роста 62 px, pivot — точка кадра, которая встаёт в позицию эффекта
 # add — ADD-смешение (огонь, искры, энергия светятся; тёмные края листа исчезают)
@@ -275,7 +277,7 @@ static func race_kind(kind: String, faction: String = "") -> String:
 # Техника — масло и искра по металлу
 static func spawn_blood(parent: Node, at: Vector2, victim: UnitData, shot: bool, size: float = 1.0) -> void:
 	var blood := victim.get_blood()
-	var kind: String = SHOT_BLOOD[randi() % SHOT_BLOOD.size()] if shot else "blood"   # только вид — не RNG забега
+	var kind: String = SHOT_BLOOD[_fx_rng.randi() % SHOT_BLOOD.size()] if shot else "blood"   # только вид — не RNG забега
 	var v := spawn(parent, kind, at, size)
 	if v:
 		v.material = blood_material(blood)
@@ -352,7 +354,11 @@ static func _make(kind: String, size: float) -> Vfx:
 		v.material = _add_material()
 	if not e["loop"] and not e.get("hold", false):
 		v.animation_finished.connect(v.queue_free)
-	FrameBlend.attach(v, e.get("add", false))   # кадры перетекают; ADD — родитель гаснет на ту же долю
+	# кадры перетекают; ADD — родитель гаснет на ту же долю. Быстрым листам (кровь, лужа, искры — 24–33 к/с) узел
+	# не нужен: FrameBlend сам не перетекает выше MAX_FPS, а создавался на каждый эффект — до половины цены
+	# смерти бойца (профиль 09.11.2026)
+	if e["fps"] <= FrameBlend.MAX_FPS:
+		FrameBlend.attach(v, e.get("add", false))
 	v.play("play")
 	v._apply_fade()   # первый кадр — уже прозрачный и мельче, без вспышки до первого _process
 	return v

@@ -92,8 +92,10 @@ func _add_fire_shadow(nf: int, s: Soldier, f: Array, pos: Vector2, xf: Transform
 	if _fire == null:
 		return nf
 	var away: Vector2 = s.global_position - f[0]
-	var dist := Vector2(away.x, away.y * 2.0).length()   # расстояние по земле (изометрия 2:1)
 	var r: float = f[1]
+	if absf(away.x) >= r or absf(away.y) * 2.0 >= r:   # грубо отсечь далёких без sqrt: пар боец × огонь — сотни
+		return nf
+	var dist := Vector2(away.x, away.y * 2.0).length()   # расстояние по земле (изометрия 2:1)
 	if dist >= r or dist < 2.0:
 		return nf
 	var fm := _fire.multimesh

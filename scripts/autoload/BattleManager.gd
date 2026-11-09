@@ -273,12 +273,28 @@ func damage_citadel(amount: float) -> void:
 	var absorbed = minf(citadel_shield, amount)
 	citadel_shield -= absorbed
 	citadel_hp = maxf(citadel_hp - (amount - absorbed), 0.0)
-	if RunManager.test_mode:   # тестовый режим: цитадель не падает
-		citadel_hp = maxf(citadel_hp, 1.0)
+	if RunManager.test_mode and citadel_hp <= 0.0:
+		# Тестовый режим: цитадель не падает, но штурм проигран — бой кончается поражением (итог теста, поле как
+		# до боя). Было: 1 HP и штурм дальше — враги минутами били цитадель, пока она не перебьёт всех (примарх со
+		# щитом — 4.5 мин), бой выглядел вставшим насовсем (решение пользователя 09.11.2026)
+		citadel_hp = 1.0
+		emit_signal("citadel_hp_changed", citadel_hp)
+		_end_test_siege()
+		return
 	emit_signal("citadel_hp_changed", citadel_hp)
 	if citadel_hp <= 0.0:
 		print("BattleManager: цитадель пала")
 		emit_signal("citadel_destroyed")
+
+func _end_test_siege() -> void:
+	if phase != BattlePhase.RUNNING:
+		return
+	phase = BattlePhase.FINISHED
+	winner_team = GameConstants.TEAM_ENEMY
+	clear_projectiles()
+	_stand_down_soldiers(winner_team)
+	print("BattleManager: тестовый режим — штурм проигран, цитадель устояла на 1 HP")
+	emit_signal("battle_ended", winner_team)
 
 # Ремонт цитадели (события карты забега). Возвращает, сколько HP восстановлено.
 func heal_citadel(amount: float) -> float:

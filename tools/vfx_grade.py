@@ -54,12 +54,7 @@ GRADES = {
     PIXEL + "magic/magic_burst.png": "warp",
     PIXEL + "magic/heal_side.png": "heal",
     PIXEL + "magic/shield.png": "warp",
-    PIXEL + "pickup_ui/level_up.png": "amber",
     PIXEL + "movement/poof_side.png": "dust",
-    PIXEL + "status/burn.png": "fire",
-    PIXEL + "status/poison.png": "poison",
-    PIXEL + "status/buff.png": "amber",
-    PIXEL + "status/debuff.png": "warp",
     PIXEL + "status/stun.png": "amber",
     # FXpack13 (листы — tools/frames_to_strip.py): огненный снаряд цитадели, варп-болт (Шпиль, Рубрики)
     "effects/FXpack13/fireball_sheet.png": "fire",
@@ -95,11 +90,9 @@ SOFT_SHEETS = [
     "upgrades/upgrade_iron_halo.png", "upgrades/upgrade_warp_ward.png",
     "upgrades/upgrade_combat_stimms.png", "upgrades/upgrade_combat_drugs.png",
     "upgrades/upgrade_chapter_banner.png", "upgrades/upgrade_icon_of_chaos.png",
-    "banner_aura/spritesheet.png", "banner_aura/banner_aura_chaos.png",
 
     "orbital_strike/spritesheet.png", "warp_strike/spritesheet.png",
 
-    "buildings/aura_plague.png", "buildings/aura_pleasure.png",
     "buildings/forge_repair.png", "buildings/skull_add.png",
 
     "chaplain_warcry/spritesheet.png", "jump_trail/spritesheet.png", "jump_land/spritesheet.png",
