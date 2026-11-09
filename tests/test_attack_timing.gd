@@ -244,20 +244,20 @@ func _main() -> void:
 	_check("Библиарий: %d кастов за %.0f с (ожидалось ≈ %.1f — раз в 1 / attack_speed)" % [casts, seconds, expected],
 		absf(casts - expected) <= 1.0)
 
-	# 3. Река: плита и её отражение по очереди, плита одна на всю реку (стыки без перемычек);
+	# 3. Река (решение пользователя 09.11.2026): прямое бесшовное русло — одна плита на всю реку без отражения
+	#    (на стыке плиты и отражения были каменные перемычки), кадры ряби шагом, без перетекания;
 	#    на линии по u — отражена по горизонтали
 	var r = scene.renderer
-	var pairs_ok = true
+	var same_ok = true
 	var variants = {}
-	for k in range(-4, 30, 2):
-		var a = r.river_tile_for(Vector2i(7, k), "v")
-		var b = r.river_tile_for(Vector2i(7, k + 1), "v")
-		variants[a[0]["texture"]] = true
-		pairs_ok = pairs_ok and a[0].has("mirror") and b[0]["texture"] == a[0]["mirror"]["texture"] \
-			and not a[1] and not b[1]
+	for k in range(-4, 30):
+		var t = r.river_tile_for(Vector2i(7, k), "v")
+		variants[t[0]["frames"][0]["texture"]] = true
+		same_ok = same_ok and not t[0].has("mirror") and t[0].get("blend", true) == false \
+			and t[0]["frames"].size() >= 8 and not t[1]
 	var u_tile = r.river_tile_for(Vector2i(3, -3), "u")
-	_check("река: плита + её отражение по очереди, одна плита на всю реку (%d), по u — отражена" % variants.size(),
-		pairs_ok and u_tile[1] and variants.size() == 1)
+	_check("река: одна прямая плита на всю реку (%d), без отражения, рябь шагом, по u — отражена" % variants.size(),
+		same_ok and u_tile[1] and variants.size() == 1)
 	# Река одна — вдоль поля боя, вне боевой полосы и не у цитадели
 	var river_cells: Dictionary = r._river_cells()
 	var river_rows = {}

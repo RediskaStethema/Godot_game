@@ -124,9 +124,9 @@ func _main() -> void:
 	var dread = UnitFactory.create("dreadnought_boss")
 	var cm = UnitFactory.create("chapter_master_boss")
 	_check("волны за Хаос — Космодесант: только его архетипы с их волны, тот же seed — тот же состав", sm_ok and same)
-	_check("мини-босс — Dreadnought + 2 отряда ветеранов, босс — Chapter Master; статы как у Hellbrute / Chaos Lord",
+	_check("мини-босс — Dreadnought + 2 отряда ветеранов, босс — примарх-лоялист; статы как у Hellbrute / Chaos Lord",
 		mini[0]["unit"] == "dreadnought_boss" and mini.filter(func(s): return s["unit"] == "veteran_terminator").size() == 2
-		and boss[0]["unit"] == "chapter_master_boss" and _near(dread.hp, UnitFactory.chaos_hellbrute().hp)
+		and boss[0]["unit"] in EnemyWaves.SM_BOSS["units"] and _near(dread.hp, UnitFactory.chaos_hellbrute().hp)
 		and _near(cm.hp, UnitFactory.chaos_lord().hp) and "elite" in cm.tags)
 	_check("волны Хаоса без расы врага — прежние", str(EnemyWaves.build(6, BATTLE, 9, 77, 2))
 		== str(EnemyWaves.build(6, BATTLE, 9, 77, 2, "chaos")))

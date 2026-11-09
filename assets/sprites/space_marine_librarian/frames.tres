@@ -59,9 +59,9 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/space_marine_librarian/death/11.png" id="death_11"]
 
 [resource]
-metadata/muzzle_color = Color(0.294, 0.659, 1.000, 1)
-metadata/muzzle = Vector2(44.0, -72.0)
-metadata/shot_frame = 8
+metadata/muzzle_color = Color(0.62, 0.95, 1.0, 1)
+metadata/muzzle = Vector2(16.6, -100.3)
+metadata/shot_frame = 6
 animations = [{
 "frames": [{
 "duration": 1.0,

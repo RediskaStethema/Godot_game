@@ -421,6 +421,8 @@ func refill_from_barracks() -> int:
 				d.saved_hp.append(1.0)
 				if kind != "":
 					d.saved_kinds.append(kind)
+			if kind != "" and added > 0:
+				d.fresh_converted += added   # вид: знак бога под ними на следующей расстановке
 			total += maxi(added, 0)
 			if added > 0:   # вид: ворота казарм на поле (анимация refill листа, если есть)
 				for b in buildings:

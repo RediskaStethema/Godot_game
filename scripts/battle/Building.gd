@@ -108,8 +108,10 @@ const LEVEL_RING_GLOW_ALPHA: float = 0.13
 # не выше SPRITE_MAX_HEIGHT клетки (узкие и высокие: тотем, шпиль). Здания Хаоса (карты CHAOS_RESKINS
 # с тем же building_type) — <SPRITES_DIR>/chaos/<building_type>, нет там листа — общий
 const SPRITES_DIR: String = "res://assets/sprites/buildings/"
-const SPRITE_WIDTH: float = 0.8
-const SPRITE_MAX_HEIGHT: float = 1.25
+# 07.11.2026 (решение пользователя: «здания всех уровней слишком большие — на 15% меньше»): было 0.8 / 1.25,
+# стало ×0.85; уровни 2 / 3 считаются от масштаба 1-го (level_scale) — уменьшились так же
+const SPRITE_WIDTH: float = 0.68
+const SPRITE_MAX_HEIGHT: float = 1.0625
 # Основание на листе — самая широкая строка силуэта в нижней BASE_ZONE кадра; в центре клетки — центр
 # ромба основания: выше нижнего пикселя на четверть его ширины (изометрия 2:1). Раньше в центре клетки
 # стоял нижний пиксель кадра — передний угол основания, и здание съезжало на клетку назад
@@ -421,6 +423,21 @@ func _muzzle_to_world(m: Vector2) -> Vector2:
 	return to_global(p * _level_k)
 
 # Задержка снаряда до кадра выстрела листа (metadata shot_frame) — как у бойцов
+# Ось ствола уровня в мире (metadata/level_barrel_dir листа, tools/building_levels_muzzle.py; лист «смотрит вправо»,
+# отражённый к цели — x наоборот): снаряд вылетает по ней (Projectile.launch_dir). Нет — ZERO, прямо на цель
+func _sprite_barrel_dir() -> Vector2:
+	var dirs: Dictionary = sprite.sprite_frames.get_meta("level_barrel_dir", {})
+	var d: Vector2 = dirs.get(card.building_level, dirs.get(1, Vector2.ZERO))
+	if sprite.flip_h:
+		d.x = -d.x
+	return d
+
+# Вспышка в листе началась: ряд выстрела дошёл до shot_frame или уже сменился (снаряд — с ней, Projectile.show_fn)
+func _shot_flash_started(anim: StringName) -> bool:
+	if not is_instance_valid(sprite) or sprite.animation != anim:
+		return true
+	return sprite.frame >= int(sprite.sprite_frames.get_meta("shot_frame", 0))
+
 func _shot_delay() -> float:
 	var frames := sprite.sprite_frames
 	if not frames.has_meta("shot_frame"):
@@ -659,14 +676,23 @@ func tick(delta: float) -> void:
 	queue_redraw()
 	var barrels := [to_global(_block_top(0.5, 0.5, TOWER_LEVELS) + aim.normalized() * BARREL_LENGTH)]
 	var delay := 0.0
+	var tint := Color(0, 0, 0, 0)
+	var show_fn := Callable()
+	var launch_dir := Vector2.ZERO
 	if sprite:   # свой спрайт: снаряд из каждого его ствола (на кадре вспышки, если есть ряд attack)
 		barrels = _sprite_barrels()
+		tint = sprite.sprite_frames.get_meta("muzzle_color", tint)   # снаряд в цвет вспышки листа, как у бойцов
 		if play_once("attack"):
 			delay = _shot_delay()
+			show_fn = _shot_flash_started.bind(sprite.animation)   # снаряд — с кадром вспышки в листе
+		launch_dir = _sprite_barrel_dir()   # после play_once: отражение к цели уже выставлено
 	for barrel_end in barrels:   # залп: урон поровну, сумма — как у одного выстрела; оглушение — у каждого
-		var shot = Projectile.launch(get_parent(), SHOOTERS[building_type], barrel_end, target, aim_offset, delay)
+		var shot = Projectile.launch(get_parent(), SHOOTERS[building_type], barrel_end, target, aim_offset, delay,
+			false, tint)
 		shot.damage = stats.get("damage", 0.0) / barrels.size()
 		shot.stun = stats.get("stun", 0.0)
+		shot.show_fn = show_fn
+		shot.launch_dir = launch_dir
 
 # Стрелки, которые бьют только вперёд — по полю боя (решение пользователя 06.11.2026: бастион Imperial Fists —
 # стена с пушками, не разворачивается к врагам у цитадели и в тылу); цель — не левее здания на экране
@@ -716,6 +742,7 @@ func fire_at(point: Vector2) -> bool:
 		if i == 0:   # взрыв (огонь, дым, обломки), круг и тряска камеры — раз за залп: ракеты ложатся в одну точку
 			shot.on_impact = _show_explosion
 			shot.impact_vfx = HELLFIRE_IMPACT_VFX if hellfire else ARTILLERY_IMPACT_VFX
+			shot.heavy = true   # стоп-кадр и вспышка света при разрыве
 		shot.arc_height = ARTILLERY_ARC
 		if delay > Soldier.TIMER_EPSILON and is_inside_tree():   # вспышка — на кадре выстрела листа, когда ствол поднят
 			get_tree().create_timer(delay, false).timeout.connect(_play_fire_animation.bind(barrels[i]))
@@ -826,6 +853,21 @@ static func apply_battle_start() -> void:
 			if sq.tile in area:
 				for s in sq.soldiers:
 					b._apply_start_effect(s)
+
+# Волна от здания к соседним отрядам, на которых сработает эффект начала боя (BuildingFx, EFFECTS_NEEDED 4.2) —
+# по «В БОЙ», пока отряды ещё на своих клетках (сам эффект — apply_battle_start, после построения). Только вид
+static func show_start_waves() -> void:
+	var squads := SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER)
+	for b in BattleManager.buildings:
+		if not is_instance_valid(b) or not b.special_active():
+			continue
+		var area := get_effect_tiles(b.building_type, b.tile)
+		var reached: Array = []   # сдвиги к центрам клеток отрядов
+		for sq in squads:
+			if sq.tile in area:
+				var d: Vector2i = sq.tile - b.tile
+				reached.append(Vector2((d.x - d.y) * IsoGrid.TILE_WIDTH / 2.0, (d.x + d.y) * IsoGrid.TILE_HEIGHT / 2.0))
+		BuildingFx.wave(b.global_position, reached, b.building_type)
 
 # Аура здания в бою — кольцо на земле вместо круга расстановки (AuraRing; только вид; снимает _process после боя)
 func _show_aura() -> void:

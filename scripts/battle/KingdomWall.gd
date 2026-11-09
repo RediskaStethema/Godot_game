@@ -171,9 +171,12 @@ class Segment extends Node2D:
 		AudioManager.play("wall_hit")
 		_hit_left = Soldier.HIT_FLASH_TIME
 		set_process(true)
+		var chaos := wall.card.faction == "chaos"
 		if hp <= 0.0:
 			AudioManager.play("wall_break")
-			Vfx.spawn(get_parent(), "ground_slam", position, 1.6)
+			BuildingFx.wall_break(get_parent(), a, b, chaos)   # камни и пыль (было: ground_slam пака Pixel)
+		else:
+			BuildingFx.wall_chips(get_parent(), self, a, b, chaos)
 		mark_dirty()
 
 	# HP или статы изменились — геометрию звена собрать заново

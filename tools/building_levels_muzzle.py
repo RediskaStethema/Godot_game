@@ -135,6 +135,43 @@ def barrels(folder, shot, up):
     return found
 
 
+DIR_MAX_ANGLE = 60.0   # градусов от горизонтали — больше не бывает (крупная вспышка-звезда сбивает ось)
+DIR_SKIP = {"artillery", "chaos/artillery"}   # орудия игрока — ракета по дуге в точку клика (Projectile.arc_height)
+# Ось по вспышке ошибается, где вспышка — мелкая звезда с дымом или стволов два (06.11.2026: Heretic Autocannon 2–3
+# и Bolter Turret 2–3 уровня — до 30° мимо): угол от горизонтали в градусах (+ — вниз), замерен по стволам на
+# кадре стойки уровня с сеткой. Бастион Imperial Fists — по вспышке (совпало с рисунком)
+DIR_OVERRIDE = {
+    "tower": {1: 0.0, 2: 15.0, 3: 12.0},
+    "chaos/tower": {1: -21.0, 2: -13.0, 3: -10.0},
+}
+
+
+def barrel_dir(folder, shot, level):
+    """Ось ствола уровня (решение пользователя 06.11.2026: «снаряд турели должен лететь по направлению дула»):
+    от задней части вспышки кадра выстрела (15% по x) к передней (85%) — вспышка вытянута вдоль ствола.
+    Единичный вектор, «смотрит вправо» (x > 0), как и лист; None — вспышки нет."""
+    sfx = "" if level == 1 else f"_{level}"
+    f = folder / f"attack{sfx}" / f"{shot}.png"
+    idle = folder / f"idle{sfx}" / "0.png"
+    if not f.exists() or not idle.exists():
+        return None
+    name = folder.relative_to(BUILDINGS).as_posix()
+    if level in DIR_OVERRIDE.get(name, {}):
+        a = np.radians(DIR_OVERRIDE[name][level])
+        return round(float(np.cos(a)), 3), round(float(np.sin(a)), 3)
+    mask = largest_blob(new_flash(f, idle))
+    ys, xs = np.nonzero(mask)
+    if len(xs) < MIN_PIXELS:
+        return None
+    back = xs <= np.percentile(xs, 15)
+    front = xs >= np.percentile(xs, 85)
+    d = np.array([xs[front].mean() - xs[back].mean(), ys[front].mean() - ys[back].mean()])
+    if d[0] <= 0:
+        return None
+    ang = float(np.clip(np.degrees(np.arctan2(d[1], d[0])), -DIR_MAX_ANGLE, DIR_MAX_ANGLE))
+    return round(float(np.cos(np.radians(ang))), 3), round(float(np.sin(np.radians(ang))), 3)
+
+
 def muzzle(folder):
     tres = folder / "frames.tres"
     text = tres.read_text(encoding="utf-8")
@@ -173,6 +210,15 @@ def muzzle(folder):
         print(f"  уровень {level}: ствол {found[level]}")
     text = re.sub(r"metadata/level_muzzle = [^\n]*\n", "", text)
     text = re.sub(r"metadata/level_barrels = [^\n]*\n", "", text)
+    text = re.sub(r"metadata/level_barrel_dir = [^\n]*\n", "", text)
+    if name not in TIP and name not in DIR_SKIP:
+        dirs = {lv: d for lv in (1, 2, 3) if (d := barrel_dir(folder, shot, lv)) is not None}
+        for lv, d in sorted(dirs.items()):
+            print(f"  уровень {lv}: ось ствола {d}")
+        if dirs:
+            line = "metadata/level_barrel_dir = {" + ", ".join(
+                f"{lv}: Vector2({x}, {y})" for lv, (x, y) in sorted(dirs.items())) + "}\n"
+            text = text.replace("\n[resource]\n", "\n[resource]\n" + line, 1)
     if name not in TIP:
         volley = barrels(folder, shot, name in UP)
         if volley:

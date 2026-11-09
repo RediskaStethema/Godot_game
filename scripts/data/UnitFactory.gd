@@ -112,6 +112,16 @@ static func create(factory_id: String) -> UnitData:
 		"veteran_terminator":  d = veteran_terminator()
 		"dreadnought_boss":    d = dreadnought_boss()
 		"chapter_master_boss": d = chapter_master_boss()
+		# Финальные боссы — примархи (решение пользователя 09.11.2026): EnemyWaves.BOSS / SM_BOSS "units"
+		"daemon_angron":       d = daemon_angron()
+		"daemon_mortarion":    d = daemon_mortarion()
+		"daemon_magnus":       d = daemon_magnus()
+		"daemon_fulgrim":      d = daemon_fulgrim()
+		"primarch_guilliman":  d = primarch_guilliman()
+		"primarch_sanguinius": d = primarch_sanguinius()
+		"primarch_dorn":       d = primarch_dorn()
+		"primarch_russ":       d = primarch_russ()
+		"primarch_vulkan":     d = primarch_vulkan()
 		# Особые юниты орденов и богов (решение пользователя 18.10.2026) — только в магазине своего ордена
 		"honour_guard":          d = honour_guard()
 		"sanguinary_guard":      d = sanguinary_guard()
@@ -431,7 +441,7 @@ static func librarian() -> UnitData:
 	d.on_hit_stun = 1.0
 	d.cost = 10
 	d.rarity = GameConstants.RARITY_RARE
-	d.sprite_path = "res://assets/sprites/space_marine_librarian"  # лист assets/source_sheets/Librarian_assets.png (tools/sheet_to_frames.py, + ряд каста)
+	d.sprite_path = "res://assets/sprites/space_marine_librarian"  # лист assets/source_sheets/Librarian_sheet_v2.png (07.11.2026; tools/tools.md — порядок нарезки)
 	d.sprite_scale = 1.05
 	d.projectile = "charged"
 	return d
@@ -585,6 +595,165 @@ static func chapter_master_boss() -> UnitData:
 	d.projectile_warm = false
 	d.tint = Color.WHITE
 	d.sprite_scale = 1.8
+	return d
+
+# -------------------------------------------------------
+# ФИНАЛЬНЫЕ БОССЫ — ПРИМАРХИ (решение пользователя 09.11.2026; арт — assets/source_sheets/bosses_pack,
+# tools/boss_frames.py → assets/sprites/bosses/<id>). Против Космодесанта — демон-примарх, против Хаоса — лоялист,
+# какой именно — от seed забега (EnemyWaves.boss_unit). Одиночка ~2.5 роста бойца (~78 px), не отступает,
+# не отбрасывается; свой приём у каждого (UnitData.special_*, Soldier._release_special).
+# Профили разные, но не хрупкие (решение пользователя): HP 2200–3200 против 2200 у прежнего Chaos Lord,
+# быстрые — с меньшим HP, медленные — живучие. Статы — до множителя волны 15 (×2.4). Цифры — на одобрение
+# -------------------------------------------------------
+const PRIMARCH_SCALE: float = 2.5
+const PRIMARCH_REACH: float = MELEE_RANGE * 1.6
+
+static func _primarch(id: String, unit_name: String, faction: String, hp: float, damage: float, attack_speed: float,
+		move_speed: float) -> UnitData:
+	var d = chaos_lord()
+	d.unit_name = unit_name
+	d.faction = faction
+	d.tags = (["chaos"] if faction == "chaos" else ["marine"]) + ["melee", "elite", "boss"]
+	d.hp = hp
+	d.damage = damage
+	d.attack_speed = attack_speed
+	d.move_speed = move_speed
+	d.attack_range = PRIMARCH_REACH
+	d.on_hit_knockback = 180.0
+	d.knockback_immune = true
+	d.special_first = 2.5
+	d.projectile_warm = false
+	d.tint = Color.WHITE
+	d.sprite_path = "res://assets/sprites/bosses/" + id
+	d.sprite_scale = PRIMARCH_SCALE
+	return d
+
+# Ангрон (Кхорн): быстрый и яростный — прыжок на стрелков, удар по кругу с оглушением
+static func daemon_angron() -> UnitData:
+	var d = _primarch("daemon_angron", "Angron", "chaos", 2200.0, 62.0, 0.9, 72.0)
+	d.special_name = "Прыжок ярости"
+	d.special_kind = "leap"
+	d.special_cooldown = 7.0
+	d.special_range = 240.0
+	d.special_radius = 70.0
+	d.special_mult = 1.6
+	d.special_stun = 0.6
+	d.special_color = Palette.BLOOD
+	return d
+
+# Мортарион (Нургл): медленный и самый живучий из демонов — чумное облако конусом
+static func daemon_mortarion() -> UnitData:
+	var d = _primarch("daemon_mortarion", "Mortarion", "chaos", 3000.0, 44.0, 0.7, 48.0)
+	d.special_name = "Чумное дыхание"
+	d.special_kind = "cone"
+	d.special_cooldown = 6.0
+	d.special_radius = 120.0
+	d.special_mult = 1.0
+	d.special_status = StatusEffects.POISONED
+	d.special_status_power = 5.0
+	d.special_status_duration = 5.0
+	d.special_color = Palette.POISON
+	return d
+
+# Магнус Красный (Тзинч): колдун — сгусток варпа издалека, взрыв с поджогом
+static func daemon_magnus() -> UnitData:
+	var d = _primarch("daemon_magnus", "Magnus the Red", "chaos", 2300.0, 48.0, 0.8, 55.0)
+	d.special_name = "Пламя варпа"
+	d.special_kind = "bolt"
+	d.special_projectile = "warp_bolt"
+	d.special_cooldown = 5.0
+	d.special_range = 260.0
+	d.special_radius = 75.0
+	d.special_mult = 2.2
+	d.special_status = StatusEffects.BURNING
+	d.special_status_power = 5.0
+	d.special_status_duration = 4.0
+	d.special_color = Palette.WARP_EMBER
+	d.on_hit_knockback = 150.0
+	return d
+
+# Фулгрим (Слаанеш): быстрый, частые удары без отброса — вихрь клинков замедляет всех вокруг
+static func daemon_fulgrim() -> UnitData:
+	var d = _primarch("daemon_fulgrim", "Fulgrim", "chaos", 2400.0, 36.0, 1.4, 85.0)
+	d.special_name = "Вихрь клинков"
+	d.special_kind = "nova"
+	d.special_cooldown = 5.0
+	d.special_radius = 80.0
+	d.special_mult = 1.3
+	d.special_status = StatusEffects.SLOWED
+	d.special_status_power = 0.4
+	d.special_status_duration = 3.0
+	d.special_color = Palette.SLAANESH
+	d.on_hit_knockback = 0.0
+	return d
+
+# Робаут Жиллиман (Ультрамарины): ровный и стойкий — огненная дуга мечом перед собой
+static func primarch_guilliman() -> UnitData:
+	var d = _primarch("primarch_guilliman", "Roboute Guilliman", "space_marines", 2700.0, 54.0, 0.8, 60.0)
+	d.special_name = "Пылающий клинок"
+	d.special_kind = "cone"
+	d.special_cooldown = 6.0
+	d.special_radius = 110.0
+	d.special_mult = 1.5
+	d.special_status = StatusEffects.BURNING
+	d.special_status_power = 5.0
+	d.special_status_duration = 3.0
+	d.special_color = Palette.FIRE
+	return d
+
+# Сангвиний (Кровавые Ангелы): быстрый — пикирует с крыльев на стрелков издалека
+static func primarch_sanguinius() -> UnitData:
+	var d = _primarch("primarch_sanguinius", "Sanguinius", "space_marines", 2300.0, 56.0, 1.0, 82.0)
+	d.special_name = "Пикирование"
+	d.special_kind = "leap"
+	d.special_cooldown = 7.0
+	d.special_range = 280.0
+	d.special_radius = 75.0
+	d.special_mult = 1.5
+	d.special_stun = 0.5
+	d.special_color = Palette.AMBER_LIGHT
+	d.on_hit_knockback = 150.0
+	return d
+
+# Рогал Дорн (Имперские Кулаки): самый живучий, медленный — удар о землю оглушает, сам под щитом
+static func primarch_dorn() -> UnitData:
+	var d = _primarch("primarch_dorn", "Rogal Dorn", "space_marines", 3200.0, 46.0, 0.7, 48.0)
+	d.special_name = "Несокрушимая стена"
+	d.special_kind = "shield"
+	d.special_cooldown = 8.0
+	d.special_radius = 85.0
+	d.special_mult = 1.0
+	d.special_stun = 0.8
+	d.special_shield = 0.12
+	d.special_color = Palette.AMBER_LIGHT
+	return d
+
+# Леман Русс (Космические Волки): самый быстрый — рывок с воем сквозь строй
+static func primarch_russ() -> UnitData:
+	var d = _primarch("primarch_russ", "Leman Russ", "space_marines", 2500.0, 56.0, 1.0, 88.0)
+	d.special_name = "Волчий рывок"
+	d.special_kind = "dash"
+	d.special_cooldown = 6.0
+	d.special_range = 240.0
+	d.special_radius = 40.0
+	d.special_mult = 1.5
+	d.special_stun = 0.4
+	d.special_color = Palette.FROST
+	d.on_hit_knockback = 150.0
+	return d
+
+# Вулкан (Саламандры): медленный кузнец — удар молотом, огненная волна кругом
+static func primarch_vulkan() -> UnitData:
+	var d = _primarch("primarch_vulkan", "Vulkan", "space_marines", 2900.0, 52.0, 0.7, 52.0)
+	d.special_name = "Огненная волна"
+	d.special_kind = "nova"
+	d.special_cooldown = 7.0
+	d.special_radius = 100.0
+	d.special_mult = 1.3
+	d.special_status = StatusEffects.BURNING
+	d.special_status_power = 5.0
+	d.special_status_duration = 3.0
+	d.special_color = Palette.FORGE
 	return d
 
 # -------------------------------------------------------

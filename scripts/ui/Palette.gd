@@ -42,6 +42,9 @@ const CHAOS_WALL_DARK  = Color(0.06, 0.018, 0.026)
 const CHAOS_WALL_SPIKE = Color(0.64, 0.57, 0.48)   # кость шипов
 const FIRE         = Color(1.0, 0.55, 0.15)
 const POISON       = Color(0.55, 0.9, 0.3)
+const RARE_GLOW    = Color("4f8fc4")               # подсветка Rare карт — сине-стальная, тлеющая (CardGlare)
+const EPIC_GLOW    = Color("9a4cc8")               # подсветка Epic карт — варп-фиолетовая
+const WARP_EMBER   = Color("e8a0ff")               # искры варпа на кромке Epic карт
 const POISON_DEEP  = Color("4f7a24")               # кромка ауры котла Nurgle (AuraRing)
 const SLAANESH     = Color("b8436e")               # аура святилища Slaanesh: розовое бордо (AuraRing)
 const SLAANESH_PALE = Color("f3b6cc")
@@ -51,3 +54,48 @@ const HEAL_DEEP    = Color("449458")               # кромка света л�
 const SHIELD_BLUE  = Color(0.45, 0.72, 1.0)       # щит Iron Halo и щит цитадели
 const SLOW_BLUE    = Color(0.45, 0.65, 0.95)      # замедление (статус и аура стены)
 const HIT_RED      = Color(1.0, 0.45, 0.4)        # урон по своим: цифры, вспышка цитадели
+# Эффекты зданий и стены кодом (BuildingFx, EFFECTS_NEEDED 4.2 / 4.10 / 8.5 / 8.6): волна от здания к соседям,
+# вампиризм Чаши крови, камни и пыль разбитого звена стены
+const BLOOD        = Color("730508")
+const BLOOD_BRIGHT = Color("cc0d0d")
+const FROST        = Color("76bae8")               # клич Волчьего тотема
+const FROST_PALE   = Color("e8f8ff")
+const FORGE        = Color("e85e16")               # жар Кузни Вулкана
+const FORGE_PALE   = Color("ffe296")
+const DUST         = Color("584c3e")
+const DUST_PALE    = Color("b6a894")
+# Знак бога под ногами нового бойца бога (Святилище культа, EFFECTS_NEEDED 4.9): тёмный → яркий
+const GOD_COLORS = {
+	"khorne": [Color("801218"), Color("de441e")],
+	"nurgle": [Color("58801e"), Color("d0ee76")],
+	"tzeentch": [Color("264e8a"), Color("76bae8")],
+	"slaanesh": [Color("ff5ab4"), Color("f6c8ff")],
+}
+
+# Космос главного меню (решение пользователя 06.11.2026: «меню на фоне космоса, звёзды сияют») — MenuStarfield
+const LANDING_CLOUD = Color("3a3c40")              # дым посадки на поле (BattleLanding) — Космодесант: пепельный
+const LANDING_CLOUD_CHAOS = Color("3b2422")        # то же у Хаоса — бурый дым
+const LANDING_FIRE   = Color("8a3a12")              # отсвет пожаров снизу сквозь дым (гримдарк, 08.11.2026)
+const LAUNCH_ASH     = Color("8e8a84")              # лучи взлёта — пепел и сталь, не цветные звёзды
+const LAUNCH_EMBER   = Color("a8742a")              # редкий тусклый янтарь в лучах
+const WARP_RIFT      = Color("3c0f2e")              # разрыв варпа при прыжке — мутный бордово-фиолетовый
+const WARP_RIFT_CORE = Color("7a2a5a")
+const MENU_SPACE   = Color("0b1018")               # космос главного меню — ровный, как на образце exampel.png
+const MENU_BUTTON_TEXT = Color("d6cfc0")           # надпись кнопки меню — бежево-белая (образец)
+const MENU_TITLE   = Color("cdc4b2")               # название WH40KINGS — светлый беж (образец)
+const MENU_SUBTITLE = Color("9a9282")              # «Удержите цитадель 15 волн»
+const SPACE_DEEP   = Color("05070c")               # глубина космоса (низ и левый край)
+const SPACE_MID    = Color("0b1120")               # чуть светлее у центра
+const NEBULA_BLUE  = Color(0.18, 0.32, 0.62, 0.16) # туманность — холодная синь (ADD)
+const NEBULA_WARP  = Color(0.42, 0.16, 0.38, 0.10) # туманность — далёкий варп, глуше
+const STAR_WHITE   = Color(0.95, 0.96, 1.0)
+const STAR_BLUE    = Color(0.7, 0.82, 1.0)
+const STAR_AMBER   = Color(1.0, 0.86, 0.62)
+# Телепорт Deep Strike (EFFECTS_NEEDED 5.3, кодом 09.11.2026 — BuildingFx.teleport): варп Империума
+const TELEPORT_DEEP = Color("264e8a")
+const TELEPORT      = Color("76bae8")
+const TELEPORT_CORE = Color("e8f8ff")
+# Шрамы поля (ScarLayer, 09.11.2026): подпалина — сажа с бурым краем, угольки
+const SCORCH        = Color(0.05, 0.045, 0.04)
+const SCORCH_EDGE   = Color(0.16, 0.12, 0.09)
+const SCORCH_EMBER  = Color(1.0, 0.45, 0.12)

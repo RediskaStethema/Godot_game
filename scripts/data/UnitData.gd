@@ -62,6 +62,31 @@ extends Resource
 @export var deep_strike_delay: float = 0.0   # 0 — нет
 # Стрельба на ходу (Land Speeder): в ATTACK не стоит — кружит вокруг цели, держит дистанцию
 @export var mobile_fire: bool = false
+# Приём финального босса (примархи, решение пользователя 09.11.2026): раз в special_cooldown сек ряд special листа,
+# на кадре metadata/special_frame — действие по виду (Soldier._release_special):
+#   leap — прыжок на врага (стрелка, если есть) ближе special_range, удар по кругу special_radius при приземлении;
+#   dash — рывок сквозь строй к цели ближе special_range, удар всем на пути шириной special_radius;
+#   cone — удар конусом перед собой (SPECIAL_CONE_HALF) радиуса special_radius;
+#   nova — удар по кругу special_radius вокруг себя; shield — то же + щит special_shield × max HP себе;
+#   bolt — снаряд special_projectile в цель ближе special_range, взрыв радиуса special_radius.
+# Урон по каждому — удар × special_mult × unit_weight жертвы (как у взрывов: пехоту ×3 не выкашивает втрое быстрее);
+# special_status* — статус задетым, special_stun — оглушение
+@export var special_kind: String = ""        # "" — приёма нет
+@export var special_cooldown: float = 0.0
+@export var special_first: float = 0.0       # до первого приёма с начала боя
+@export var special_range: float = 0.0
+@export var special_radius: float = 0.0
+@export var special_mult: float = 1.0
+@export var special_stun: float = 0.0
+@export var special_status: String = ""
+@export var special_status_power: float = 0.0
+@export var special_status_duration: float = 0.0
+@export var special_shield: float = 0.0
+@export var special_projectile: String = ""
+@export var special_color: Color = Color(1, 0.5, 0.2)   # свет приёма на земле и бойцах (только вид)
+@export var special_name: String = ""        # для справки отряда
+# Не отбрасывается (примархи: гигант в 2.5 роста не отлетает от удара Дредноута)
+@export var knockback_immune: bool = false
 
 # --- Визуал ---
 # Пока у новых юнитов нет своих спрайтов — различаем их тинтом и размером
@@ -118,6 +143,10 @@ const BANNER_RADIUS: float = 107.0   # 23.10.2026 (решение пользов
 var unit_weight: float = 1.0
 # Возрождён после боя (respawn_after_wipe) — на расстановке следующего боя свет появления; не сохраняется
 var respawned: bool = false
+# Только вид, не сохраняются (как respawned): возродился уровнем ниже — шеврон трескается (BuildingFx.level_down);
+# сколько бойцов бога Хаоса встали после боя в отряде (Святилище культа) — знак бога под ними (BuildingFx.god_sigil)
+var level_lost: bool = false
+var fresh_converted: int = 0
 
 # Бог-покровитель отряда Хаоса (ChaosGods; решение пользователя 25.10.2026): "" — по юниту (по лору), у Common
 # бога нет. Карта «Chaos Gods' Blessing» меняет его, благословения (blessings, до ChaosGods.MAX_BLESSINGS) — только
@@ -200,6 +229,7 @@ func apply_merge_upgrade() -> void:
 # на уровень ниже и без карт-улучшений (с базового уровня — просто возрождается).
 func respawn_after_wipe() -> void:
 	var new_level = maxi(squad_level - 1, 0)
+	level_lost = squad_level > 0
 	hp_multiplier = 1.0
 	damage_multiplier = 1.0
 	attack_speed_multiplier = 1.0

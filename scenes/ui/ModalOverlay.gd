@@ -60,8 +60,9 @@ static func add_frame_eagle(panel: PanelContainer) -> void:
 	if not ResourceLoader.exists(UITheme.WINDOW_EAGLE):
 		return
 	var eagle: Texture2D = load(UITheme.WINDOW_EAGLE)
+	var size := eagle.get_size() * UITheme.UI_ART_SCALE   # нарисована ×2 к экрану (пакет menu_ui)
 	panel.draw.connect(func():
-		panel.draw_texture(eagle, Vector2(round((panel.size.x - eagle.get_width()) / 2.0), 0.0)))
+		panel.draw_texture_rect(eagle, Rect2(Vector2(round((panel.size.x - size.x) / 2.0), 0.0), size), false))
 
 func add_title(text: String, variation: String = "TitleLabel") -> Label:
 	var l = UITheme.make_label(text, variation)
@@ -116,11 +117,14 @@ func add_button(text: String, on_pressed: Callable, variation: String = "") -> B
 
 var _focus_taken: bool = false
 
-# Фокус в следующем кадре — если окно к тому времени не закрыли вместе со сценой
+# Фокус в следующем кадре — если окно к тому времени не закрыли вместе со сценой. Скрытый (hide_focus, Godot 4.6):
+# Enter / стрелки работают, но рамка фокуса не горит, пока игрок не начал навигацию клавиатурой (решение
+# пользователя 07.11.2026, Screenshot 2026-11-07 114006.png: первый орден / бог подсвечивался сразу — подсвечен
+# должен быть только тот, что выбирает игрок)
 static func focus_later(c: Control) -> void:
 	(func():
 		if is_instance_valid(c) and c.is_inside_tree():
-			c.grab_focus()).call_deferred()
+			c.grab_focus(true)).call_deferred()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if close_on_cancel and event.is_action_pressed("ui_cancel"):

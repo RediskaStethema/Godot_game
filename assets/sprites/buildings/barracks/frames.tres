@@ -77,7 +77,7 @@
 [resource]
 metadata/level_shift = {2: Vector2(-2, 0), 3: Vector2(3, 0)}
 metadata/level_scale = {2: 1.042, 3: 1.027}
-metadata/level_static = ["idle_3"]
+metadata/level_static = []
 animations = [{
 "frames": [{
 "duration": 1.0,

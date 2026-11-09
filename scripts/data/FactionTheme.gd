@@ -74,14 +74,31 @@ static func is_available(faction: String) -> bool:
 const SM_TILES = "res://assets/sprites/tiles/space_marines/"
 const SM_TERRAIN = [{"texture": SM_TILES + "terrain.png", "top": 10}]      # каменная осыпь
 const SM_DEBRIS_WALL = [{"texture": SM_TILES + "wall.png", "top": 67, "axis": "u"}]   # стена с обломками
-# Ядовитый ручей: плиты русла (к юго-западу шире) и их отражения вдоль течения (tools/river_mirror.py) —
-# IsoGridRenderer чередует плиту и отражение одной плиты на всю реку: стыки совпадают пиксель в пиксель.
-# River1 (river_0) не берём: на узком конце русло перегорожено обломками — грунтовая перемычка на стыке
+# Ядовитый ручей — прямое бесшовное русло (решение пользователя 09.11.2026, Screenshot 2026-11-09 093925.png: «река
+# течёт перпендикулярно и каменные перемычки» — плита и её отражение чередовались, на стыках сходились концы русла
+# с кромкой и обломками, рябь пакета v2 в отражении текла назад): tools/river_straight.py выпрямляет русло нарисованной
+# плиты, концы — её серединой (плита стыкуется сама с собой), рябь вдоль течения с периодом в половину плиты.
+# Кадры не перетекают ("blend": false — шаг, как в пикселе), у всех клеток реки одно время (IsoGridRenderer._draw_river_tile):
+# рябь непрерывна через стыки. Кадры пакета художника v2 — assets/source_sheets/River_Assets_v2
+const SM_RIVER_1_FLOW = [
+	{"texture": SM_TILES + "river_1_flow_00.png", "top": 17}, {"texture": SM_TILES + "river_1_flow_01.png", "top": 17},
+	{"texture": SM_TILES + "river_1_flow_02.png", "top": 17}, {"texture": SM_TILES + "river_1_flow_03.png", "top": 17},
+	{"texture": SM_TILES + "river_1_flow_04.png", "top": 17}, {"texture": SM_TILES + "river_1_flow_05.png", "top": 17},
+	{"texture": SM_TILES + "river_1_flow_06.png", "top": 17}, {"texture": SM_TILES + "river_1_flow_07.png", "top": 17},
+	{"texture": SM_TILES + "river_1_flow_08.png", "top": 17}, {"texture": SM_TILES + "river_1_flow_09.png", "top": 17},
+	{"texture": SM_TILES + "river_1_flow_10.png", "top": 17}, {"texture": SM_TILES + "river_1_flow_11.png", "top": 17},
+]
+const SM_RIVER_2_FLOW = [
+	{"texture": SM_TILES + "river_2_flow_00.png", "top": 22}, {"texture": SM_TILES + "river_2_flow_01.png", "top": 22},
+	{"texture": SM_TILES + "river_2_flow_02.png", "top": 22}, {"texture": SM_TILES + "river_2_flow_03.png", "top": 22},
+	{"texture": SM_TILES + "river_2_flow_04.png", "top": 22}, {"texture": SM_TILES + "river_2_flow_05.png", "top": 22},
+	{"texture": SM_TILES + "river_2_flow_06.png", "top": 22}, {"texture": SM_TILES + "river_2_flow_07.png", "top": 22},
+	{"texture": SM_TILES + "river_2_flow_08.png", "top": 22}, {"texture": SM_TILES + "river_2_flow_09.png", "top": 22},
+	{"texture": SM_TILES + "river_2_flow_10.png", "top": 22}, {"texture": SM_TILES + "river_2_flow_11.png", "top": 22},
+]
 const SM_RIVER = [
-	{"texture": SM_TILES + "river_1.png", "top": 17, "axis": "v",
-		"mirror": {"texture": SM_TILES + "river_1_mirror.png", "top": 17}},
-	{"texture": SM_TILES + "river_2.png", "top": 22, "axis": "v",
-		"mirror": {"texture": SM_TILES + "river_2_mirror.png", "top": 22}},
+	{"frames": SM_RIVER_1_FLOW, "fps": 8.0, "blend": false, "axis": "v"},
+	{"frames": SM_RIVER_2_FLOW, "fps": 8.0, "blend": false, "axis": "v"},
 ]
 const SM_RUINS = [{"texture": SM_TILES + "ruins_bunker.png", "top": 48}]   # руины с бункером
 const SM_CRATER = [{"texture": SM_TILES + "crater.png", "top": 20, "no_decor": true}]   # большой кратер
@@ -192,13 +209,12 @@ const CH_SMALL_CRATERS = [{"texture": CH_TILES + "red_terrain_craters.png", "top
 # выбор клеток и плиток идёт одной цепочкой случайных чисел, иначе съехали бы руины, обелиски и кратеры.
 # Файлы прежних плит остались в assets/sprites/tiles/chaos
 const CH_PLAIN = {"texture": CH_TILES + "red_terrain.png", "top": 10, "no_decor": true}
-# На клетках бывших кристаллов — туман (решение пользователя 23.10.2026): дымка в тон поля, как туман Космодесанта
-const CH_MIST = {"color": Color(0.62, 0.3, 0.27, 0.2), "radius": 90.0}   # гуще тумана Космодесанта: клетки одиночные
-const CH_CRYSTALS = [{"texture": CH_TILES + "red_terrain.png", "top": 10, "no_decor": true, "mist": CH_MIST}]
+# Туман Хаоса — у групп светящихся кристаллов (CH_OBELISK) и ямы с глазами (решение пользователя 07.11.2026: «туман
+# находится не возле кристаллов» — с 23.10.2026 он висел на одиночных клетках бывших кристаллов, далеко от обелисков)
+const CH_MIST = {"color": Color(0.62, 0.3, 0.27, 0.2), "radius": 90.0}   # дымка в тон поля, гуще тумана Космодесанта
+const CH_CRYSTALS = [{"texture": CH_TILES + "red_terrain.png", "top": 10, "no_decor": true}]
 const CH_FLAG = [{"texture": CH_TILES + "red_terrain.png", "top": 10, "no_decor": true, "flag": true}]
-const CH_TRENCH = [CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN,
-	CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN, CH_PLAIN]
-const CH_OBELISK = [{"fps": 1.2, "no_decor": true, "frames": [   # кристаллы разгораются
+const CH_OBELISK = [{"fps": 1.2, "no_decor": true, "mist": CH_MIST, "frames": [   # кристаллы разгораются
 	{"texture": CH_TILES + "obelisk_0.png", "top": 53},
 	{"texture": CH_TILES + "obelisk_1.png", "top": 53},
 	{"texture": CH_TILES + "obelisk_2.png", "top": 53},
@@ -212,7 +228,7 @@ const CH_BLAST = [CH_PLAIN]
 # постояла, раскрылась (кадры перетекают — TerrainTiles.draw_theme_tile; у клеток свой сдвиг времени)
 const EYES_GLOW = Color(1.0, 0.18, 0.5, 0.25)   # малиновый варп
 # Порядок кадров: 0–5 ×3 (моргание), 6–9 (закрывается), 9 ×6 (закрыта), 8–6 (раскрывается); 4 к/с — цикл 7.5 с
-const CH_EYES = [{"fps": 4.0, "no_decor": true, "glow": EYES_GLOW, "glow_radius": 45.0, "glow_offset": Vector2(0.0, -6.0),
+const CH_EYES = [{"fps": 4.0, "no_decor": true, "mist": CH_MIST, "glow": EYES_GLOW, "glow_radius": 45.0, "glow_offset": Vector2(0.0, -6.0),
 		"frames": [
 	{"texture": CH_TILES + "red_eyes_0.png", "top": 19},
 	{"texture": CH_TILES + "red_eyes_1.png", "top": 19},
@@ -277,6 +293,9 @@ const CH_DECOR = [
 	{"texture": CH_PROPS + "chaos_28.png", "base": Vector2(68, 96), "scale": CH_DECOR_SCALE},   # big_chest
 	{"texture": CH_PROPS + "chaos_29.png", "base": Vector2(56, 111), "scale": CH_DECOR_SCALE},   # dome
 ]
+# Жаровня — ориентир у цитадели, как костёр Космодесанта (объект листа крепости chaos_27, со светом)
+const CH_BRAZIER = {"texture": CH_PROPS + "chaos_27.png", "base": Vector2(44, 130), "scale": 0.42,
+	"glow": FIRE_GLOW, "glow_radius": 75.0}
 # Знамёна UI_assets.png в тоне красного грунта: красно-чёрное с черепом, со скелетом, чёрное с черепом
 const CH_WAR_BANNERS = [
 	{"texture": CH_PROPS + "war_banner_1.png", "base": Vector2(40, 237), "scale": WAR_BANNER_SCALE},
@@ -287,11 +306,13 @@ const CH_WAR_BANNERS = [
 # грунт, как у Космодесанта): группы руин мельче, обелисков меньше, декора — "decor_chance";
 # окопы, кристаллы и извержения — ровный грунт (CH_PLAIN, 23.10.2026)
 const CH_FEATURES = [
-	{"tiles": CH_CHAOS_RUINS + CH_TRENCH, "clusters": 5, "size": [2, 3]},
+	# 07.11.2026 (решение пользователя: «карта Хаоса слишком пустая»): в группах руин — только руины (половина списка
+	# была пустым грунтом бывших окопов CH_TRENCH), групп кристаллов 4 (было 2), декора 12% (было 6)
+	{"tiles": CH_CHAOS_RUINS, "clusters": 5, "size": [2, 3]},
 	{"tiles": CH_CRATER, "scatter": 0.04},
 	{"tiles": CH_SMALL_CRATERS, "scatter": 0.06},
 	{"tiles": CH_CRYSTALS, "scatter": 0.02},
-	{"tiles": CH_OBELISK, "clusters": 2, "size": [3, 5], "center": CH_EYES},   # глаза — посреди кристаллов
+	{"tiles": CH_OBELISK, "clusters": 4, "size": [3, 5], "center": CH_EYES},   # глаза — посреди кристаллов
 	{"tiles": CH_BLAST, "scatter": 0.03},   # грунт (было извержение; последней — раскладка остальных не менялась)
 ]
 
@@ -316,8 +337,15 @@ const THEMES = {
 		# затемнение к основанию, мягкая обводка
 		"building_env": {"tint": Color(0.78, 0.80, 0.88), "sat": 0.85, "knee": 0.35, "ao": 0.45,
 			"outline_px": 1.3, "outline_alpha": 0.7},
+		# Бойцы в свет местности (Soldier.UNIT_SHADER, решение пользователя 08.11.2026: «юниты слишком выделяются»):
+		# оттенок, насыщенность, приглушение светов, затемнение к ногам; объём — свет сверху: верхние кромки к
+		# light_color (light), нижние и боковые в тень (shade), корпус светлее к плечам (grad)
+		"unit_env": {"tint": Color(0.88, 0.90, 0.96), "sat": 0.82, "knee": 0.2, "ao": 0.3,
+			"light": 0.45, "shade": 0.35, "grad": 0.25, "light_color": Color(0.75, 0.82, 1.0)},
 		"atmosphere": "ash",
-		"critters": {"count": 6},   # существа по краям поля (SideCritters)
+		"dust": Color(Palette.DUST_PALE, 0.22),   # пыль из-под ног (DustLayer) — серая каменная крошка
+		# Существ по краям поля (SideCritters: демоны и кровавые твари) у Космодесанта нет — только у Хаоса (решение
+		# пользователя 07.11.2026)
 		"building_tint": Color(0.5, 0.56, 0.68),   # блоки зданий без спрайта — готическая сталь
 		"landmarks": {"campfire": SM_CAMPFIRE, "banners": SM_BANNERS, "random_banners": 2,
 			"war_banners": SM_WAR_BANNERS, "war_banner_count": 3},
@@ -341,7 +369,8 @@ const THEMES = {
 		"map_seed": 131,
 		"edge": CH_DEBRIS_WALL,
 		"decorations": CH_DECOR,
-		"decor_chance": 6,   # % клеток вне боевой полосы с декором (по умолчанию IsoGridRenderer.DECOR_CHANCE)
+		"clear_strip": true,   # в боевой полосе — только грунт и воронки (IsoGridRenderer._tiles_allowed_at)
+		"decor_chance": 12,   # % клеток вне боевой полосы с декором (как у Космодесанта; было 6 — «слишком пусто», 07.11.2026)
 		# Подсветки края силуэта ("unit_rim", Soldier.RIM_SHADER) нет — решение пользователя 20.10.2026:
 		# оранжевый контур на хаоситах лишний, поле и так темнее и глуше
 		# Красное поле: тени — в бордо, света — в малиновый варп (палитра «бордо + варп», 23.10.2026; было — в огонь
@@ -349,13 +378,17 @@ const THEMES = {
 		"grade": {"saturation": 0.86, "shadow_tone": Color(0.028, 0.006, 0.01), "highlights": Color(1.06, 0.92, 1.0)},
 		"building_env": {"tint": Color(0.88, 0.80, 0.80), "sat": 0.78, "knee": 0.3, "ao": 0.4,
 			"outline_px": 1.3, "outline_alpha": 0.7},   # здания в свет местности — см. тему Космодесанта
+		"unit_env": {"tint": Color(0.98, 0.92, 0.92), "sat": 0.92, "knee": 0.1, "ao": 0.3,
+			"light": 0.45, "shade": 0.35, "grad": 0.25, "light_color": Color(1.0, 0.72, 0.62)},   # см. тему Космодесанта
 		# Грунт светлее (только слой пола, IsoGridRenderer._floor): здания, бойцы и их контур не сливаются
 		# с почти чёрным бордо (решение пользователя 24.10.2026, из ×1 / ×1.3 / ×1.6)
 		"floor_brightness": 1.3,
 		"atmosphere": "embers",
+		"dust": Color(Palette.DUST, 0.32),   # пыль из-под ног (DustLayer) — бурый пепел
 		"critters": {"count": 6},   # существа по краям поля (SideCritters)
 		"building_tint": Color(0.58, 0.38, 0.36),  # блоки зданий без спрайта — ржаво-бордовый камень
-		"landmarks": {"war_banners": CH_WAR_BANNERS, "war_banner_count": 4},   # костров и знамён-GIF нет
+		# Жаровня у цитадели — вместо костра Космодесанта (07.11.2026), свет — огонь; знамён-GIF нет
+		"landmarks": {"campfire": CH_BRAZIER, "war_banners": CH_WAR_BANNERS, "war_banner_count": 4},
 		# Крепость с черепом — кадры пользователя 25.10.2026 (buildings_png/New_citadel_frames, как у Космодесанта;
 		# tools/citadel_frames_fit.py: попадание было на 20% мельче выстрела, стойка — крупнее): выстрел — красный
 		# взрыв у ворот (снаряд на кадре 3, из ворот muzzle), попадание, обрушение до руин. scale — стойка на поле

@@ -46,7 +46,9 @@ func _make_card(c: Dictionary) -> Control:
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	box.offset_left = CARD_PADDING
 	box.offset_right = -CARD_PADDING
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	# от верха (решение пользователя 07.11.2026, Screenshot 2026-11-07 114006.png): по центру значок и имя у карточек
+	# с описанием разной длины стояли на разной высоте
+	box.alignment = BoxContainer.ALIGNMENT_BEGIN
 	box.add_theme_constant_override("separation", 6)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(box)
@@ -54,7 +56,8 @@ func _make_card(c: Dictionary) -> Control:
 	if emblem:
 		emblem.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		if not open:
-			emblem.modulate = Color(0.45, 0.45, 0.5)
+			emblem.self_modulate = Color(0.45, 0.45, 0.5)
+			UITheme.add_lock_badge(emblem)
 		box.add_child(emblem)
 	var name_label = UITheme.make_label(c["name"], "HeaderLabel")
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

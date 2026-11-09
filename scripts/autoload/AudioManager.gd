@@ -38,9 +38,13 @@ const EVENTS = {
 	"poison":       {"volume": -14.0, "max_per_sec": 4,  "pitch": 0.1},
 	"battle_cry":   {"volume": -6.0,  "max_per_sec": 2,  "pitch": 0.03},
 	"jump_land":    {"volume": -8.0,  "max_per_sec": 6,  "pitch": 0.08},   # приземление Assault
+	"launch":       {"volume": -6.0,  "max_per_sec": 1,  "pitch": 0.0},    # взлёт из меню в забег (MenuLaunch)
+	"landing":      {"volume": -6.0,  "max_per_sec": 1,  "pitch": 0.0},    # посадка на первое поле (BattleLanding)
 	"deep_strike":  {"volume": -4.0,  "max_per_sec": 2,  "pitch": 0.03},   # телепорт Терминаторов
 	"revive":       {"volume": -8.0,  "max_per_sec": 3,  "pitch": 0.05},
 	"orbital_strike": {"volume": -2.0, "max_per_sec": 2, "pitch": 0.0},
+	"boss_special": {"volume": -2.0,  "max_per_sec": 2,  "pitch": 0.03},   # приём финального босса (Soldier._special_view)
+	"boss_appear":  {"volume": -2.0,  "max_per_sec": 1,  "pitch": 0.0},    # босс выходит на поле (Soldier.play_appear)
 	# Интерфейс
 	"ui_click":     {"volume": -10.0, "max_per_sec": 20, "pitch": 0.0},
 	"buy":          {"volume": -6.0,  "max_per_sec": 8,  "pitch": 0.0},

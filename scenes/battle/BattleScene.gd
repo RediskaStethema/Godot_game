@@ -35,7 +35,28 @@ var _base_time_scale: float = 1.0
 var _speed_applied: bool = false
 const FINALE_SLOWMO: float = 0.35       # скорость мира в финале боя
 const FINALE_SLOWMO_TIME: float = 0.6   # сколько реальных секунд
+# Стоп-кадр на крупном ударе (решение пользователя 08.11.2026, только вид): мир на HITSTOP_TIME реального
+# времени замедляется до HITSTOP_SCALE — удар Дредноута, приземление прыжка, залп орудия, гибель техники.
+# Не чаще HITSTOP_GAP_MS, не в финале; headless — выключен (тесты гоняют бой по кадрам), тест включает сам
+const HITSTOP_SCALE: float = 0.05
+const HITSTOP_TIME: float = 0.05
+const HITSTOP_GAP_MS: int = 400
+var hitstop_enabled: bool = DisplayServer.get_name() != "headless"
+var _hitstop_base: float = -1.0   # скорость до стоп-кадра (-1 — его нет)
+var _hitstop_at: int = -100000
 var _finale_base_scale: float = -1.0    # скорость до замедления (-1 — замедления нет)
+# Финальный босс (решение пользователя 09.11.2026, BossFx): выход — наезд камеры, титр, появление, удар о землю;
+# смерть — замедление мира, наезд, вспышка, титр; итог боя ждёт конца этого мига. Только вид
+const BOSS_INTRO_TIME: float = 2.2      # сек игрового времени: столько длится выход (бой не начнётся раньше)
+const BOSS_INTRO_ZOOM: float = 1.8      # наезд — от вписанного зума
+const BOSS_INTRO_IMPACT: float = 0.75   # удар о землю — на этой доле ряда appear
+const BOSS_FALL_SLOWMO: float = 0.25    # скорость мира, пока примарх падает
+const BOSS_FALL_TIME: float = 1.4       # реальных секунд
+const BOSS_FALL_ZOOM: float = 1.6
+const BOSS_FALL_LIGHT: float = 0.5      # яркость вспышки смерти (была 1.0 — засвечивала поле)
+var _intro_time: float = 0.0            # выход босса этого «В БОЙ» (0 — нет)
+var _boss_fall_base: float = -1.0       # скорость до замедления смерти босса (-1 — нет)
+var _deferred_winner: int = -2          # итог боя пришёл во время смерти босса (-2 — нет)
 
 var battle_type: String = RunMapNode.BATTLE   # тип боя шага забега: battle / miniboss / boss
 var battle_wave: int = 1
@@ -78,6 +99,7 @@ func _ready() -> void:
 	SoldierRegistry.clear()
 	battle_type = RunManager.get_battle_type()
 	AudioManager.play_music("boss" if battle_type == RunMapNode.BOSS else "battle")
+	UITheme.apply_cursors()
 	battle_wave = RunManager.get_battle_wave()
 	_card_handlers = {
 		"squad": _play_squad_card,
@@ -92,6 +114,12 @@ func _ready() -> void:
 	Projectile.warm_cache()
 	AudioManager.warm_cache()
 	SaveManager.save_run()
+	# Первое поле нового забега — посадка сквозь облака (MenuLaunch → магазин → сюда); флаг снимается всегда
+	if RunManager.landing_pending:
+		RunManager.landing_pending = false
+		if not RunManager.test_mode and not BattleManager.battle_in_progress and DisplayServer.get_name() != "headless":
+			BattleLanding.play(self, camera,
+				Palette.LANDING_CLOUD_CHAOS if RunManager.player_faction == "chaos" else Palette.LANDING_CLOUD)
 	# Загрузили сохранение посреди боя: армия уже стоит как была — сразу в бой
 	if BattleManager.battle_in_progress:
 		_show_message("Бой продолжается")
@@ -148,11 +176,23 @@ func _build_ui() -> void:
 func _build_field() -> void:
 	# Бойцы рисуются по глубине: кто ниже на экране — тот ближе
 	units_container.y_sort_enabled = true
+	# Шрамы поля — подпалины и кровь до конца боя, на земле под тенями (только вид)
+	var scars := ScarLayer.new()
+	add_child(scars)
+	move_child(scars, units_container.get_index())
+	scars.setup()
 	# Тени и кольца бойцов — одним слоем под отрядами (SoldierShadows)
 	var shadows := SoldierShadows.new()
 	add_child(shadows)
 	move_child(shadows, units_container.get_index())
 	shadows.setup(units_container)
+	# Пыль из-под ног — на земле под отрядами, над тенями (только вид)
+	var dust := DustLayer.new()
+	add_child(dust)
+	move_child(dust, units_container.get_index())
+	dust.setup(FactionTheme.current())
+	# След снарядов — один слой над бойцами (только вид)
+	units_container.get_parent().add_child(ProjectileTrail.new())
 	iso_grid.set_unlocked_tiles(BattleManager.kingdom_tiles)
 	iso_grid.setup()
 	renderer = IsoGridRenderer.new()
@@ -186,12 +226,24 @@ func _populate_field() -> void:
 		_strike_marks.append(TileGlow.target(renderer, "strike", iso_grid.tile_to_screen(tile)))
 	_update_synergy_preview()
 	_update_expansion()
-	# Этап расширения объявлен экраном ещё до магазина (решение пользователя) — здесь подсказка в шапке
+	# Этап расширения объявлен экраном ещё до магазина (решение пользователя) — здесь подсказка в шапке;
+	# финальный бой — сначала кто ждёт за туманом (примарх и его приём)
+	var boss := _final_boss_note()
 	if BattleManager.can_expand_kingdom() and not iso_grid.get_expansion_tiles().is_empty():
-		_show_message("Этап расширения: клетки рядом с королевством — от %d Req, клик по клетке с ценой"
+		_show_message(boss + "Этап расширения: клетки рядом с королевством — от %d Req, клик по клетке с ценой"
 			% BattleManager.get_tile_cost())
 	elif BattleManager.next_battle_note != "":
-		_show_message(BattleManager.next_battle_note)
+		_show_message(boss + BattleManager.next_battle_note)
+	elif boss != "":
+		_show_message(boss.trim_suffix(". "))
+
+# «Финальная битва: <босс> (приём). » — для шапки расстановки; не финальный бой — ""
+func _final_boss_note() -> String:
+	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_ENEMY):
+		var d: UnitData = squad.data
+		if EnemyWaves.BOSS_TITLES.has(d.factory_id):
+			return "Финальная битва: %s — «%s». " % [EnemyWaves.BOSS_TITLES[d.factory_id], d.special_name]
+	return ""
 
 func _get_play_area() -> Rect2:
 	var screen = get_viewport_rect().size
@@ -272,12 +324,58 @@ func _place_player_squads() -> void:
 		if unit_data.respawned:   # пал целиком, бой выигран — возродился: свет появления на бойцах
 			unit_data.respawned = false
 			_glow_soldiers.call_deferred(squad, "arrive")
+		if unit_data.level_lost:   # и уровнем ниже — шеврон трескается
+			unit_data.level_lost = false
+			BuildingFx.level_down.call_deferred(squad)
+		if unit_data.fresh_converted > 0:   # павшие встали бойцами бога (Святилище культа) — знак бога под ними
+			_show_god_sigils.call_deferred(squad, unit_data.fresh_converted)
+			unit_data.fresh_converted = 0
+
+# Знак бога под последними count бойцами бога в отряде (новые — дописаны в конец состава)
+func _show_god_sigils(squad: Squad, count: int) -> void:
+	if not is_instance_valid(squad):
+		return
+	var order := 0
+	for i in range(squad.soldiers.size() - 1, -1, -1):
+		var s = squad.soldiers[i]
+		if order >= count:
+			break
+		if is_instance_valid(s) and s.convert_kind != "":
+			BuildingFx.god_sigil(s, ChaosGods.default_god(s.convert_kind.split(":")[0]), order)
+			order += 1
+
+# Благословение и смена бога отряда (EFFECTS_NEEDED 4.11, кодом 09.11.2026; было — свет появления): знак бога
+# загорается под каждым бойцом по очереди
+func _bless_sigils(squad: Squad) -> void:
+	var god: String = squad.data.get_god()
+	var order := 0
+	for s in squad.soldiers:
+		if is_instance_valid(s):
+			BuildingFx.god_sigil(s, god, order)
+			order += 1
+
+# «В БОЙ» — полоса света вдоль передней кромки королевства (EFFECTS_NEEDED 8.4, кодом; только вид)
+func _show_front_line() -> void:
+	if BattleManager.kingdom_tiles.is_empty():
+		return
+	var u := -999
+	var v0 := 999
+	var v1 := -999
+	for t in BattleManager.kingdom_tiles:
+		u = maxi(u, t.x)
+		v0 = mini(v0, t.y)
+		v1 = maxi(v1, t.y)
+	BuildingFx.battle_start(renderer, iso_grid.lattice_to_screen(u + 0.5, v0 - 0.5),
+		iso_grid.lattice_to_screen(u + 0.5, v1 + 0.5), RunManager.player_faction == "chaos")
 
 # Состав врагов — данными в EnemyWaves; заполняют зону с переднего края в тыл
 func _place_enemy_squads() -> void:
 	var tiles = iso_grid.get_enemy_tiles_front_first()
 	var specs = EnemyWaves.build(battle_wave, battle_type, tiles.size(), RunManager.rng.seed, RunManager.difficulty,
 		FactionTheme.enemy_of(RunManager.player_faction))
+	# Тестовый режим: босс из панели — любой из 9 примархов, и чужой расы (посмотреть всех)
+	if RunManager.test_mode and RunManager.test_boss != "" and battle_type == RunMapNode.BOSS and not specs.is_empty():
+		specs[0]["unit"] = RunManager.test_boss
 	enemy_elites_at_start = 0
 	# Строй врага, как у игрока (построение перед боем): ближний бой — в передние клетки зоны, стрелки — в задние;
 	# внутри групп — порядок волны (EnemyWaves: босс и танки впереди)
@@ -528,7 +626,7 @@ func _play_god_card(card: CardData, squad: Squad) -> bool:
 	if not squad.apply_upgrade(card):   # Тзинч — только стрелкам
 		_show_message("%s: действует только на стрелков" % card.title)
 		return false
-	_glow_soldiers(squad, "arrive")
+	_bless_sigils(squad)
 	_show_message("%s → %s: %s" % [card.title, squad.data.unit_name,
 		ChaosGods.describe(squad.data.get_god(), squad.data.blessings, squad.data.tags)])
 	return true
@@ -539,7 +637,7 @@ func _on_god_chosen(new_god: String, card: CardData, squad: Squad) -> void:
 	squad.data.change_god(new_god)
 	for s in squad.soldiers:
 		s.refresh_stats_from_data()
-	_glow_soldiers(squad, "arrive")
+	_bless_sigils(squad)
 	AudioManager.play("place")
 	_show_message("%s теперь служит богу %s" % [squad.data.unit_name, ChaosGods.god_name(new_god)])
 	_consume_bench_card(card)
@@ -793,11 +891,18 @@ func _on_start_pressed(deploy: bool = true) -> void:
 	bench.visible = false
 	_fit_camera(true)
 	_update_expansion()
+	_intro_time = 0.0
 	for squad in SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_ENEMY):
 		squad.visible = true
+		for s in squad.soldiers:
+			s.reveal_boss()   # тень и кольцо примарха — только теперь (на расстановке выдали бы его)
+			if deploy and s.data.special_kind != "":   # примарх выходит на поле, пока армия строится (только вид)
+				_boss_intro(s)
 	_base_time_scale = Engine.time_scale
 	_speed_applied = true
 	_apply_battle_speed()
+	Building.show_start_waves()   # волна от зданий к соседям — пока отряды на своих клетках
+	_show_front_line()
 	var slots := _deploy_slots(SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
 	if not deploy:
 		for squad in slots:
@@ -850,7 +955,11 @@ func _deploy_army(slots: Dictionary) -> void:
 	# Пауза «стоят строем» — после последнего: параллельный шаг длится до него, дальше — по очереди
 	# (без set_parallel(false) пауза шла бы вместе с ходом и бой стартовал бы на бегу)
 	tw.set_parallel(false)
-	tw.tween_interval(DEPLOY_HOLD)
+	var walk := 0.0
+	for squad in slots:
+		walk = maxf(walk, (slots[squad] - squad.global_position).length()
+			/ maxf(maxf(squad.data.get_move_speed() * DEPLOY_PACE, (slots[squad] - squad.global_position).length() / DEPLOY_MAX_TIME), 1.0))
+	tw.tween_interval(maxf(DEPLOY_HOLD, _intro_time - walk))   # выход босса доигрывается до схватки
 	tw.tween_callback(_begin_battle)
 
 func _deploy_arrived(squad: Squad) -> void:
@@ -914,6 +1023,9 @@ func _on_battle_ended(winner_team: int) -> void:
 	# Итог боя обрабатывается ровно один раз: доход, round_number, шаг забега
 	if _battle_resolved:
 		return
+	if _boss_fall_base > 0.0:   # примарх ещё падает — итог после (_end_boss_fall)
+		_deferred_winner = winner_team
+		return
 	_battle_resolved = true
 	BattleManager.battle_in_progress = false
 	_restore_time_scale()
@@ -930,7 +1042,11 @@ func _on_battle_ended(winner_team: int) -> void:
 		return
 	var won = winner_team == GameConstants.TEAM_PLAYER
 	# Мета-прогрессия: статистика побед; открытые ордена / карты — в итоги боя
-	var unlocked: Array[String] = MetaProgress.on_battle_won(battle_wave, battle_type) if won else [] as Array[String]
+	# Без тернарного: «… if won else [] as Array[String]» отдаёт нетипизированный Array — ошибка присваивания
+	# обрывала _on_battle_ended (06.11.2026, бой выигран одними зданиями)
+	var unlocked: Array[String] = []
+	if won:
+		unlocked = MetaProgress.on_battle_won(battle_wave, battle_type)
 	if battle_type == RunMapNode.BOSS and won:
 		RunManager.complete_current_node()
 		_unlocked_difficulty = SaveManager.on_run_won(RunManager.difficulty)
@@ -989,9 +1105,104 @@ func _result_title(winner_team: int) -> String:
 # Финал боя (решение пользователя): мир на миг замедляется — последние падения, позы победы.
 # Бой уже закончен — на исход не влияет; таймер по реальному времени, на паузе стоит
 func _play_finale_slowmo() -> void:
+	_end_hitstop()
 	_finale_base_scale = Engine.time_scale
 	Engine.time_scale = _finale_base_scale * FINALE_SLOWMO
 	get_tree().create_timer(FINALE_SLOWMO_TIME, false, false, true).timeout.connect(_end_finale_slowmo)
+
+# Выход финального босса (по «В БОЙ», бой ещё не идёт): наезд камеры, титр, ряд appear, удар о землю; через
+# BOSS_INTRO_TIME камера — обратно на поле. Время игровое (как построение — скорость боя ускоряет и его)
+func _boss_intro(boss: Soldier) -> void:
+	_intro_time = BOSS_INTRO_TIME
+	var d: UnitData = boss.data
+	camera.focus(boss.global_position + Vector2(0.0, -Soldier.TARGET_SPRITE_HEIGHT * d.sprite_scale * 0.5),
+		BOSS_INTRO_ZOOM, 0.5)
+	BossFx.title(self, d.unit_name.to_upper(), EnemyWaves.BOSS_TITLES.get(d.factory_id, "").get_slice(",", 1).strip_edges(),
+		d.special_color)
+	var impact := 0.3
+	if boss.play_appear():
+		var frames := boss.sprite.sprite_frames
+		impact = frames.get_frame_count("appear") / frames.get_animation_speed("appear") * BOSS_INTRO_IMPACT
+	var tw := create_tween()
+	tw.tween_interval(impact)
+	tw.tween_callback(_boss_landed.bind(boss))
+	tw.tween_interval(maxf(BOSS_INTRO_TIME - impact, 0.0))
+	tw.tween_callback(func(): if is_instance_valid(camera): _fit_camera(true))
+
+func _boss_landed(boss: Soldier) -> void:
+	if not is_instance_valid(boss):
+		return
+	var d: UnitData = boss.data
+	BossFx.shockwave(boss.global_position, d.special_radius * 1.3, d.special_color)
+	BossFx.cracks(boss.global_position, d.special_radius, Soldier.BOSS_CRACK_LIFE, d.special_color)
+	IsoGridRenderer.flash_light(boss.global_position, Color(d.special_color, 0.9), d.special_radius * 2.0, 0.5)
+	camera.shake(Soldier.SPECIAL_SHAKE)
+
+# Ярость босса (Soldier._enrage) — строка в шапке
+func boss_enraged(boss: Soldier) -> void:
+	_show_message("%s в ярости: приём чаще!" % boss.data.unit_name)
+
+# Смерть финального босса (Soldier._die): мир замедляется на BOSS_FALL_TIME реального времени, камера — к нему,
+# вспышка, ударная волна, титр; итог боя, пришедший в это время, ждёт (_deferred_winner). Без стоп-кадров
+# (headless, hitstop_enabled) — только вспышка и титр, без замедления и ожидания
+func boss_fall(boss: Soldier) -> void:
+	var d: UnitData = boss.data
+	var at := boss.global_position
+	BossFx.shockwave(at, d.special_radius * 2.0, d.special_color)
+	BossFx.cracks(at, d.special_radius * 1.2, Soldier.BOSS_CRACK_LIFE * 1.5, d.special_color)
+	# Решение пользователя 09.11.2026 («умирают инородно от текстур»): вспышка была на полную яркость 0.9 с — в
+	# замедлении ×0.25 почти 4 с засвечивала поле и тело добела; взрыв и удар пака Pixel, растянутые до размера
+	# примарха, ложились на тело квадратной серо-белой кляксой. Теперь: свет глуше и короче, вместо них — пыль
+	# поля (DustLayer) кольцом от тела; павший сам не загорается (Soldier.add_flash_light)
+	IsoGridRenderer.flash_light(at, Color(d.special_color, BOSS_FALL_LIGHT), d.special_radius * 2.0, 0.45)
+	DustLayer.puff(at, d.special_radius * 0.3, 10, d.special_radius * 0.35)
+	ScarLayer.scorch(at, d.special_radius * 0.55)
+	DustLayer.puff(at, d.special_radius * 0.18, 8, d.special_radius * 0.7)
+	camera.shake(Soldier.SPECIAL_SHAKE * 1.5)
+	BossFx.title(self, "ДЕМОН ИЗГНАН" if d.faction == "chaos" else "ПРИМАРХ ПОВЕРЖЕН", d.unit_name, d.special_color)
+	if not hitstop_enabled or _boss_fall_base > 0.0:
+		return
+	_end_hitstop()
+	_boss_fall_base = Engine.time_scale
+	Engine.time_scale = _boss_fall_base * BOSS_FALL_SLOWMO
+	camera.focus(at + Vector2(0.0, -Soldier.TARGET_SPRITE_HEIGHT * d.sprite_scale * 0.4), BOSS_FALL_ZOOM, 0.35, true)
+	get_tree().create_timer(BOSS_FALL_TIME, false, false, true).timeout.connect(_end_boss_fall)
+
+func is_boss_falling() -> bool:
+	return _boss_fall_base > 0.0
+
+func _end_boss_fall() -> void:
+	if _boss_fall_base <= 0.0:
+		return
+	if is_equal_approx(Engine.time_scale, _boss_fall_base * BOSS_FALL_SLOWMO):
+		Engine.time_scale = _boss_fall_base
+	_boss_fall_base = -1.0
+	if not is_inside_tree():
+		return
+	_fit_camera(true)
+	if _deferred_winner != -2:
+		var w := _deferred_winner
+		_deferred_winner = -2
+		_on_battle_ended(w)
+
+# Стоп-кадр (зовут бойцы и снаряды через дерево: current_scene.has_method("hitstop"))
+func hitstop(sec: float = HITSTOP_TIME) -> void:
+	if not hitstop_enabled or _hitstop_base > 0.0 or _finale_base_scale > 0.0 or _boss_fall_base > 0.0 \
+			or not BattleManager.is_battle_running():
+		return
+	if Time.get_ticks_msec() - _hitstop_at < HITSTOP_GAP_MS:
+		return
+	_hitstop_at = Time.get_ticks_msec()
+	_hitstop_base = Engine.time_scale
+	Engine.time_scale = _hitstop_base * HITSTOP_SCALE
+	get_tree().create_timer(sec, false, false, true).timeout.connect(_end_hitstop)
+
+# Конец стоп-кадра; скорость за это время сменили (кнопка ×2, итог боя) — не трогаем
+func _end_hitstop() -> void:
+	if _hitstop_base > 0.0:
+		if is_equal_approx(Engine.time_scale, _hitstop_base * HITSTOP_SCALE):
+			Engine.time_scale = _hitstop_base
+		_hitstop_base = -1.0
 
 func _end_finale_slowmo() -> void:
 	if _finale_base_scale > 0.0:
@@ -1065,7 +1276,7 @@ func _show_run_end(victory: bool) -> void:
 	AudioManager.play_music("")
 	SaveManager.delete_save()
 	inspector.shutdown()
-	var subtitle = "Главный босс Хаоса повержен — забег выигран!" if victory \
+	var subtitle = "Главный босс повержен — забег выигран!" if victory \
 		else "Забег окончен на волне %d из %d." % [battle_wave, RunManager.get_total_waves()]
 	var meta: Dictionary = MetaProgress.on_run_end(victory)
 	if MetaProgress.active():
@@ -1088,6 +1299,7 @@ func _show_run_end(victory: bool) -> void:
 func _on_new_run_pressed() -> void:
 	BattleManager.reset_run()
 	SaveManager.delete_save()
+	RunManager.landing_pending = true   # первое поле нового забега — посадка (BattleLanding)
 	RunManager.advance()
 
 # -------------------------------------------------------
@@ -1107,6 +1319,9 @@ func _exit_tree() -> void:
 	BattleManager.kingdom_wall = null
 	if AuraRing.layer == renderer:   # новая сцена боя могла уже поставить свой слой
 		AuraRing.layer = null
+	_end_hitstop()
+	_deferred_winner = -2   # сцена уходит — отложенный итог не обрабатываем
+	_end_boss_fall()
 	_restore_time_scale()
 	_end_finale_slowmo()
 
@@ -1137,6 +1352,9 @@ func _build_test_panel() -> void:
 		_reload_test_placement())
 	test_panel.type_changed.connect(func(kind):
 		RunManager.test_battle_type = kind
+		_reload_test_placement())
+	test_panel.boss_changed.connect(func(id):
+		RunManager.test_boss = id
 		_reload_test_placement())
 	test_panel.level_changed.connect(func(level): _show_message("Из панели: отряды ур.%d, здания ур.%d" % [level, mini(1 + level, CardData.MAX_BUILDING_LEVEL)]))
 	test_panel.clear_pressed.connect(_on_test_clear)

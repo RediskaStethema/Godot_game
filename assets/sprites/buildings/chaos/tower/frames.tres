@@ -58,6 +58,7 @@
 [resource]
 metadata/level_muzzle = {2: Vector2(107.5, -213.5), 3: Vector2(91.0, -178.3)}
 metadata/level_barrels = {3: [Vector2(75.1, -231.4), Vector2(93.5, -177.9)]}
+metadata/level_barrel_dir = {1: Vector2(0.934, -0.358), 2: Vector2(0.974, -0.225), 3: Vector2(0.985, -0.174)}
 metadata/level_shift = {2: Vector2(17, -2), 3: Vector2(30, -2)}
 metadata/level_scale = {2: 1.170, 3: 1.308}
 metadata/level_static = []

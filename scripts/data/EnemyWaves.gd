@@ -46,9 +46,12 @@ const MINIBOSS = {
 	"elite_wave_div": 5,    # волна 5 — 1 элитный отряд, волна 10 — 2
 }
 
-# Главный босс (последняя волна): Chaos Lord заменяет передние отряды обычной волны
+# Главный босс (последняя волна) заменяет передние отряды обычной волны. Решение пользователя 09.11.2026:
+# босс — примарх, какой из units — случайно от seed забега (boss_unit; «Продолжить» босса не меняет);
+# "unit" — прежний босс (Chaos Lord / Chapter Master), если units пуст
 const BOSS = {
 	"unit": "chaos_lord",
+	"units": ["daemon_angron", "daemon_mortarion", "daemon_magnus", "daemon_fulgrim"],
 	"soldiers": 1,
 	"replaces_squads": 2,
 }
@@ -72,6 +75,7 @@ const SM_MINIBOSS = {
 }
 const SM_BOSS = {
 	"unit": "chapter_master_boss",
+	"units": ["primarch_guilliman", "primarch_sanguinius", "primarch_dorn", "primarch_russ", "primarch_vulkan"],
 	"soldiers": 1,
 	"replaces_squads": 2,
 }
@@ -148,6 +152,27 @@ static func pick_archetypes(wave: int, squads: int, seed_value: int,
 	picked.sort_custom(func(a, b): return archetypes[a]["order"] < archetypes[b]["order"])
 	return picked
 
+# Финальный босс забега: примарх из BOSS / SM_BOSS "units" по seed забега (тот же при переигровке и «Продолжить»)
+static func boss_unit(seed_value: int, enemy: String = "chaos") -> String:
+	var boss: Dictionary = _enemy_set(enemy)["boss"]
+	var units: Array = boss.get("units", [])
+	if units.is_empty():
+		return boss["unit"]
+	return units[posmod(hash([seed_value, "final_boss"]), units.size())]
+
+# Подпись финального босса для шапки расстановки (BattleScene)
+const BOSS_TITLES = {
+	"daemon_angron": "Ангрон, демон-примарх Кхорна",
+	"daemon_mortarion": "Мортарион, демон-примарх Нургла",
+	"daemon_magnus": "Магнус Красный, демон-примарх Тзинча",
+	"daemon_fulgrim": "Фулгрим, демон-примарх Слаанеш",
+	"primarch_guilliman": "Робаут Жиллиман, примарх Ультрамаринов",
+	"primarch_sanguinius": "Сангвиний, примарх Кровавых Ангелов",
+	"primarch_dorn": "Рогал Дорн, примарх Имперских Кулаков",
+	"primarch_russ": "Леман Русс, примарх Космических Волков",
+	"primarch_vulkan": "Вулкан, примарх Саламандр",
+}
+
 # Возвращает [{ "unit": factory_id, "count": бойцов, "mult": множитель hp/урона }].
 # seed_value — seed забега (RunManager.rng.seed): от него случайный состав волны.
 # difficulty — уровень сложности забега (Difficulty): бойцов в обычных отрядах и сильные архетипы
@@ -162,7 +187,7 @@ static func build(wave: int, node_type: String, max_squads: int, seed_value: int
 	var replaced = 0   # сколько отрядов обычной волны заменено
 	match node_type:
 		RunMapNode.BOSS:
-			squads.append({"unit": boss["unit"], "count": boss["soldiers"], "mult": mult})
+			squads.append({"unit": boss_unit(seed_value, enemy), "count": boss["soldiers"], "mult": mult})
 			replaced = boss["replaces_squads"]
 		RunMapNode.MINIBOSS:
 			squads.append({"unit": miniboss["unit"], "count": miniboss["soldiers"], "mult": mult})

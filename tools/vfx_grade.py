@@ -30,6 +30,8 @@ RAMPS = {
     "poison": [(0.0, (14, 20, 8)), (0.5, (88, 128, 30)), (1.0, (208, 238, 118))],
     "heal":   [(0.0, (10, 22, 14)), (0.5, (68, 148, 88)), (1.0, (208, 248, 212))],
     "amber":  [(0.0, (30, 16, 6)), (0.5, (198, 128, 40)), (1.0, (255, 234, 168))],
+    # лёд замедления (статус slowed, 09.11.2026): холодная сталь → #73A6F2 → иней
+    "frost":  [(0.0, (10, 16, 30)), (0.45, (52, 96, 170)), (0.75, (115, 166, 242)), (1.0, (222, 240, 255))],
     # болт Хаоса: красное ядро, разряды — не зелёные (зелёный в игре — яд Nurgle), а адский огонь в бордо
     "chaos_bolt": [(0.0, (30, 6, 10)), (0.35, (128, 18, 24)), (0.65, (222, 68, 30)), (0.85, (250, 150, 70)),
                    (1.0, (255, 222, 172))],
@@ -63,6 +65,12 @@ GRADES = {
     "effects/FXpack13/fireball_sheet.png": "fire",
     "effects/FXpack13/warp_bolt_sheet.png": "warp_bolt",
     "effects/chaos_bolt/spritesheet.png": "chaos_bolt",
+    # Статусы на теле бойца (EFFECTS_NEEDED 7.1–7.4, листы художника 09.11.2026 — исходник
+    # assets/source_sheets/status_effects_2026-11-09; решение пользователя: вместо значков над головой)
+    "effects/status/burning.png": "fire",
+    "effects/status/poisoned.png": "poison",
+    "effects/status/slowed.png": "frost",
+    "effects/status/empowered.png": "amber",
 }
 LOW, HIGH = 2.0, 99.5   # перцентили яркости плотных пикселей → начало и конец градиента
 DENSE_ALPHA = 40
@@ -118,17 +126,25 @@ for _rel in ["upgrades/upgrade_warp_ward.png", "upgrades/upgrade_combat_drugs.pn
 # скруглённый (ступеньки пикселей ушли), зерно мазка (PAINT_GRAIN), объём — край темнее середины (PAINT_EDGE_DARK),
 # мягкий ореол (PAINT_HALO), затем — градиент палитры, как раньше. Лист выходит в PAINT_UP раз больше исходного:
 # Vfx берёт масштаб из отношения ширины листов (Vfx._get_frames) — размеры и точки в Vfx.EFFECTS прежние
-PAINT_PREFIX = PIXEL
-PAINT_FRAME = 32
+# Листы, которые идут через paint: префикс пути → размер кадра (09.11.2026 — и листы статусов, кадр 64)
+PAINT_FRAMES = {PIXEL: 32, "effects/status/": 64}
 PAINT_UP = 4
 PAINT_GRAIN = 0.22        # ± доля яркости: зерно мазка
 PAINT_EDGE_DARK = 0.35    # край силуэта темнее на эту долю — объём, а не плоская заливка
 PAINT_HALO = 0.35         # непрозрачность мягкого ореола вокруг силуэта
 
 
-def paint(img: Image.Image, seed: int) -> Image.Image:
+def paint_frame(rel: str) -> int:
+    """Размер кадра листа для paint (0 — лист не рисуется «живописно»)."""
+    for prefix, frame in PAINT_FRAMES.items():
+        if rel.startswith(prefix):
+            return frame
+    return 0
+
+
+def paint(img: Image.Image, seed: int, frame: int = 32) -> Image.Image:
     src = img.convert("RGBA")
-    f, up = PAINT_FRAME, PAINT_UP
+    f, up = frame, PAINT_UP
     cols, rows = src.width // f, src.height // f
     out = Image.new("RGBA", (cols * f * up, rows * f * up), (0, 0, 0, 0))
     rng = np.random.default_rng(seed)
@@ -227,10 +243,11 @@ def main(args):
         dst = OUT / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         img = Image.open(src)
-        if rel.startswith(PAINT_PREFIX):
-            img = paint(img, sum(map(ord, rel)))
+        frame = paint_frame(rel)
+        if frame:
+            img = paint(img, sum(map(ord, rel)), frame)
         (soft_grade(img, ramp == DEEP) if ramp in (SOFT, DEEP) else grade(img, ramp)).save(dst)
-        if rel.startswith(PAINT_PREFIX):
+        if frame:
             enable_mipmaps(dst)
         print(f"{rel} -> graded ({ramp})")
 

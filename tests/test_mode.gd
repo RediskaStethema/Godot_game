@@ -91,6 +91,21 @@ func _main() -> void:
 		scene.get("battle_wave") == 10 and scene.get("battle_type") == "boss" and squad2 != null
 		and squad2.data.squad_level == 3 and scene._get_player_building_at(Vector2i(0, 0)) != null)
 
+	# 4б. Босс из панели (решение пользователя 09.11.2026 — сетка вместо перебора): видна в бою «босс», «от seed» + все
+	# 9 примархов (свои враги — первыми), выбранный подсвечен; клик по чужому (Жиллиман против Космодесанта) — он и выходит
+	panel = scene.get("test_panel")
+	var order: Array = panel.boss_order(rm.player_faction)
+	var grid_btns: Dictionary = panel.get("_boss_buttons")
+	var shown: bool = panel.get("_boss_box").visible and grid_btns.size() == 10 and grid_btns[""].button_pressed
+	grid_btns["primarch_guilliman"].pressed.emit()
+	scene = await _scene()
+	var bosses: Array = root.get_node("SquadRegistry").get_alive_squads_of_team(1) 		.filter(func(sq): return sq.data.factory_id == "primarch_guilliman")
+	var new_btns: Dictionary = scene.get("test_panel").get("_boss_buttons")
+	var picked: bool = new_btns["primarch_guilliman"].button_pressed and not new_btns[""].button_pressed
+	_check("босс из панели: сетка %d, выбран Жиллиман — подсвечен и на поле, отряд на месте" % order.size(),
+		shown and order.size() == 10 and order[0] == "" and order[1] == EnemyWaves.BOSS["units"][0]
+		and bosses.size() == 1 and picked and scene._get_player_squad_at(Vector2i(3, 1)) != null)
+
 	# 5. Без сохранения: даже с включённым SaveManager файл не пишется
 	var sm = root.get_node("SaveManager")
 	var old_path: String = sm.save_path

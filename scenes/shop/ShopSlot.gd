@@ -136,6 +136,7 @@ func _fill_header(data: CardData) -> void:
 		_face_cost = _face.get_node("Cost")
 		$VBoxContainer.add_child(_face)
 		$VBoxContainer.move_child(_face, 0)
+		CardGlare.attach(_face, data.rarity, true)   # наклон, блик; подсветка редкости — всегда (только вид)
 		card_faction.hide()   # редкость и тип — рамка и масть
 		card_title.text = data.title
 		card_title.hide()     # название — на плашке рамки

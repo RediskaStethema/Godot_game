@@ -15,6 +15,13 @@ const SHOP_SCENE: String = "res://scenes/shop/ShopScene.tscn"
 const BATTLE_SCENE: String = "res://scenes/battle/BattleScene.tscn"
 const EVENT_SCENE: String = "res://scenes/event/EventScene.tscn"
 const MENU_SCENE: String = "res://scenes/menu/MainMenu.tscn"
+# Переход между сценами (решение пользователя 08.11.2026, только вид): сцена меняется сразу (тесты и сохранения
+# ничего не ждут), поверх — чёрная шторка на слое FADE_LAYER, тает за FADE_TIME (по реальному времени, и на паузе)
+const FADE_LAYER: int = 100
+const FADE_TIME: float = 0.35
+var _fade: CanvasLayer = null
+var _fade_rect: ColorRect = null
+var _fade_tween: Tween = null
 
 signal run_started
 signal node_entered(node: RunMapNode)
@@ -41,9 +48,13 @@ var difficulty: int = Difficulty.DEFAULT
 # сразу расстановка, панель со всеми картами расы (TestPanel), волна и тип боя на выбор, цитадель не падает,
 # королевство 4×4; после боя — та же расстановка (test_snapshot), без сохранения, Славы и открытий меты
 var test_mode: bool = false
+# Посадка на поле (BattleLanding, решение пользователя 08.11.2026): ставят MainMenu (после взлёта MenuLaunch) и
+# «НОВЫЙ ЗАБЕГ» экрана итога, снимает первое поле забега (BattleScene._ready); не сохраняется, выход в меню снимает
+var landing_pending: bool = false
 var test_wave: int = 1
 var test_battle_type: String = RunMapNode.BATTLE
 var test_level: int = 0                 # улучшений у отрядов (ур.N) и зданий (ур. 1 + N) из панели
+var test_boss: String = ""              # финальный босс боя «босс» (любой из 9 примархов); "" — от seed, как в забеге
 var test_snapshot: Dictionary = {}      # BattleManager.save_state() перед «В БОЙ» — после боя поле как было
 
 static func test_mode_available() -> bool:
@@ -59,18 +70,19 @@ func start_test_mode(faction: String, chapter: String) -> void:
 	test_wave = 1
 	test_battle_type = RunMapNode.BATTLE
 	test_level = 0
+	test_boss = ""
 	test_snapshot = {}
 	BattleManager.kingdom_tiles.clear()
 	for row in IsoGrid.MAX_KINGDOM_SIZE.y:   # 4×4 = MAX_KINGDOM_TILES: расширять некуда
 		for col in IsoGrid.MAX_KINGDOM_SIZE.x:
 			BattleManager.kingdom_tiles.append(Vector2i(col, row))
-	get_tree().change_scene_to_file(BATTLE_SCENE)
+	_go(BATTLE_SCENE)
 
 # Тестовый режим: новая расстановка (волна / тип боя сменились, бой кончился) — сцена боя заново
 func reload_test_battle() -> void:
 	get_tree().paused = false
 	BattleManager.stop_battle()
-	get_tree().change_scene_to_file(BATTLE_SCENE)
+	_go(BATTLE_SCENE)
 
 func new_run(seed_value: int = 0) -> void:
 	if seed_value != 0:
@@ -98,13 +110,13 @@ func enter_node(id: int) -> bool:
 	var node = map.get_node_by_id(id)
 	match node.type:
 		RunMapNode.SHOP:
-			get_tree().change_scene_to_file(SHOP_SCENE)
+			_go(SHOP_SCENE)
 		RunMapNode.EVENT:
-			get_tree().change_scene_to_file(EVENT_SCENE)
+			_go(EVENT_SCENE)
 		RunMapNode.BATTLE, RunMapNode.MINIBOSS, RunMapNode.BOSS:
 			if node.wave != EconomyManager.round_number:
 				push_warning("RunManager: волна шага %d ≠ round_number %d" % [node.wave, EconomyManager.round_number])
-			get_tree().change_scene_to_file(BATTLE_SCENE)
+			_go(BATTLE_SCENE)
 	return true
 
 # Делает шаг текущим без смены сцены
@@ -142,13 +154,14 @@ func advance() -> void:
 # отряды удалённой сцены
 func goto_main_menu() -> void:
 	get_tree().paused = false
+	landing_pending = false
 	if test_mode:   # тест не продолжается: армия и поле — тестовые
 		test_mode = false
 		test_snapshot = {}
 		BattleManager.reset_run()
 		player_chapter = ""
 	BattleManager.stop_battle()
-	get_tree().change_scene_to_file(MENU_SCENE)
+	_go(MENU_SCENE)
 
 # Сдача вне схватки (магазин, расстановка, итог боя) — конец забега без экрана
 # итога: сохранение удаляется, в главное меню. В схватке — BattleManager.surrender()
@@ -254,3 +267,23 @@ func get_total_waves() -> int:
 func is_shop_node_active() -> bool:
 	var node = get_current_node()
 	return node != null and node.type == RunMapNode.SHOP and not current_completed
+
+# Смена сцены со шторкой: всё, что меняет сцену забега, — через _go
+func _go(path: String) -> void:
+	get_tree().change_scene_to_file(path)
+	if _fade == null:
+		_fade = CanvasLayer.new()
+		_fade.layer = FADE_LAYER
+		_fade.process_mode = Node.PROCESS_MODE_ALWAYS
+		_fade_rect = ColorRect.new()
+		_fade_rect.color = Palette.BG_DEEP
+		_fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_fade.add_child(_fade_rect)
+		_fade_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		get_tree().root.add_child.call_deferred(_fade)
+	if _fade_tween:
+		_fade_tween.kill()
+	_fade_rect.modulate.a = 1.0
+	_fade_tween = create_tween().set_ignore_time_scale(true)
+	_fade_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_fade_tween.tween_property(_fade_rect, "modulate:a", 0.0, FADE_TIME).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)

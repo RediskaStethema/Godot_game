@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" load_steps=55 format=3]
+[gd_resource type="SpriteFrames" load_steps=31 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle/0.png" id="idle_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle/1.png" id="idle_1"]
@@ -29,18 +29,6 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/9.png" id="idle_2_9"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/10.png" id="idle_2_10"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/11.png" id="idle_2_11"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/12.png" id="idle_2_12"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/13.png" id="idle_2_13"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/14.png" id="idle_2_14"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/15.png" id="idle_2_15"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/16.png" id="idle_2_16"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/17.png" id="idle_2_17"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/18.png" id="idle_2_18"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/19.png" id="idle_2_19"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/20.png" id="idle_2_20"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/21.png" id="idle_2_21"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/22.png" id="idle_2_22"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_2/23.png" id="idle_2_23"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/0.png" id="idle_3_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/1.png" id="idle_3_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/2.png" id="idle_3_2"]
@@ -53,22 +41,10 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/9.png" id="idle_3_9"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/10.png" id="idle_3_10"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/11.png" id="idle_3_11"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/12.png" id="idle_3_12"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/13.png" id="idle_3_13"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/14.png" id="idle_3_14"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/15.png" id="idle_3_15"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/16.png" id="idle_3_16"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/17.png" id="idle_3_17"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/18.png" id="idle_3_18"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/19.png" id="idle_3_19"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/20.png" id="idle_3_20"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/21.png" id="idle_3_21"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/22.png" id="idle_3_22"]
-[ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/23.png" id="idle_3_23"]
 
 [resource]
-metadata/level_shift = {2: Vector2(0, 0), 3: Vector2(-27, 3)}
-metadata/level_scale = {2: 1.604, 3: 1.588}
+metadata/level_shift = {2: Vector2(0, 0), 3: Vector2(0, 0)}
+metadata/level_scale = {2: 1.0, 3: 1.0}
 metadata/level_static = []
 animations = [{
 "frames": [{
@@ -130,42 +106,6 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("idle_2_11")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_12")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_13")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_14")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_15")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_16")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_17")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_18")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_19")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_20")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_21")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_22")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_2_23")
 }],
 "loop": true,
 "name": &"idle_2",
@@ -207,44 +147,9 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("idle_3_11")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_12")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_13")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_14")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_15")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_16")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_17")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_18")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_19")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_20")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_21")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_22")
-}, {
-"duration": 1.0,
-"texture": ExtResource("idle_3_23")
 }],
 "loop": true,
 "name": &"idle_3",
 "speed": 5.0
 }]
+

@@ -19,7 +19,7 @@ const CHEVRON_RISE: float = 14.0     # px за время жизни
 const CHEVRON_SIZE: float = 8.0
 const MOTES: int = 16
 const PILLAR_BANDS: int = 4       # столб света поперёк: столько вложенных полос — мягкий край
-const WIDTH: float = 0.8             # ширина света — доля клетки (как спрайт здания, Building.SPRITE_WIDTH)
+const WIDTH: float = Building.SPRITE_WIDTH   # ширина света — доля клетки, как спрайт здания
 
 static var _add: CanvasItemMaterial
 

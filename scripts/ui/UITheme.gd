@@ -50,9 +50,31 @@ const BENCH_PEEK: float = 90.0      # видимая часть карт рук�
 # Текстуры интерфейса — лист assets/source_sheets/UI_assets.png, нарезка tools/ui_from_sheet.py. Поля 9-slice:
 # (лево, верх, право, низ) — края, которые не тянутся, и отступы содержимого
 const UI_ART_DIR = "res://assets/ui/"
-const BUTTON_TEXTURE_MARGIN = Vector4(16, 14, 16, 14)
+# Кнопки и рамка окна — в высоком разрешении (пакет assets/menu_ui, 06.11.2026, UI_NEEDED 7.1 / 7.3): нарисованы ×2
+# к экрану, поля 9-slice — в px текстуры, на экране — ×UI_ART_SCALE (ScaledNinePatch): кнопка 16 / 14, рамка 48 / 44
+const UI_ART_SCALE: float = 0.5
+const MENU_ICON_SIZE: int = 36                 # иконка кнопки меню, px (128 px арта — поля 7 px, силуэт ~30)
+const MENU_ICON_IDLE = Color(0.8, 0.8, 0.84)      # иконка кнопки меню в покое
+const MENU_ICON_PRESSED = Color(0.85, 0.78, 0.66)
+const BUTTON_TEXTURE_MARGIN = Vector4(32, 28, 32, 28)
 const BUTTON_CONTENT_MARGIN = Vector4(18, 8, 18, 8)
-const WINDOW_FRAME_MARGIN = Vector4(48, 44, 48, 44)
+const WINDOW_FRAME_MARGIN = Vector4(96, 88, 96, 88)
+# Раздел 8 (окна боя и магазина): поля 9-slice в px текстуры ×2, содержимое — на экране
+const SMALL_BUTTON_ART_MARGIN = Vector4(24, 20, 24, 20)
+const SMALL_BUTTON_CONTENT_MARGIN = Vector4(10, 6, 10, 6)
+const PANEL_ART_MARGIN = Vector4(24, 24, 24, 24)
+const PANEL_CONTENT_MARGIN = Vector4(10, 10, 10, 10)
+const PLATE_ART_MARGIN = Vector4(24, 24, 24, 24)
+const PLATE_CONTENT_MARGIN = Vector4(12, 8, 12, 8)
+const HUD_BAR_CONTENT_MARGIN = Vector4(10, 10, 10, 10)
+const TOOLTIP_ART_MARGIN = Vector4(16, 16, 16, 16)
+const TOOLTIP_CONTENT_MARGIN = Vector4(8, 5, 8, 5)
+const SCROLL_ART_MARGIN = Vector4(0, 12, 0, 12)
+const SCROLL_CONTENT_MARGIN = Vector4(4, 4, 4, 4)   # ширина полосы на экране — 8 px
+const INFO_FRAME_MARGIN = Vector4(40, 40, 40, 40)
+const INFO_CONTENT_MARGIN = Vector4(10, 10, 10, 8)
+const NAME_PLATE_MARGIN = Vector4(28, 20, 28, 20)
+const NAME_PLATE_CONTENT_MARGIN = Vector4(16, 3, 12, 3)
 # Отступ содержимого — за уголками рамки и под аквилой (25.10.2026: кнопки и текст налезали на уголки)
 const WINDOW_CONTENT_MARGIN = Vector4(38, 48, 38, 38)
 const WINDOW_EAGLE = "res://assets/ui/frame_eagle.png"
@@ -122,18 +144,36 @@ static func _build() -> Theme:
 
 	# --- Панели: тёмный металл, стальная рамка, срезанные углы ---
 	# Текстуры пластин tools/ui_panels_gen.py (стилизация 20.10.2026) поверх плоских, если файлы на месте
-	var plate = panel_texture("panel")
+	# Арт художника ×2 (пакет UI_NEEDED раздел 8, 06.11.2026) важнее пластин скрипта: panel.png, plate_small.png
+	var plate: StyleBox = art_style("panel", PANEL_ART_MARGIN, PANEL_CONTENT_MARGIN)
+	if plate == null:
+		plate = panel_texture("panel")
 	t.set_stylebox("panel", "PanelContainer", plate if plate else panel_style(PANEL, GOLD_DIM, 2, 10, 10))
 	t.set_stylebox("panel", "Panel", plate if plate else panel_style(PANEL, GOLD_DIM, 2, 10, 10))
-	t.set_type_variation("HudPanel", "PanelContainer")
+	t.set_type_variation("HudPanel", "PanelContainer")   # плашки: сообщение, подпись при наведении, итоги, сноски
 	var hud = panel_style(PANEL_DARK, GOLD_DIM, 0, 0, 10)
 	hud.border_width_bottom = 2
 	hud.border_width_top = 2
-	var hud_tex = panel_texture("hud")
+	var hud_tex: StyleBox = art_style("plate_small", PLATE_ART_MARGIN, PLATE_CONTENT_MARGIN)
+	if hud_tex == null:
+		hud_tex = panel_texture("hud")
 	t.set_stylebox("panel", "HudPanel", hud_tex if hud_tex else hud)
+	# Полоса шапки боя / магазина / события на всю ширину — hud_bar.png повтором (нет — как HudPanel)
+	t.set_type_variation("HudBar", "HudPanel")
+	var bar := art_style("hud_bar", Vector4.ZERO, HUD_BAR_CONTENT_MARGIN)
+	if bar:
+		bar.tile_x = true
+		t.set_stylebox("panel", "HudBar", bar)
+	# Всплывающая подсказка
+	var tip := art_style("tooltip", TOOLTIP_ART_MARGIN, TOOLTIP_CONTENT_MARGIN)
+	if tip:
+		t.set_stylebox("panel", "TooltipPanel", tip)
+		t.set_color("font_color", "TooltipLabel", TEXT)
+		t.set_font_size("font_size", "TooltipLabel", text_px(13))
 
 	# --- Кнопки: сталь (обычная) и янтарь (главное действие) ---
 	_button_styles(t, "Button", Color(BG_DEEP, 0.92), GOLD_DIM, ui_px(16), sans, 0.0)
+	_small_button_textures(t)
 	t.set_type_variation("PrimaryButton", "Button")
 	_button_styles(t, "PrimaryButton", Color("2b1d0d"), GOLD, ui_px(19), sans, 0.25)
 	_primary_button_textures(t)
@@ -142,7 +182,7 @@ static func _build() -> Theme:
 
 	# --- Окна (ModalOverlay): рамка листа UI_assets.png, аквила сверху — WINDOW_EAGLE ---
 	t.set_type_variation("WindowPanel", "PanelContainer")
-	var frame := texture_style("frame", WINDOW_FRAME_MARGIN, WINDOW_CONTENT_MARGIN)
+	var frame := art_style("frame", WINDOW_FRAME_MARGIN, WINDOW_CONTENT_MARGIN)
 	t.set_stylebox("panel", "WindowPanel", frame if frame else panel_style(PANEL, GOLD_DIM, 2, 10, 10))
 
 	# --- Полоса прокрутки: тонкая сталь, наведение — янтарь ---
@@ -153,6 +193,15 @@ static func _build() -> Theme:
 	t.set_stylebox("grabber", "VScrollBar", panel_style(GOLD_DIM, GOLD_DIM, 0, 2, 0))
 	t.set_stylebox("grabber_highlight", "VScrollBar", panel_style(GOLD, GOLD, 0, 2, 0))
 	t.set_stylebox("grabber_pressed", "VScrollBar", panel_style(GOLD_BRIGHT, GOLD_BRIGHT, 0, 2, 0))
+	# Арт полосы (UI_NEEDED 8.5): паз в металле, ползунок — сталь, наведение — янтарь; вертикальные — только VScrollBar
+	var track_art := art_style("scroll_track", SCROLL_ART_MARGIN, SCROLL_CONTENT_MARGIN)
+	var grab_art := art_style("scroll_grabber", SCROLL_ART_MARGIN, SCROLL_CONTENT_MARGIN)
+	var grab_hover := art_style("scroll_grabber_hover", SCROLL_ART_MARGIN, SCROLL_CONTENT_MARGIN)
+	if track_art and grab_art and grab_hover:
+		t.set_stylebox("scroll", "VScrollBar", track_art)
+		t.set_stylebox("grabber", "VScrollBar", grab_art)
+		t.set_stylebox("grabber_highlight", "VScrollBar", grab_hover)
+		t.set_stylebox("grabber_pressed", "VScrollBar", grab_hover)
 	t.set_stylebox("scroll", "HScrollBar", track)
 	t.set_stylebox("grabber", "HScrollBar", panel_style(GOLD_DIM, GOLD_DIM, 0, 2, 0))
 	t.set_stylebox("grabber_highlight", "HScrollBar", panel_style(GOLD, GOLD, 0, 2, 0))
@@ -233,6 +282,77 @@ static func icon_row(group: String, name: String, label: Control, height: float 
 		row.add_child(label)
 	return row
 
+# Иллюстрация 16:9 в окне (события — events/<id>, конец забега — screens/run_*): на всю ширину,
+# высотой height, лишнее по краям срезается (KEEP_ASPECT_COVERED); стальная кромка поверх. Нет файла — null
+const ILLUSTRATION_BORDER: int = 2
+static func make_illustration(group: String, name: String, height: float) -> Control:
+	var tex := ui_icon(group, name)
+	if tex == null:
+		return null
+	var art = TextureRect.new()
+	art.name = "Illustration"
+	art.texture = tex
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.custom_minimum_size = Vector2(0, height)
+	art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var edge = Panel.new()
+	var sb = StyleBoxFlat.new()
+	sb.draw_center = false
+	sb.border_color = GOLD_DIM
+	sb.set_border_width_all(ILLUSTRATION_BORDER)
+	edge.add_theme_stylebox_override("panel", sb)
+	edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.add_child(edge)
+	edge.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	return art
+
+# Значок пакета интерфейса слева от текста кнопки, шириной не больше width; нет файла — кнопка как была
+static func set_button_icon(b: Button, group: String, name: String, width: int = BUTTON_ICON_SIZE) -> void:
+	var tex := ui_icon(group, name)
+	if tex == null:
+		return
+	b.icon = tex
+	b.add_theme_constant_override("icon_max_width", width)
+	b.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
+const BUTTON_ICON_SIZE: int = 24
+
+# Курсоры пакета интерфейса (assets/ui/cursor, горячие точки — hotspots.txt художника): стрелка-копьё,
+# латная перчатка над картой руки (CURSOR_DRAG — BenchCard), прицел орудия (CURSOR_CROSS — ArtilleryReticle).
+# Ставятся один раз на всю игру; зовут главные сцены в _ready. Нет файла — системный
+const CURSORS = [
+	["cursor_default", Input.CURSOR_ARROW, Vector2(3, 3)],
+	["cursor_grab", Input.CURSOR_DRAG, Vector2(16, 3)],
+	["cursor_target", Input.CURSOR_CROSS, Vector2(16, 16)],
+]
+# Курсор крупнее файла (решение пользователя 08.11.2026: «на 30% побольше»): 32 → 42 px, точка нажатия — так же
+const CURSOR_SCALE: float = 1.3
+static var _cursors_applied: bool = false
+static func apply_cursors() -> void:
+	if _cursors_applied:
+		return
+	_cursors_applied = true
+	for c in CURSORS:
+		var tex := ui_icon("cursor", c[0])
+		if tex == null:
+			continue
+		var img := tex.get_image()
+		img.clear_mipmaps()
+		img.resize(roundi(img.get_width() * CURSOR_SCALE), roundi(img.get_height() * CURSOR_SCALE), Image.INTERPOLATE_CUBIC)
+		Input.set_custom_mouse_cursor(ImageTexture.create_from_image(img), c[1], c[2] * CURSOR_SCALE)
+
+# Замок «закрыто» (hud/lock) в правом нижнем углу значка — закрытые мета-прогрессией ордены / боги / уровни;
+# значок гасить self_modulate — modulate погасил бы и замок
+const LOCK_BADGE_SHARE: float = 0.45   # доля высоты значка
+static func add_lock_badge(icon: Control) -> void:
+	var lock := make_icon("hud", "lock", maxf(icon.custom_minimum_size.y * LOCK_BADGE_SHARE, 18.0))
+	if lock == null:
+		return
+	lock.name = "Lock"
+	icon.add_child(lock)
+	lock.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE)
 const HUD_ICON_SIZE: float = 26.0
 const CHAPTER_BADGE_SIZE: float = 42.0
 
@@ -271,32 +391,41 @@ static func _menu_button_styles(t: Theme) -> void:
 	t.set_stylebox("focus", type, hover)
 	t.set_stylebox("pressed", type, menu_button_style(Color("3b270f"), MENU_AMBER_DIM, 0.2))
 	t.set_stylebox("disabled", type, menu_button_style(Color(MENU_BG, 0.6), Color("262b33"), 0.0))
-	# Кнопки листа UI_assets.png (сталь / янтарь / нажата) — поверх плоских, если файлы на месте
-	var normal_tex := texture_style("button_normal", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
-	var hover_tex := texture_style("button_hover", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
-	var pressed_tex := texture_style("button_pressed", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	# Кнопки листа UI_assets.png (сталь / янтарь / нажата) — поверх плоских, если файлы на месте; состаренные
+	# (решение пользователя 08.11.2026, образец exampel.png: потёртая серая сталь — tools/menu_button_weather.py,
+	# button_menu_*) важнее
+	var pre := "button_menu_" if ResourceLoader.exists(UI_ART_DIR + "button_menu_normal.png") else "button_"
+	var normal_tex := art_style(pre + "normal", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	var hover_tex := art_style(pre + "hover", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	var pressed_tex := art_style(pre + "pressed", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
 	if normal_tex and hover_tex and pressed_tex:
 		t.set_stylebox("normal", type, normal_tex)
 		t.set_stylebox("hover", type, hover_tex)
 		t.set_stylebox("focus", type, hover_tex)
 		t.set_stylebox("pressed", type, pressed_tex)
-		var disabled := normal_tex.duplicate() as StyleBoxTexture
-		disabled.modulate_color = Color(0.55, 0.55, 0.6, 0.8)
+		# своя текстура неактивной (button_disabled), нет — обычная приглушённая
+		var disabled := art_style(pre + "disabled", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+		if disabled == null:
+			disabled = normal_tex.duplicate() as ScaledNinePatch
+			disabled.modulate_color = Color(0.55, 0.55, 0.6, 0.8)
 		t.set_stylebox("disabled", type, disabled)
 	t.set_font("font", type, ui_font())
-	t.set_font_size("font_size", type, ui_px(18))
-	t.set_color("font_color", type, MENU_TEXT)
+	t.set_font_size("font_size", type, ui_px(23))   # 08.11.2026, образец exampel.png: крупнее (было 18)
+	t.set_color("font_color", type, Palette.MENU_BUTTON_TEXT)   # бежево-белая с тёмной обводкой (образец)
+	t.set_color("font_outline_color", type, Color(0.02, 0.02, 0.03, 0.9))
+	t.set_constant("outline_size", type, 5)
 	t.set_color("font_hover_color", type, MENU_AMBER)
 	t.set_color("font_focus_color", type, MENU_AMBER)
 	t.set_color("font_pressed_color", type, MENU_AMBER_DIM)
 	t.set_color("font_hover_pressed_color", type, MENU_AMBER)
 	t.set_color("font_disabled_color", type, Color("4a525c"))
-	t.set_color("icon_normal_color", type, Color("8f98a3"))
-	t.set_color("icon_hover_color", type, MENU_AMBER)
-	t.set_color("icon_focus_color", type, MENU_AMBER)
-	t.set_color("icon_pressed_color", type, MENU_AMBER_DIM)
-	t.set_color("icon_hover_pressed_color", type, MENU_AMBER)
-	t.set_constant("icon_max_width", type, 30)
+	# Иконки меню цветные (пакет menu_ui, 06.11.2026) — не перекрашивать: в покое чуть приглушены, наведение — как есть
+	t.set_color("icon_normal_color", type, MENU_ICON_IDLE)
+	t.set_color("icon_hover_color", type, Color.WHITE)
+	t.set_color("icon_focus_color", type, Color.WHITE)
+	t.set_color("icon_pressed_color", type, MENU_ICON_PRESSED)
+	t.set_color("icon_hover_pressed_color", type, Color.WHITE)
+	t.set_constant("icon_max_width", type, MENU_ICON_SIZE)
 	t.set_constant("h_separation", type, 16)
 
 # Карточка окон выбора (раса, орден / бог, сложность) — SelectCard: железная пластина card_select,
@@ -321,15 +450,26 @@ static func _select_card_styles(t: Theme) -> void:
 	t.set_stylebox("pressed", type, pressed)
 	t.set_stylebox("disabled", type, disabled)
 
+# Обычная кнопка (Button) — арт button_small_* (UI_NEEDED 8.2): сталь, наведение — янтарная кромка; фокус — без рамки
+static func _small_button_textures(t: Theme) -> void:
+	var styles := {}
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var st := art_style("button_small_" + state, SMALL_BUTTON_ART_MARGIN, SMALL_BUTTON_CONTENT_MARGIN)
+		if st == null:
+			return
+		styles[state] = st
+	for state in styles:
+		t.set_stylebox(state, "Button", styles[state])
+
 # Главная кнопка (PrimaryButton) — янтарная кнопка листа: обычная — «hover» листа, наведение — она же
 # светлее, нажата — «pressed»; фокус — без рамки, как у плоской
 static func _primary_button_textures(t: Theme) -> void:
-	var amber := texture_style("button_hover", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
-	var pressed := texture_style("button_pressed", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	var amber := art_style("button_hover", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	var pressed := art_style("button_pressed", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
 	if amber == null or pressed == null:
 		return
 	t.set_stylebox("normal", "PrimaryButton", amber)
-	var bright := amber.duplicate() as StyleBoxTexture
+	var bright := amber.duplicate() as ScaledNinePatch
 	bright.modulate_color = Color(1.25, 1.2, 1.1)
 	t.set_stylebox("hover", "PrimaryButton", bright)
 	t.set_stylebox("pressed", "PrimaryButton", pressed)
@@ -401,6 +541,21 @@ static func panel_texture(name: String) -> StyleBoxTexture:
 
 # Текстура интерфейса assets/ui/<name>.png как 9-slice (края — texture_margin, середина тянется);
 # файла нет — null (тема остаётся плоской)
+# 9-slice арта ×2 к экрану (кнопки, рамка окна): поля — px текстуры, на экране ×UI_ART_SCALE; нет файла — null
+static func art_style(name: String, texture_margin: Vector4, content_margin: Vector4) -> ScaledNinePatch:
+	var path := UI_ART_DIR + name + ".png"
+	if not ResourceLoader.exists(path):
+		return null
+	var s := ScaledNinePatch.new()
+	s.texture = load(path)
+	s.margin = texture_margin
+	s.art_scale = UI_ART_SCALE
+	s.content_margin_left = content_margin.x
+	s.content_margin_top = content_margin.y
+	s.content_margin_right = content_margin.z
+	s.content_margin_bottom = content_margin.w
+	return s
+
 static func texture_style(name: String, texture_margin: Vector4, content_margin: Vector4) -> StyleBoxTexture:
 	var path := UI_ART_DIR + name + ".png"
 	if not ResourceLoader.exists(path):
@@ -593,24 +748,35 @@ const CARD_ART_SIZE = Vector2(360, 504)
 # слева, масть снизу справа; footer — нижняя плашка (у эпической: тип карты)
 const CARD_FRAME_LAYOUT = {
 	"common": {"window": Rect2(38, 54, 284, 402), "title": Rect2(100, 38, 186, 28),
-		"cost": Vector2(49, 64), "suit": Vector2(310, 440), "medallion": 20.0},
+		"cost": Vector2(49, 64), "suit": Vector2(310, 440), "medallion": 20.0, "plate": Rect2(86, 30, 214, 44)},
 	"rare": {"window": Rect2(35, 78, 289, 371), "title": Rect2(91, 40, 178, 28),
-		"cost": Vector2(40, 65), "suit": Vector2(309, 446), "medallion": 19.0},
+		"cost": Vector2(40, 65), "suit": Vector2(309, 446), "medallion": 19.0, "plate": Rect2(78, 31, 204, 46)},
 	"epic": {"window": Rect2(50, 85, 259, 328), "title": Rect2(100, 58, 160, 31),
-		"cost": Vector2(50, 65), "suit": Vector2(317, 430), "medallion": 21.0,
+		"cost": Vector2(50, 65), "suit": Vector2(317, 430), "medallion": 21.0, "plate": Rect2(86, 51, 188, 44),
 		"footer": Rect2(95, 414, 165, 34)},
 }
+# Плашка маленькой карты (скамейка, перетаскивание; решение пользователя 06.11.2026 — название на папирусе, как в
+# магазине): плашка рамки ("plate" — с кромкой) крупнее в CARD_SMALL_PLATE_SCALE и шире до CARD_SMALL_PLATE_WIDTH
+# (px арта): концы и середина с украшением — как в рамке, между ними тянется чистый папирус (CARD_PLATE_ENDS,
+# CARD_PLATE_CREST — доли плашки); медальон цены — поверх её левого края, кругом с рамки
+const CARD_SMALL_PLATE_SCALE: float = 1.3
+const CARD_SMALL_PLATE_WIDTH: float = 330.0
+const CARD_PLATE_ENDS: float = 0.14         # доля ширины плашки — каждый конец
+const CARD_PLATE_CREST: float = 0.2         # доля ширины плашки — середина с украшением
+const CARD_PLATE_INNER = Vector2(14, 8)     # px арта: кромка плашки до папируса
+const CARD_MEDALLION_CUT: float = 1.35      # медальон цены поверх плашки — радиус круга с рамки
 const CARD_ART_BLEED: float = 10.0          # арт заходит под брусья рамки (px арта)
 const CARD_INK = Color("2b1c10")            # надписи на костяных плашках
 const CARD_PLATE_FONT: float = 0.82         # кегль надписи плашки — доля её высоты
 const CARD_CAP_HEIGHT: float = 0.54         # высота заглавных ImpactfulBits — доля кегля (у Play было 0.7)
 const CARD_PLATE_MIN_FONT: int = 7          # меньше — уже не читается: длинное название обрезается
-# Маленькая карта (скамейка, перетаскивание): на плашке кегль вышел бы мельче CARD_PLATE_READABLE — пиксельный
-# шрифт не читается (решение пользователя 24.10.2026); название — на тёмной полосе под плашкой во всю ширину арта
+# Маленькая карта (скамейка, перетаскивание): по высоте плашки кегль вышел бы мельче CARD_PLATE_READABLE.
+# Решение пользователя 06.11.2026 (Screenshot 2026-11-06 093741.png): название — на папирусе плашки, как в
+# магазине, а не тёмной полосой под ней (было с 24.10.2026). Кегль — от CARD_PLATE_READABLE вниз под ширину
+# плашки с заходом на её завитки (CARD_PLATE_SMALL_ROOM), не мельче CARD_PLATE_SMALL_MIN
 const CARD_PLATE_READABLE: int = 11
-const CARD_STRIP_FONT_MAX: int = 12
-const CARD_STRIP_FONT_MIN: int = 8
-const CARD_STRIP_BG = Color(0.02, 0.02, 0.03, 0.78)
+const CARD_PLATE_SMALL_ROOM: float = 1.12
+const CARD_PLATE_SMALL_MIN: int = 8
 const CARD_COST_COLOR = GOLD_BRIGHT
 
 # Иллюстрация карты или null (арта нет — карта показывается портретом, как раньше)
@@ -668,11 +834,12 @@ static func make_card_face(card: CardData, width: float, cost_text: String = "")
 	var title_rect := Rect2(layout["title"].position * k, layout["title"].size * k)
 	if ui_px(int(title_rect.size.y * CARD_PLATE_FONT)) >= CARD_PLATE_READABLE:
 		face.add_child(_plate_label("Title", card.title, title_rect))
+	elif frame:   # маленькая карта — на плашке крупнее рамочной, кегль читаемый
+		var text_rect := _add_small_plate(face, frame, layout, k)
+		face.add_child(_plate_label("Title", card.title, text_rect, CARD_PLATE_READABLE, 1.0, CARD_PLATE_SMALL_MIN))
 	else:
-		# под плашкой и под медальоном цены (иначе он закрывает начало названия)
-		var strip_y := maxf(title_rect.end.y, (layout["cost"].y + layout["medallion"]) * k)
-		face.add_child(_title_strip(card.title, Rect2(layout["window"].position.x * k, strip_y,
-			layout["window"].size.x * k, 0.0)))
+		face.add_child(_plate_label("Title", card.title, title_rect, CARD_PLATE_READABLE, CARD_PLATE_SMALL_ROOM,
+			CARD_PLATE_SMALL_MIN))
 	if layout.has("footer"):
 		var kind: String = TYPE_NAMES.get(card.card_type, "")
 		if card.card_type == "squad" and card.unit_count > 0:
@@ -704,6 +871,93 @@ static func make_card_face(card: CardData, width: float, cost_text: String = "")
 		face.add_child(suit)
 	return face
 
+# Плашка маленькой карты из кусков плашки рамки (CARD_SMALL_PLATE_*) поверх рамки + медальон цены поверх неё;
+# возвращает прямоугольник папируса под надпись (в координатах лица карты), правее медальона
+static var _plate_parts: Dictionary = {}   # путь рамки → {left, right, column, crest, medallion} — ImageTexture
+static func _add_small_plate(face: Control, frame: Texture2D, layout: Dictionary, k: float) -> Rect2:
+	var plate: Rect2 = layout["plate"]
+	var parts := _plate_textures(frame, layout)
+	var s := CARD_SMALL_PLATE_SCALE
+	var w := maxf(CARD_SMALL_PLATE_WIDTH / s, plate.size.x)   # ширина в px плашки рамки
+	var holder := Control.new()
+	holder.name = "TitlePlate"
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.scale = Vector2(k * s, k * s)
+	holder.position = plate.get_center() * k - Vector2(w, plate.size.y) * k * s / 2.0
+	face.add_child(holder)
+	var end_w: float = parts["left"].get_width()
+	var crest_w: float = parts["crest"].get_width()
+	var pieces := [
+		[parts["column"], end_w - 1.0, w - end_w * 2.0 + 2.0],   # чистый папирус на всю середину
+		[parts["left"], 0.0, end_w],
+		[parts["right"], w - end_w, end_w],
+		[parts["crest"], (w - crest_w) / 2.0, crest_w],
+	]
+	for p in pieces:
+		var r = TextureRect.new()
+		r.texture = p[0]
+		r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		r.stretch_mode = TextureRect.STRETCH_SCALE
+		r.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		r.position = Vector2(p[1], 0.0)
+		r.size = Vector2(p[2], plate.size.y)
+		holder.add_child(r)
+	# Медальон цены — поверх левого края плашки
+	var m_r: float = layout["medallion"] * CARD_MEDALLION_CUT
+	var med = TextureRect.new()
+	med.name = "Medallion"
+	med.texture = parts["medallion"]
+	med.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	med.stretch_mode = TextureRect.STRETCH_SCALE
+	med.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	med.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	med.position = (layout["cost"] - Vector2(m_r, m_r)) * k
+	med.size = Vector2(m_r, m_r) * 2.0 * k
+	face.add_child(med)
+	# Папирус под надпись: внутри кромки и правее медальона
+	var left := holder.position.x + CARD_PLATE_INNER.x * k * s
+	var right := holder.position.x + (w - CARD_PLATE_INNER.x) * k * s
+	left = maxf(left, (layout["cost"].x + m_r * 0.8) * k)
+	var top := holder.position.y + CARD_PLATE_INNER.y * k * s
+	var h := (plate.size.y - CARD_PLATE_INNER.y * 2.0) * k * s
+	return Rect2(left, top, right - left, h)
+
+# Куски плашки и медальон с рамки редкости (кэш): концы, столбец чистого папируса, середина с украшением,
+# медальон — круг с мягким краем
+static func _plate_textures(frame: Texture2D, layout: Dictionary) -> Dictionary:
+	var key := frame.resource_path
+	if _plate_parts.has(key):
+		return _plate_parts[key]
+	var img := frame.get_image()
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var plate := Rect2i(layout["plate"])
+	var end_w := int(plate.size.x * CARD_PLATE_ENDS)
+	var crest_w := int(plate.size.x * CARD_PLATE_CREST)
+	var col_x := plate.position.x + int(plate.size.x * 0.3)   # между концом и серединой — без украшений
+	var parts := {
+		"left": ImageTexture.create_from_image(img.get_region(Rect2i(plate.position, Vector2i(end_w, plate.size.y)))),
+		"right": ImageTexture.create_from_image(img.get_region(Rect2i(plate.end.x - end_w, plate.position.y,
+			end_w, plate.size.y))),
+		"column": ImageTexture.create_from_image(img.get_region(Rect2i(col_x, plate.position.y, 4, plate.size.y))),
+		"crest": ImageTexture.create_from_image(img.get_region(Rect2i(plate.position.x + (plate.size.x - crest_w) / 2,
+			plate.position.y, crest_w, plate.size.y))),
+	}
+	var m_r := int(layout["medallion"] * CARD_MEDALLION_CUT)
+	var c := Vector2i(layout["cost"])
+	var med := img.get_region(Rect2i(c - Vector2i(m_r, m_r), Vector2i(m_r, m_r) * 2))
+	for y in med.get_height():
+		for x in med.get_width():
+			var d := Vector2(x + 0.5 - m_r, y + 0.5 - m_r).length() / m_r
+			var px := med.get_pixel(x, y)
+			px.a *= clampf((1.0 - d) / 0.12, 0.0, 1.0)   # мягкий край круга
+			med.set_pixel(x, y, px)
+	parts["medallion"] = ImageTexture.create_from_image(med)
+	_plate_parts[key] = parts
+	return parts
+
 # Иллюстрация фоном маленькой карты (рука магазина, скамейка): по большей стороне, верх — лицо / силуэт,
 # приглушена под текст (CARD_BACKDROP_DIM); арта нет — null
 const CARD_BACKDROP_DIM = Color(0.5, 0.5, 0.55)
@@ -724,16 +978,20 @@ static func make_card_backdrop(card: CardData) -> TextureRect:
 # Надпись на костяной плашке рамки: жирный гротеск тёмными чернилами (решение пользователя 20.10.2026: антиква
 # мелкая и съезжала вниз — у неё большой межстрочный запас), кегль — по высоте плашки, длинное название
 # уменьшается под её ширину
-static func _plate_label(name: String, text: String, rect: Rect2) -> Label:
+# Маленькая карта: start_size — кегль с которого начинать (0 — по высоте плашки), room_k — доля ширины плашки
+# под строку, min_size — меньше не уменьшать (длиннее — многоточие)
+static func _plate_label(name: String, text: String, rect: Rect2, start_size: int = 0, room_k: float = 0.92,
+		min_size: int = CARD_PLATE_MIN_FONT) -> Label:
 	var l = Label.new()
 	l.name = name
 	l.text = text
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	var font := ui_font()
-	var size := ui_px(int(rect.size.y * CARD_PLATE_FONT))   # заглавные — почти той же высоты, что у Play
-	var room := rect.size.x * 0.92
-	while size > CARD_PLATE_MIN_FONT and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > room:
+	var size := start_size if start_size > 0 else ui_px(int(rect.size.y * CARD_PLATE_FONT))   # заглавные — почти той же высоты, что у Play
+	var room := rect.size.x * room_k
+	rect = Rect2(rect.get_center().x - room / 2.0, rect.position.y, room, rect.size.y)
+	while size > min_size and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > room:
 		size -= 1
 	l.add_theme_font_override("font", font)
 	l.add_theme_font_size_override("font_size", size)
@@ -757,35 +1015,6 @@ static func fit_font_size(font: Font, text: String, width: float, max_size: int,
 		size -= 1
 	return size
 
-# Название маленькой карты: светлые буквы с обводкой на тёмной полосе (rect — левый верх и ширина полосы)
-static func _title_strip(text: String, rect: Rect2) -> Control:
-	var font := ui_font()
-	var size := fit_font_size(font, text, rect.size.x - 6.0, ui_px(CARD_STRIP_FONT_MAX), ui_px(CARD_STRIP_FONT_MIN))
-	var strip := Panel.new()
-	strip.name = "TitleStrip"
-	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = CARD_STRIP_BG
-	strip.add_theme_stylebox_override("panel", sb)
-	strip.position = rect.position
-	strip.size = Vector2(rect.size.x, font.get_height(size) + 2.0)
-	var l := Label.new()
-	l.name = "Title"
-	l.text = text
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	l.clip_text = true
-	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	l.add_theme_font_override("font", font)
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", GOLD_BRIGHT)
-	l.add_theme_color_override("font_outline_color", OUTLINE)
-	l.add_theme_constant_override("outline_size", 3)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	strip.add_child(l)
-	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	return strip
-
 # Фон-виньетка: холодная ночь — светлее в центре, к краям в черноту
 static func make_background() -> TextureRect:
 	var g = Gradient.new()
@@ -805,6 +1034,30 @@ static func make_background() -> TextureRect:
 	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return rect
+
+# Счётчик отматывается (решение пользователя 08.11.2026, только вид): число в метке бежит от показанного к to за
+# ROLL_TIME (реальное время — ускорение боя не влияет), с flash — вспышка цвета (рост — золото, убыль — красный).
+# fmt: Callable(int) -> String. Первый вызов (ничего не показано) — сразу
+const ROLL_TIME: float = 0.45
+static func roll_number(label: Label, to: int, fmt: Callable, flash: bool = true) -> void:
+	var from: int = label.get_meta("roll_shown", to)
+	var old = label.get_meta("roll_tween") if label.has_meta("roll_tween") else null
+	if old is Tween and old.is_valid():
+		old.kill()
+	if from == to or not label.is_inside_tree():
+		label.set_meta("roll_shown", to)
+		label.text = fmt.call(to)
+		return
+	var t := label.create_tween().set_ignore_time_scale(true)
+	t.tween_method(func(v: float):
+		label.set_meta("roll_shown", roundi(v))
+		label.text = fmt.call(roundi(v)), float(from), float(to), ROLL_TIME) 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	label.set_meta("roll_tween", t)
+	if flash:
+		var c: Color = GOLD_BRIGHT if to > from else HIT_RED
+		label.self_modulate = Color(c.r * 1.6, c.g * 1.6, c.b * 1.6)
+		var f := label.create_tween().set_ignore_time_scale(true)
+		f.tween_property(label, "self_modulate", Color.WHITE, ROLL_TIME)
 
 static func make_label(text: String, variation: String = "") -> Label:
 	var l = Label.new()

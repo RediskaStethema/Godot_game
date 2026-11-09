@@ -13,6 +13,7 @@ const BLOOD_DIR = "res://assets/effects/NEw pack blood/"     # брызги по
 # Листы в палитре игры (tools/vfx_grade.py): res://assets/<путь> → res://assets/graded/<путь>, если перекрашен
 const GRADED_DIR = "res://assets/graded/"
 const FX_DIR = "res://assets/effects/"   # пакет художника по ТЗ EFFECTS_NEEDED.txt (tools/fx_fix.py)
+const STATUS_DIR = "res://assets/effects/status/"   # статусы на теле бойца (EFFECTS_NEEDED 7.1–7.4, 09.11.2026)
 # sheet — файл листа, size — кадр, frames — кадров (пустые хвосты листа не берём), fps, loop,
 # scale — масштаб на бойце роста 62 px, pivot — точка кадра, которая встаёт в позицию эффекта
 # add — ADD-смешение (огонь, искры, энергия светятся; тёмные края листа исчезают)
@@ -87,15 +88,17 @@ const EFFECTS = {
 	# боец встал (Apothecarion), высадка Deep Strike
 	"poof":       {"sheet": PIXEL_DIR + "movement/poof_side.png", "size": Vector2i(32, 32), "frames": 8, "fps": 12.0,
 		"loop": false, "scale": 1.5, "pivot": Vector2(16, 37)},
-	# статусы над головой — StatusEffects.VFX; оглушение (STUNNED) — звёздочки
-	"burning":    {"sheet": PIXEL_DIR + "status/burn.png", "size": Vector2i(32, 32), "frames": 8, "fps": 12.0,
-		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
-	"poisoned":   {"sheet": PIXEL_DIR + "status/poison.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
-		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
-	"empowered":  {"sheet": PIXEL_DIR + "status/buff.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
-		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
-	"slowed":     {"sheet": PIXEL_DIR + "status/debuff.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
-		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
+	# статусы на теле бойца — StatusEffects.VFX (EFFECTS_NEEDED 7.1–7.4, листы художника 09.11.2026, стилизация —
+	# tools/vfx_grade.py paint + градиент; решение пользователя: вместо значков пака Pixel над головой): огонь по телу,
+	# пузыри яда у ног, кольца льда у ног (за бойцом), янтарный контур по силуэту; оглушение (STUNNED) — звёздочки
+	"burning":    {"sheet": STATUS_DIR + "burning.png", "size": Vector2i(64, 64), "frames": 8, "fps": 14.0,
+		"loop": true, "add": true, "scale": 1.2, "pivot": Vector2(32, 54)},
+	"poisoned":   {"sheet": STATUS_DIR + "poisoned.png", "size": Vector2i(64, 64), "frames": 8, "fps": 10.0,
+		"loop": true, "scale": 1.2, "pivot": Vector2(32, 60)},
+	"empowered":  {"sheet": STATUS_DIR + "empowered.png", "size": Vector2i(64, 64), "frames": 8, "fps": 10.0,
+		"loop": true, "add": true, "scale": 1.45, "pivot": Vector2(31, 56)},
+	"slowed":     {"sheet": STATUS_DIR + "slowed.png", "size": Vector2i(64, 64), "frames": 8, "fps": 8.0,
+		"loop": true, "add": true, "scale": 1.25, "pivot": Vector2(32, 50), "behind": true},
 	"stun":       {"sheet": PIXEL_DIR + "status/stun.png", "size": Vector2i(32, 32), "frames": 12, "fps": 12.0,
 		"loop": true, "scale": 1.4, "pivot": Vector2(16, 72)},
 	# --- Пакет художника по ТЗ EFFECTS_NEEDED.txt (21.10.2026; листы — tools/fx_fix.py из

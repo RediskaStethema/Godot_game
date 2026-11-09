@@ -20,6 +20,7 @@ const HAND_TITLE_FONT_MIN: int = 8
 const HAND_PORTRAIT_ALPHA: float = 0.22   # портрет фоном карты руки — под текстом, не мешает читать
 const HAND_CARD_PAD: float = 5.0       # поля карты руки по бокам (у card_style — 10)
 const HAND_BUTTON_PAD: float = 4.0     # поля кнопки «Продать» по бокам
+const SELL_ICON_SIZE: int = 16         # значок hud/sell у «Продать +N» (карта руки узкая)
 const NO_MONEY_SIZE: float = 1.6       # вспышка «не хватает Req» (Vfx "no_money", кадр 64×32) у кнопки
 const SELL_FADE_TIME: float = 0.25     # проданная карта гаснет под огнём
 
@@ -43,6 +44,7 @@ func _ready() -> void:
 	# Магазин — главная сцена: при запуске игры он же первый шаг забега
 	RunManager.ensure_started()
 	AudioManager.play_music("shop")
+	UITheme.apply_cursors()
 	_build_layout()
 	add_child(PauseMenu.new())
 	EconomyManager.requisition_changed.connect(_update_requisition_label)
@@ -233,6 +235,7 @@ func _make_hand_card(card: CardData) -> Control:
 		bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		panel.add_child(bg)
+	CardGlare.add_rarity_glow(panel, card.rarity, false)   # подсветка редкости — под курсором (в контейнере — внутрь)
 	var col = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 2)
 	panel.add_child(col)
@@ -267,6 +270,8 @@ func _make_hand_card(card: CardData) -> Control:
 			sb.content_margin_right = HAND_BUTTON_PAD
 			sell.add_theme_stylebox_override(state, sb)
 	sell.pressed.connect(_sell_card.bind(card))
+	UITheme.set_button_icon(sell, "hud", "sell", SELL_ICON_SIZE)
+	sell.add_theme_constant_override("h_separation", 2)
 	col.add_child(sell)
 	return panel
 
@@ -287,7 +292,7 @@ func _count_units() -> int:
 	return count
 
 func _update_requisition_label(amount: int) -> void:
-	requisition_label.text = "%d Req" % amount
+	UITheme.roll_number(requisition_label, amount, func(v: int): return "%d Req" % v)   # отматывается
 	_refresh_reroll_button()
 
 # -------------------------------------------------------
@@ -372,7 +377,7 @@ func _build_layout() -> void:
 # Шапка: название, сообщение, волна, Req, цитадель
 func _build_hud() -> void:
 	var hud = PanelContainer.new()
-	hud.theme_type_variation = "HudPanel"
+	hud.theme_type_variation = "HudBar"   # полоса шапки — hud_bar повтором
 	hud.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	hud.offset_bottom = UITheme.HUD_HEIGHT
 	add_child(hud)
@@ -426,9 +431,11 @@ func _build_shop_panel() -> void:
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	catch_up_button = UITheme.make_button("Подкрепление", "PrimaryButton", _open_catch_up)
 	catch_up_button.custom_minimum_size = Vector2(200, 40)
+	UITheme.set_button_icon(catch_up_button, "hud", "catch_up")
 	header.add_child(catch_up_button)
 	reroll_button = Button.new()
 	reroll_button.custom_minimum_size = Vector2(200, 40)
+	UITheme.set_button_icon(reroll_button, "hud", "reroll")
 	header.add_child(reroll_button)
 	shop_slots.add_theme_constant_override("separation", 18)
 	shop_slots.size_flags_vertical = Control.SIZE_EXPAND_FILL

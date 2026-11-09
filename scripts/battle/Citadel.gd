@@ -73,6 +73,7 @@ var _pending_shot: Dictionary = {}
 var _flash_material: ShaderMaterial
 # Спрайт листа — шейдер бойцов (контур + вспышка; Soldier.unit_shader), свой материал: вспышка — только этой крепости
 var _sprite_material: ShaderMaterial = null
+const SOFTEN: float = 0.2   # доля плавной выборки листа цитадели (Soldier.UNIT_SHADER "soften")
 var _env: Dictionary = {}   # тема "building_env" (пусто — без света местности)
 var _siege_shown: bool = false   # тревога штурма показана (цитадель — новая на каждый бой)
 var _flash_left: float = 0.0   # сек до конца вспышки попадания (гаснет в _process, не Tween на удар)
@@ -125,10 +126,13 @@ func apply_theme(citadel_theme: Dictionary) -> void:
 	var k: float = _sheet.get("scale", 1.0)
 	_sprite.scale = Vector2(k, k)
 	_sprite.position = -Vector2(_sheet.get("anchor", Vector2(frame.x / 2.0, frame.y))) * k
-	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# Менее пиксельная (решение пользователя 07.11.2026, «на 20%»): фильтр LINEAR, а шейдер смешивает выборку по
+	# центру пикселя листа (как NEAREST) с плавной в доле SOFTEN — края блоков мягче, рисунок не мылится
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_sprite.modulate = _sheet.get("tint", Color.WHITE)   # вспышка попадания — modulate узла, не спрайта
 	_sprite_material = ShaderMaterial.new()
 	_sprite_material.shader = Soldier.unit_shader()
+	_sprite_material.set_shader_parameter("soften", SOFTEN)
 	_env = FactionTheme.current().get("building_env", {})
 	var outline_px: float = _env.get("outline_px", Building.OUTLINE_WORLD_PX)
 	_sprite_material.set_shader_parameter("outline_px", float(maxi(1, roundi(outline_px / maxf(k, 0.01)))))

@@ -5,7 +5,9 @@
     PYTHONPATH=tools python tools/building_levels_add.py <папка пакета кадров> <здание …>
     python tools/building_levels_muzzle.py            # стволы рядов выстрела 2 / 3 уровня
 
-Лист — 24 кадра сеткой 6×4 (ячейки ≈ 336 px, у Апотекариона и Кодекс-бастиона — свои; здание в ячейках съезжает — align): кадры 0–11 — стойка,
+Лист — 24 кадра сеткой 6×4 (ячейки ≈ 336 px, у Апотекариона и Кодекс-бастиона — свои; здание в ячейках съезжает — align;
+Кровавая чаша и Чумной котёл 2-го уровня (07.11.2026) — листы 4×3 по 12 кадров, `GRID`, у котла стойка + работа двумя
+листами; уровень без листа — кадры пакета `FRAMES_PACK` как есть): кадры 0–11 — стойка,
 12–23 — работа / выстрел (нарастание, вспышка, затухание). Раскладка по рядам (решение 06.11.2026):
 - у здания только стойка (IDLE_ONLY) — все 24 кадра одной стойкой: работа идёт в цикле, иначе пропала бы;
 - Казармы и Святилище культа — 0–11 стойка, 12–23 пополнение (refill);
@@ -33,18 +35,32 @@ FOLDERS = {"bolter_turret": "tower", "heretic_autocannon": "chaos/tower", "thund
 # Листы без обычного имени <здание>_*_l<уровень>.png
 SHEETS = {"codex_bastion": {2: "exec-8e6a41ed-4c87-44ee-ac38-ea4dff43b8a1.png",
                             3: "exec-ae0fd419-b3bd-4052-a36d-6b2443bd06f1.png"},
-          "apothecarion": {2: "apothecarion_idle_work_spritesheet.png", 3: "apothecarion_idle_work_spritesheet_l3.png"}}
-IDLE_ONLY = ["apothecarion", "pleasure_shrine", "skull_altar", "vulkan_forge", "warp_rift", "codex_bastion"]
+          "apothecarion": {2: "apothecarion_idle_work_spritesheet.png", 3: "apothecarion_idle_work_spritesheet_l3.png"},
+          # 07.11.2026: живые стойки 2-го уровня листами 4×3 (12 кадров); у котла — стойка и работа двумя листами
+          "blood_chalice": {2: "blood_chalice_idle_spritesheet_l2.png"},
+          "plague_cauldron": {2: ["plague_cauldron_idle_spritesheet_l2.png", "plague_cauldron_work_spritesheet_l2.png"]}}
+# Сетка листа (столбцы, строки), где она не 6×4
+GRID = {"blood_chalice": (4, 3), "plague_cauldron": (4, 3)}
+# Уровни без листа — кадрами пакета 05.11.2026 как есть (<анимация>_<уровень>_NN.png в его папке здания):
+# building_levels_add.py пересобирает все ряды уровней разом, и ряд без листа не должен пропасть
+FRAMES_PACK = Path("assets/source_sheets/building_levels/LVL_builds_2026-11-05")
+IDLE_ONLY = ["apothecarion", "pleasure_shrine", "skull_altar", "vulkan_forge", "warp_rift", "codex_bastion",
+             "blood_chalice", "plague_cauldron"]
 REFILL = ["barracks", "cult_shrine"]
 ATTACK = ["bolter_turret", "fists_bastion", "hellfire_mortar", "heretic_autocannon", "thunderfire_cannon"]
 COLS, ROWS = 6, 4
 
 
-def cells(path):
-    im = Image.open(path).convert("RGBA")
-    cw, ch = im.width / COLS, im.height / ROWS
-    return align([im.crop((round(c * cw), round(r * ch), round((c + 1) * cw), round((r + 1) * ch)))
-                  for r in range(ROWS) for c in range(COLS)])
+def cells(paths, grid=(COLS, ROWS)):
+    """Кадры листов уровня по порядку (несколько листов — подряд), выровненные на кадр 0 первого."""
+    cols, rows = grid
+    out = []
+    for path in paths:
+        im = Image.open(path).convert("RGBA")
+        cw, ch = im.width / cols, im.height / rows
+        out += [im.crop((round(c * cw), round(r * ch), round((c + 1) * cw), round((r + 1) * ch)))
+                for r in range(rows) for c in range(cols)]
+    return align(out)
 
 
 def pedestal_iou(a, b, dx, dy, y0, y1):
@@ -168,8 +184,12 @@ def place(frames, canvas, ref_box):
 
 
 def sheet_of(src, name, level):
+    """Листы уровня (список) или None — листа нет."""
     named = SHEETS.get(name, {}).get(level)
-    return src / named if named else next(src.glob(f"{name}_*_l{level}.png"))
+    if named:
+        return [src / n for n in ([named] if isinstance(named, str) else named)]
+    found = sorted(src.glob(f"{name}_*_l{level}.png"))
+    return found or None
 
 
 def main(src, out, only=()):
@@ -182,7 +202,14 @@ def main(src, out, only=()):
         n_attack = len(list((dst / "attack").glob("*.png"))) if (dst / "attack").is_dir() else 0
         (out / name).mkdir(parents=True, exist_ok=True)
         for level in (2, 3):
-            cs = cells(sheet_of(src, name, level))
+            sheets = sheet_of(src, name, level)
+            if sheets is None:
+                kept = sorted((FRAMES_PACK / name).glob(f"*_{level}_*.png"))
+                for f in kept:
+                    Image.open(f).save(out / name / f.name)
+                print(f"{name} уровень {level}: листа нет — кадры пакета ({len(kept)})")
+                continue
+            cs = cells(sheets, GRID.get(name, (COLS, ROWS)))
             if name in IDLE_ONLY:
                 rows = {"idle": cs}
             elif name in REFILL:

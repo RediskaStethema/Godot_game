@@ -81,6 +81,7 @@ var charm_chance: float = 0.0       # шанс поработить цель (б
 var splash_radius: float = 0.0      # > 0 — урон всем бойцам splash_team в радиусе точки попадания
 var splash_team: int = GameConstants.TEAM_ENEMY
 var on_impact: Callable             # (точка) — вспышка взрыва у стрелка (цитадель)
+const SCORCH_SHARE: float = 0.45    # подпалина разрыва — доля splash_radius (ScarLayer)
 var impact_vfx: Array = ["explosion"]   # эффекты взрыва (Vfx), масштаб — по splash_radius
 var arc_height: float = 0.0         # > 0 — рисуется по дуге (артиллерия), попадание то же
 var origin_fn: Callable             # () -> Vector2: ствол стрелка сейчас — снаряд с задержкой вылетает из него
@@ -98,6 +99,30 @@ var _angle_offset: float = 0.0
 var _released: bool = false         # вылетел из ствола (кадр вспышки дошёл)
 var _standing: bool = false         # тик вылета: стоит у ствола, летит со следующего (только вид — в _process)
 var _show_after: float = 0.0        # с какой доли тика вылета (сек) снаряд виден — вспышка в листе стрелка
+# Показ по анимации стрелка (здания, решение пользователя 06.11.2026 «выстрел Heretic Autocannon накладывается»):
+# Callable → bool «кадр вспышки в листе уже идёт». Доля тика опережала анимацию — тик срабатывает с запозданием,
+# а анимация начинается в момент его обработки, и искра горела на стволе в кадре 0, раньше нарисованной вспышки.
+# Задан — снаряд виден, только когда вспышка в листе началась (и дальше уже всегда)
+var show_fn: Callable
+# Тяжёлый разрыв (залп орудия игрока): стоп-кадр мира при попадании (BattleScene.hitstop) — только вид
+var heavy: bool = false
+# Свет выстрела и разрыва (IsoGridRenderer.flash_light, только вид): цвет вспышки стрелка, иначе огонь
+const MUZZLE_LIGHT_RADIUS: float = 34.0
+const MUZZLE_LIGHT_TIME: float = 0.12
+const IMPACT_LIGHT_TIME: float = 0.35
+var light_color: Color = Palette.FIRE
+# След по виду снаряда (слой ProjectileTrail, сам обходит снаряды): трассер — болты, лучи, искры; дым — ракета, огненный шар
+const TRAILS = {"bolt": "tracer", "charged": "tracer", "spark": "tracer", "warp_bolt": "tracer",
+	"chaos_bolt": "tracer", "rocket": "smoke", "fireball": "smoke"}
+var _shown: bool = false
+# Вылет по оси ствола (здания, решение пользователя 06.11.2026: «снаряд турели должен лететь по направлению дула,
+# а не прямо на врага»): единичный вектор в мире; задан — полёт по квадратичной кривой Безье от ствола к точке цели
+# с опорой на оси ствола (CURVE_LEAD доли пути, не дальше CURVE_MAX_LEAD px). Кривая пересчитывается к живой цели
+# каждый тик, снаряд идёт по ней на SPEED — доходит всегда. ZERO — прямо на цель, как раньше
+var launch_dir: Vector2 = Vector2.ZERO
+var _traveled: float = 0.0
+const CURVE_LEAD: float = 0.45
+const CURVE_MAX_LEAD: float = 180.0
 
 # Выстрел из точки from в цель (Soldier / Citadel): aim — куда в цели (смещение от её ног).
 # tint (альфа > 0) — снаряд в цвет вспышки стрелка; иначе warm — синий → красный (Хаос), иначе как на листе.
@@ -127,6 +152,8 @@ static func launch(parent: Node, kind: String, from: Vector2, target: Node2D, ai
 		pass
 	elif tint.a > 0.0:   # цвет вспышки стрелка — важнее тёплой перекраски
 		p.material = _get_tint_material(tint)
+	if tint.a > 0.0:
+		p.light_color = Color(tint, 1.0)
 	elif warm:
 		p.material = _get_warm_material()
 	parent.add_child(p)
@@ -204,6 +231,14 @@ func tick(delta: float) -> void:
 		return
 	_standing = false
 	var step := SPEED * delta
+	if launch_dir != Vector2.ZERO:   # по оси ствола, дугой к цели
+		_traveled += step
+		if _traveled >= _curve_length() or _life > MAX_LIFETIME:
+			_pos = _aim_point
+			_impact()
+			return
+		_pos = _curve_point(_traveled / _curve_length())
+		return
 	if _pos.distance_to(_aim_point) <= step or _life > MAX_LIFETIME:
 		_pos = _aim_point
 		_impact()
@@ -220,9 +255,10 @@ func _release() -> void:
 		_origin = origin_fn.call()
 		_pos = _origin
 		global_position = _pos
-	_face(_aim_point - _pos)
-	visible = true
+	_face(launch_dir if launch_dir != Vector2.ZERO else _aim_point - _pos)   # у ствола — носом по оси ствола
+	visible = _shown or not show_fn.is_valid()   # по анимации стрелка — покажет _process с кадром вспышки
 	AudioManager.play("shot_" + _kind)
+	IsoGridRenderer.flash_light(_origin, Color(light_color, 0.55), MUZZLE_LIGHT_RADIUS, MUZZLE_LIGHT_TIME)
 
 # Самонаведение: живая цель тянет снаряд за собой. Цель погибла — летим в последнюю точку,
 # урона там не будет (если только это не взрыв).
@@ -248,6 +284,10 @@ func _impact() -> void:
 			on_impact.call(point)
 		for kind in impact_vfx:
 			Vfx.spawn(get_parent(), kind, point, splash_radius / EXPLOSION_VFX_RADIUS)
+		if heavy:
+			Soldier.request_hitstop(self)
+		IsoGridRenderer.flash_light(point, Color(Palette.FIRE, 0.9), splash_radius * 1.8, IMPACT_LIGHT_TIME)
+		ScarLayer.scorch(point, splash_radius * SCORCH_SHARE)   # подпалина до конца боя
 	elif not is_instance_valid(_target):
 		pass   # цель удалена в полёте (погибла и исчезла) — урона нет. _track_target её не обнулит:
 			# удалённый объект в Godot 4 равен null, а «is» на нём падает
@@ -264,6 +304,7 @@ func _impact() -> void:
 		if stun > 0.0:
 			s.apply_stun(stun)
 			Vfx.spawn(get_parent(), "lightning", _aim_point, Soldier.EFFECT_SCALE)
+			IsoGridRenderer.flash_light(_aim_point, Color(Palette.FROST, 0.8), 60.0, 0.18)
 		if knockback > 0.0:
 			s.apply_knockback(s.global_position - _origin, knockback)
 		if status != "":
@@ -282,6 +323,12 @@ func _impact() -> void:
 func _process(_delta: float) -> void:
 	if finished:
 		return
+	if show_fn.is_valid() and not _shown:   # по анимации стрелка: до вспышки в листе — не виден
+		_shown = show_fn.call()
+		visible = _shown
+		if not _shown:
+			global_position = _pos
+			return
 	if not _released:   # ждёт кадра вспышки (видимость — по задержке в launch)
 		global_position = _pos
 		return
@@ -289,12 +336,19 @@ func _process(_delta: float) -> void:
 	# 1/16 с), а не летит вперёд по доле тика: искра уходила со ствола раньше вспышки, и выстрел в листе
 	# загорался позади неё (23.10.2026)
 	if _standing:
-		visible = BattleManager.get_tick_alpha() * GameConstants.FIXED_TICK >= _show_after - Soldier.TIMER_EPSILON
+		if not show_fn.is_valid():
+			visible = BattleManager.get_tick_alpha() * GameConstants.FIXED_TICK >= _show_after - Soldier.TIMER_EPSILON
 		global_position = _pos
 		return
 	if not visible:
 		return
 	var ahead := SPEED * GameConstants.FIXED_TICK * BattleManager.get_tick_alpha()
+	if launch_dir != Vector2.ZERO:
+		var t := minf((_traveled + ahead) / _curve_length(), 1.0)
+		var at := _curve_point(t)
+		_face(_curve_point(minf(t + ARC_LOOKAHEAD / _curve_length(), 1.0)) - at if t < 1.0 else _aim_point - _pos)
+		global_position = at
+		return
 	var shown := _pos.move_toward(_aim_point, ahead)
 	if arc_height > 0.0:
 		var next := _arc(shown.move_toward(_aim_point, ARC_LOOKAHEAD))
@@ -303,6 +357,23 @@ func _process(_delta: float) -> void:
 	else:
 		_face(_aim_point - shown)
 	global_position = shown
+
+# Опора кривой вылета по стволу: на оси ствола, CURVE_LEAD пути (цель позади оси — ближе к стволу)
+func _curve_control() -> Vector2:
+	var chord := _aim_point - _origin
+	var along := launch_dir.dot(chord.normalized()) if chord.length_squared() > 1.0 else 1.0
+	var lead := minf(chord.length() * CURVE_LEAD * clampf(0.5 + 0.5 * along, 0.25, 1.0), CURVE_MAX_LEAD)
+	return _origin + launch_dir * lead
+
+func _curve_point(t: float) -> Vector2:
+	var c := _curve_control()
+	var u := 1.0 - t
+	return _origin * (u * u) + c * (2.0 * u * t) + _aim_point * (t * t)
+
+# Длина кривой — среднее хорды и ломаной через опору (для квадратичной Безье с запасом точно)
+func _curve_length() -> float:
+	var c := _curve_control()
+	return maxf((_origin.distance_to(_aim_point) + _origin.distance_to(c) + c.distance_to(_aim_point)) / 2.0, 1.0)
 
 # Точка прямого полёта → на дуге: подъём по параболе, наибольший в середине пути
 func _arc(point: Vector2) -> Vector2:

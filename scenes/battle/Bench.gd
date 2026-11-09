@@ -218,6 +218,9 @@ func _on_drop(screen_pos: Vector2) -> void:
 		tw.tween_property(preview, "modulate:a", 0.0, RETURN_TIME)
 	tw.chain().tween_callback(preview.queue_free)
 	tw.tween_callback(_restore_hand_card.bind(hand_node))   # карта на руке проявляется, когда долетела
+	# отпустили над полем, а карта осталась — не сыграна: красная вспышка по рамке (EFFECTS_NEEDED 1.6)
+	if bench_cards.has(card) and screen_pos.y < get_viewport().get_visible_rect().size.y - PEEK:
+		tw.tween_callback(CardReject.flash.bind(hand_node))
 
 # Без типа: карта сыграна — её узел в руке освобождается раньше колбэка твина, а освобождённый объект в
 # типизированный аргумент не передать («Cannot convert argument 1 from Object to Object»)

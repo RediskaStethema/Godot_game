@@ -304,6 +304,9 @@ static func describe_citadel() -> String:
 
 # Способность отряда из данных UnitData ("" — нет)
 static func ability_text(d: UnitData) -> String:
+	if d.special_kind != "":
+		return "%s (раз в %d с); ярость на %d%% HP — приём в 1,5 раза чаще%s" % [d.special_name,
+			roundi(d.special_cooldown), roundi(Soldier.ENRAGE_AT * 100.0), "; не отбрасывается" if d.knockback_immune else ""]
 	if d.jump_range > 0.0:
 		return "прыжок на стрелка (раз за бой), удар ×%.1f и оглушение %.1f с" % [d.jump_damage_mult, d.jump_stun]
 	if d.entrench_time > 0.0:

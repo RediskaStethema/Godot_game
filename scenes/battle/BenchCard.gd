@@ -20,6 +20,7 @@ var _rest := Vector2.ZERO
 var _raised_y: float = 0.0
 var _tween: Tween = null
 var _desc: PanelContainer
+var _glare: CardGlare = null
 
 # Сигнал — когда начали тащить карту
 signal drag_started(card: CardData, screen_pos: Vector2)
@@ -37,6 +38,7 @@ func setup(data: CardData) -> void:
 	# Медальон: у отряда — число бойцов, у остальных пусто (цены на руке нет)
 	var face := UITheme.make_card_face(data, CARD_WIDTH, str(data.unit_count) if data.card_type == "squad" else "")
 	add_child(face)
+	_glare = CardGlare.attach(face, data.rarity)   # наклон, блик, подсветка редкости — под курсором (только вид)
 	_build_desc(data)
 	mouse_entered.connect(func():
 		_set_raised(true)
@@ -87,6 +89,8 @@ func _set_raised(on: bool) -> void:
 
 func set_dragged(on: bool) -> void:
 	modulate.a = DRAG_ALPHA if on else 1.0
+	if _glare:
+		_glare.enabled = not on
 
 # -------------------------------------------------------
 # DRAG & DROP

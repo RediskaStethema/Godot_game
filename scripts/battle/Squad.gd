@@ -166,7 +166,8 @@ func start_march() -> void:
 # на дальность удара + DEEP_STRIKE_GAP перед ним, со своей стороны. Раз за бой
 const DEEP_STRIKE_GAP: float = 30.0
 const DEEP_STRIKE_MIN_DIST: float = 150.0   # враг уже ближе — телепорт не нужен
-const DEEP_STRIKE_ORIGIN_POOF: float = 2.5    # облачко на месте отряда — во столько раз крупнее
+const FALL_RING_RADIUS: float = 26.0          # px мира — кольцо «отряд пал» (× sprite_scale)
+const DEEP_STRIKE_STAGGER: float = 0.12       # с × attack_stagger — полосы бойцов загораются вразнобой
 var deep_struck: bool = false
 var _deep_strike_timer: float = 0.0
 
@@ -190,13 +191,20 @@ func _tick_deep_strike(delta: float) -> void:
 	var anchor := foe.global_position + back * (data.attack_range + DEEP_STRIKE_GAP)
 	if center.distance_to(anchor) < DEEP_STRIKE_MIN_DIST:
 		return
-	# Облачко — у каждого бойца на месте высадки и одно крупное там, откуда отряд исчез
-	# (по облачку на бойца с обеих сторон — 24 эффекта в один тик, выброс тика)
-	var size: float = data.sprite_scale * Soldier.EFFECT_SCALE
-	Vfx.spawn(get_parent(), "poof", center, size * DEEP_STRIKE_ORIGIN_POOF)
+	# Телепорт кодом (EFFECTS_NEEDED 5.3, решение пользователя 09.11.2026; было — облачка poof): на месте ухода
+	# бойцы стягиваются в полосы варп-света, на месте высадки полосы раскрываются — по узлу на сторону, не на бойца
+	var h: float = Soldier.TARGET_SPRITE_HEIGHT * data.sprite_scale
+	var from_pts: Array = []
+	var to_pts: Array = []
+	var waits: Array = []
 	for s in alive:
+		from_pts.append(s.global_position)
+		waits.append(s.attack_stagger * DEEP_STRIKE_STAGGER)
 		s.teleport_to(anchor + s.formation_offset)
-		Vfx.spawn(get_parent(), "poof", s.global_position, size)
+		to_pts.append(s.global_position)
+		DustLayer.puff(s.global_position, 7.0 * s.data.sprite_scale, 2, 5.0)
+	BuildingFx.teleport(get_parent(), from_pts, h, false, waits)
+	BuildingFx.teleport(get_parent(), to_pts, h, true, waits)
 	SoldierRegistry.invalidate_grid()   # сдвиг больше GRID_SLACK за тик
 	AudioManager.play("deep_strike")
 
@@ -278,6 +286,10 @@ func _on_soldier_died(soldier: Soldier) -> void:
 	# Если все бойцы мертвы — отряд уничтожен
 	if soldiers.is_empty():
 		current_state = State.DEAD
+		# Отряд пал целиком (решение пользователя 09.11.2026): кольцо цвета стороны по земле и пыль — обе стороны
+		if BattleManager.is_battle_running():
+			BuildingFx.squad_fall(soldier.global_position, FALL_RING_RADIUS * data.sprite_scale,
+				team == GameConstants.TEAM_PLAYER)
 		# Свой отряд пал целиком — надпись над местом гибели последнего бойца (только вид)
 		if team == GameConstants.TEAM_PLAYER and BattleManager.is_battle_running():
 			FloatingText.spawn(get_parent(), soldier.global_position + Vector2(0.0, -Soldier.TARGET_SPRITE_HEIGHT * 1.5),

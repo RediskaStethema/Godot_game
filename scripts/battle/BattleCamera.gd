@@ -62,6 +62,18 @@ func zoom_at(screen_point: Vector2, steps: float) -> void:
 	position = before - from_center / z
 	_clamp_position()
 
+# Наезд на точку мира (выход и смерть финального босса, только вид): центр экрана — на world, зум — mult от
+# вписанного (в пределах ZOOM_RANGE); тот же твин, что у fit — колесо / тяга мышью его гасят, fit — возвращает.
+# ignore_time_scale — наезд идёт в реальном времени и при замедлении мира
+func focus(world: Vector2, mult: float, time: float, ignore_time_scale: bool = false) -> void:
+	if _fit_tween and _fit_tween.is_valid():
+		_fit_tween.kill()
+	var z := clampf(_fit_zoom * mult, _fit_zoom * ZOOM_RANGE.x, _fit_zoom * ZOOM_RANGE.y)
+	_fit_tween = create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_fit_tween.set_ignore_time_scale(ignore_time_scale)
+	_fit_tween.tween_property(self, "zoom", Vector2(z, z), time)
+	_fit_tween.tween_property(self, "position", world, time)
+
 # Тянуть камеру мышью: сдвиг экрана → сдвиг мира
 func pan(screen_delta: Vector2) -> void:
 	if _fit_tween and _fit_tween.is_valid():

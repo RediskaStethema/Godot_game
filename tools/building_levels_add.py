@@ -57,6 +57,11 @@ SHIFT_OVERRIDE = {"codex_bastion": {2: (0, 0), 3: (-27, 3)}}
 MAX_BASE_GROWTH = 1.2    # основание уровня — не шире 1.2 основания 1-го уровня (0.96 клетки при SPRITE_WIDTH 0.8)
 SAT_RATIO = (0.6, 1.3)
 STATIC_MOTION = 20.0     # % пикселей тела, сменившихся между кадрами ряда: меньше — ряд неживой
+# Ряды, нарисованные живыми, но с малым движением корпуса — не оживлять кодом (07.11.2026, проверено глазами:
+# у Казарм 3-го уровня живут огни и знамёна, у Hellfire Mortar 2-го — свечение пасти и свой выстрел с отдачей;
+# движение 17–21% у порога STATIC_MOTION, код добавлял «дыхание» поверх настоящей анимации, а соседний уровень
+# той же мортиры с 19% не помечался — уровни вели себя по-разному)
+LIVE_ROWS = {"barracks": ["idle_3"], "hellfire_mortar": ["idle_2", "attack_2"]}
 CALM = (0.7, 0.75)       # тело — яркость и насыщенность ниже (огни, вспышки, свечение не в счёт)   # пределы множителей насыщенности золота / синего
 
 
@@ -240,10 +245,11 @@ def add_levels(name, src, dst):
                 bases[level] = base_width(out / "0.png")
                 print(f"  уровень {level}: сдвиг {shifts[level]} (IoU постамента {score:.2f})")
             motion = body_motion(groups[(anim, level)])
-            if motion < STATIC_MOTION:
+            dead = motion < STATIC_MOTION and row not in LIVE_ROWS.get(name, [])
+            if dead:
                 static.append(row)
             print(f"  {row}: {len(groups[(anim, level)])} кадров, {speed} к/с, движение {motion:.0f}%"
-                  + (" — неживой, оживит код" if motion < STATIC_MOTION else ""))
+                  + (" — неживой, оживит код" if dead else " — живой (LIVE_ROWS)" if motion < STATIC_MOTION else ""))
     if not anims:
         return
     scales, prev = {}, heights[1]

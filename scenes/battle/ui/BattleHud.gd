@@ -37,7 +37,7 @@ func setup(wave_text: String, message_label: Label, start_button: Button) -> voi
 	_on_citadel_changed(BattleManager.citadel_hp)
 
 func _build_header(wave_text: String, message_label: Label, start_button: Button) -> void:
-	var hud = UITheme.make_panel()
+	var hud = UITheme.make_panel("HudBar")   # полоса шапки — hud_bar повтором
 	hud.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	hud.offset_bottom = UITheme.HUD_HEIGHT
 	add_child(hud)
@@ -87,7 +87,7 @@ func _build_header(wave_text: String, message_label: Label, start_button: Button
 		_artillery_icon.visible = false
 	row.add_child(artillery_row)
 	_speed_button = UITheme.make_button("", "", GameSettings.cycle_battle_speed)
-	_speed_button.custom_minimum_size = Vector2(64, 0)
+	_speed_button.custom_minimum_size = Vector2(84, 0)
 	_speed_button.tooltip_text = "Скорость боя"
 	row.add_child(_speed_button)
 	GameSettings.changed.connect(_update_speed_button)
@@ -243,15 +243,20 @@ func _process(_delta: float) -> void:
 
 func _update_speed_button() -> void:
 	_speed_button.text = "×%d" % GameSettings.battle_speed
+	UITheme.set_button_icon(_speed_button, "hud", "speed_%d" % roundi(GameSettings.battle_speed))   # шевроны 1–3
 
 func _on_requisition_changed(amount: int) -> void:
-	_requisition.text = "%d Req" % amount
+	UITheme.roll_number(_requisition, amount, func(v: int): return "%d Req" % v)   # отматывается
+
+func _citadel_text(hp: int) -> String:
+	var t := "%d/%d" % [hp, int(BattleManager.CITADEL_MAX_HP)]
+	if BattleManager.citadel_shield > 0.0:
+		t += "  +%d" % ceili(BattleManager.citadel_shield)
+	return t
 
 func _on_citadel_changed(hp: float) -> void:
 	# «Цитадель» и «щит» — значками шапки (пакет интерфейса), в тексте только числа
-	_citadel.text = "%d/%d" % [ceili(hp), int(BattleManager.CITADEL_MAX_HP)]
-	if BattleManager.citadel_shield > 0.0:
-		_citadel.text += "  +%d" % ceili(BattleManager.citadel_shield)
+	UITheme.roll_number(_citadel, ceili(hp), _citadel_text, false)   # отматывается, без вспышки (штурм — часто)
 	if _shield_icon:
 		_shield_icon.visible = BattleManager.citadel_shield > 0.0
 	_citadel.add_theme_color_override("font_color",

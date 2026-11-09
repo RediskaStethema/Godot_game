@@ -218,8 +218,13 @@ func _main() -> void:
 	for i in critters.size():
 		if critters[i].position != start_pos[i]:
 			walked += 1
-	_check("существа по краям поля: %d, за стеной владений и вне боевой полосы, ходят %d" % [critters.size(), walked],
-		critters.size() == battle.renderer.theme.get("critters", {}).get("count", -1) and outside and walked > 0)
+	# у Космодесанта (тема по умолчанию) их нет — только у Хаоса (решение пользователя 07.11.2026)
+	# ожидаемое — по теме, с которой строилась сцена (раса без темы → тема по умолчанию); renderer.theme к этому
+	# месту подменён проверкой Хаоса
+	var ft = load("res://scripts/data/FactionTheme.gd")
+	var want: int = ft.get_theme(ft.DEFAULT_FACTION).get("critters", {}).get("count", 0)
+	_check("существа по краям поля: %d из %d, за стеной владений и вне боевой полосы, ходят %d" % [critters.size(), want, walked],
+		critters.size() == want and outside and (walked > 0 or want == 0))
 
 	bm.stop_battle()
 	rm.player_faction = "space_marines"
