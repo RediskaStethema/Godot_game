@@ -21,6 +21,8 @@ var _fit_zoom: float = 1.0
 var _bounds: Rect2 = Rect2()
 var _fit_tween: Tween
 var _shake_tween: Tween
+var _shake_peak: float = 0.0     # сила последней тряски и конец её по часам — слабая не перебивает сильную
+var _shake_end_ms: int = 0
 var _shake_rng := RandomNumberGenerator.new()   # своя случайность — общий randf боя не сдвигается
 
 func fit(bounds: Rect2, area: Rect2, placement: bool, animate: bool) -> void:
@@ -89,6 +91,14 @@ func _clamp_position() -> void:
 
 # Тряска (взрыв залпа): сдвиг offset гаснет за SHAKE_TIME — только вид, position не трогает
 func shake(strength: float) -> void:
+	# Слабый толчок не перебивает сильный, который ещё не угас (иначе шаг босса гасил удар приёма)
+	var now := Time.get_ticks_msec()
+	if now < _shake_end_ms:
+		var left := float(_shake_end_ms - now) / (SHAKE_TIME * 1000.0)
+		if strength < _shake_peak * left:
+			return
+	_shake_peak = strength
+	_shake_end_ms = now + int(SHAKE_TIME * 1000.0)
 	if _shake_tween and _shake_tween.is_valid():
 		_shake_tween.kill()
 	_shake_tween = create_tween()

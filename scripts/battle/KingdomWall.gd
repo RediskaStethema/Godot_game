@@ -21,6 +21,10 @@ const THICK: float = 7.0         # px: толщина (верхняя грань
 const RISE_TIME: float = 0.35    # стена вырастает из земли (сыграна карта)
 const RISE_WAVE: float = 0.6     # звенья — волной по контуру
 const FLASH_TIME: float = 0.9    # вспышка щита в начале боя
+# Решение пользователя 10.11.2026: каждый уровень стены — на 10% выше (ур. 1 / 2 / 3 — ×1.0 / ×1.1 / ×1.2,
+# столбы и полоска HP — следом); улучшение — стена дорастает за GROW_TIME
+const LEVEL_HEIGHT_STEP: float = 0.10
+const GROW_TIME: float = 0.4
 
 var card: CardData
 var stats: Dictionary = {}
@@ -46,6 +50,12 @@ func refresh_stats() -> void:
 		s.max_hp = stats.get("wall_hp", 0.0)
 		s.hp = s.max_hp
 		s.mark_dirty()
+		if s.shown_scale >= 0.0 and not is_equal_approx(s.shown_scale, height_scale()):
+			s.set_process(true)   # уровень сменился — звено дорастает в _process
+
+# Множитель высоты по уровню карты стены
+func height_scale() -> float:
+	return 1.0 + LEVEL_HEIGHT_STEP * (card.building_level - 1)
 
 func get_citadel_shield() -> float:
 	return stats.get("shield", 0.0)
@@ -82,6 +92,7 @@ func _build_segments(container: Node, rising: bool) -> void:
 	for s in segments:
 		s.position = (s.a + s.b) / 2.0   # y-sort с бойцами — по середине звена
 		s.rise_delay = (float(s.index) / total) * RISE_WAVE if rising else -1.0
+		s.shown_scale = height_scale()
 		container.add_child(s)
 	refresh_stats()
 
@@ -156,6 +167,7 @@ class Segment extends Node2D:
 	var flash_color := Palette.SHIELD_BLUE
 	var _hit_left := 0.0       # белая вспышка попадания
 	var _t := 0.0
+	var shown_scale := -1.0    # высота звена сейчас (× HEIGHT); к wall.height_scale() — плавно
 
 	func _ready() -> void:
 		set_process(rise_delay >= 0.0)
@@ -186,7 +198,12 @@ class Segment extends Node2D:
 		flash_left = maxf(flash_left - delta, 0.0)
 		_hit_left = maxf(_hit_left - delta, 0.0)
 		var rising := rise_delay >= 0.0 and _t < rise_delay + KingdomWall.RISE_TIME
-		if flash_left <= 0.0 and _hit_left <= 0.0 and not rising:
+		var target := wall.height_scale()
+		var growing := not is_equal_approx(shown_scale, target)
+		if growing:
+			shown_scale = move_toward(shown_scale, target, delta * KingdomWall.LEVEL_HEIGHT_STEP / KingdomWall.GROW_TIME)
+			_dirty = true
+		if flash_left <= 0.0 and _hit_left <= 0.0 and not rising and not growing:
 			if rise_delay >= 0.0:
 				_dirty = true   # дорос — последний кадр в полную высоту
 			rise_delay = -1.0
@@ -245,7 +262,7 @@ class Segment extends Node2D:
 			RenderingServer.canvas_item_add_triangle_array(get_canvas_item(), _idx, _pts, _cols)
 
 	func _build() -> void:
-		var h := KingdomWall.HEIGHT
+		var h := KingdomWall.HEIGHT * shown_scale
 		if rise_delay >= 0.0:
 			var k := clampf((_t - rise_delay) / KingdomWall.RISE_TIME, 0.0, 1.0)
 			if k <= 0.0:
@@ -289,7 +306,7 @@ class Segment extends Node2D:
 				if ratio < 0.34 and i == 1:
 					continue   # сильно побито — зубец выбит
 				_rect(Rect2(p + Vector2(-2.0, -3.0), Vector2(4.0, 3.0)), top_col)
-			var post_up := Vector2(0.0, -KingdomWall.POST_HEIGHT * h / KingdomWall.HEIGHT)
+			var post_up := Vector2(0.0, -KingdomWall.POST_HEIGHT * h / KingdomWall.HEIGHT)   # с уровнем — выше
 			_poly(PackedVector2Array([la + Vector2(-3, 0), la + Vector2(3, 0), la + Vector2(3, 0) + post_up,
 				la + Vector2(-3, 0) + post_up]), dark_col.lerp(face_col, 0.6))
 			if chaos:
@@ -304,6 +321,6 @@ class Segment extends Node2D:
 				_line(c + Vector2(-1, 8), c + Vector2(1, 11), dark_col)
 			if ratio < 1.0 and BattleManager.is_battle_running():   # HP звена — над ним
 				var w := la.distance_to(lb) * 0.6
-				var bar := Rect2(Vector2(-w / 2.0, -KingdomWall.POST_HEIGHT - 6.0), Vector2(w, 2.0))
+				var bar := Rect2(Vector2(-w / 2.0, -KingdomWall.POST_HEIGHT * shown_scale - 6.0), Vector2(w, 2.0))
 				_rect(bar, Palette.OUTLINE)
 				_rect(Rect2(bar.position, Vector2(w * ratio, 2.0)), Palette.HIT_RED)

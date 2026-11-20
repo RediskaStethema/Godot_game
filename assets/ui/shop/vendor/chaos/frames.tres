@@ -1,0 +1,90 @@
+[gd_resource type="SpriteFrames" load_steps=18 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/idle/0.png" id="idle_0"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/buy/0.png" id="buy_0"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/buy/1.png" id="buy_1"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/buy/2.png" id="buy_2"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/buy/3.png" id="buy_3"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/buy/4.png" id="buy_4"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/buy/5.png" id="buy_5"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/buy/6.png" id="buy_6"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/buy/7.png" id="buy_7"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/no_money/0.png" id="no_money_0"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/no_money/1.png" id="no_money_1"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/no_money/2.png" id="no_money_2"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/no_money/3.png" id="no_money_3"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/no_money/4.png" id="no_money_4"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/no_money/5.png" id="no_money_5"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/no_money/6.png" id="no_money_6"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/chaos/no_money/7.png" id="no_money_7"]
+
+[resource]
+metadata/figure_height = 600.0
+metadata/lens = Vector2(230, 250)
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("idle_0")
+}],
+"loop": false,
+"name": &"idle",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("buy_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("buy_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("buy_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("buy_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("buy_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("buy_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("buy_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("buy_7")
+}],
+"loop": false,
+"name": &"buy",
+"speed": 12.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("no_money_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("no_money_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("no_money_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("no_money_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("no_money_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("no_money_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("no_money_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("no_money_7")
+}],
+"loop": false,
+"name": &"no_money",
+"speed": 12.0
+}]

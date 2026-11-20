@@ -19,7 +19,7 @@ func setup() -> void:
 	close_on_cancel = true
 	build_frame(1040.0)
 	add_title("СЛОЖНОСТЬ")
-	add_title("Больше врагов в волнах и чаще сильные отряды Хаоса", "DimLabel")
+	add_title("Больше врагов в волнах и чаще сильные отряды Кровоподписантов", "DimLabel")
 	var row = HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 8)

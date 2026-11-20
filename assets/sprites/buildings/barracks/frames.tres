@@ -75,8 +75,8 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/barracks/refill_3/11.png" id="refill_3_11"]
 
 [resource]
-metadata/level_shift = {2: Vector2(-2, 0), 3: Vector2(3, 0)}
-metadata/level_scale = {2: 1.042, 3: 1.027}
+metadata/level_shift = {2: Vector2(-15, 11), 3: Vector2(-33, 0)}
+metadata/level_scale = {2: 1.000, 3: 1.027}
 metadata/level_static = []
 animations = [{
 "frames": [{

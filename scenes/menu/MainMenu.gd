@@ -9,49 +9,33 @@ extends Control
 # UI собирается кодом, стили — из UITheme.
 
 const BUTTON_SIZE = Vector2(320, 52)
-const MENU_LEFT: float = 72.0          # отступ колонки меню от левого края
-const LOGO_SCALE: float = 1.25
-const SCENE_FADE_WIDTH: float = 260.0  # переход сцены справа в фон, px
+const COLUMN_SHADE: float = 0.62        # затемнение слева под колонкой меню
+const COLUMN_SHADE_WIDTH: float = 0.42  # доля ширины окна
+const MENU_LEFT: float = 52.0          # отступ колонки меню от левого края (эталон меню 16.11.2026: 4% ширины)
 const ART_DIR = "res://assets/ui/menu/"
 const MenuSceneArt = preload("res://scenes/menu/MenuSceneArt.gd")
-const MenuStarfield = preload("res://scenes/menu/MenuStarfield.gd")
 # Туманности за меню: [цвет (альфа — сила), центр, радиус — доли экрана]
 # Решение пользователя 08.11.2026 (образец assets/source_sheets/FInalUI/exampel.png): фон — почти чёрный космос без туманностей
 # (были NEBULA_BLUE в 0.22, 0.3 и NEBULA_WARP в 0.48, 0.85); вернуть — записи сюда
 const NEBULAE = []
-# Аквила над названием (решение пользователя 07.11.2026: logo_eagle 152×56 — мутная вырезка старого листа,
-# на большом окне «слишком низкое качество») — логотип художника logo_eagle_hd.png (1024 px, исходник 2073 px —
-# assets/source_sheets/ui_logo_2026-11-07), на экране LOGO_WIDTH, мип-уровни; нет файла — аквила рамки окна
-# (UITheme.WINDOW_EAGLE областью LOGO_REGION). Блик — шейдером
-const LOGO_HD = "res://assets/ui/menu/logo_eagle_hd.png"
-const LOGO_WIDTH: float = 210.0
-const LOGO_REGION = Rect2(4, 16, 144, 56)
-const SHINE_PERIOD: float = 5.0        # блик пробегает раз в 5 с
-const SHINE_TIME: float = 0.7          # с — проход полосы света слева направо
-const SHINE_WIDTH: float = 0.12        # доля ширины — полуширина полосы
-const SHINE_STRENGTH: float = 0.55
-const SHINE_SHADER = """
-shader_type canvas_item;
-uniform float pos = -1.0;      // центр полосы по x (доля ширины), вне 0..1 — блика нет
-uniform float width = 0.12;
-uniform float strength = 0.55;
-uniform vec4 glow : source_color;
-void fragment() {
-	vec4 c = texture(TEXTURE, UV);
-	float x = UV.x + (UV.y - 0.5) * 0.35;   // полоса чуть наклонена
-	float k = 1.0 - smoothstep(0.0, width, abs(x - pos));
-	float lum = dot(c.rgb, vec3(0.3, 0.59, 0.11));
-	COLOR = vec4(c.rgb + glow.rgb * k * strength * smoothstep(0.15, 0.6, lum), c.a);   // по золоту, не по чёрному контуру
-}
-"""
+# Шапка меню по эталону (решение пользователя 16.11.2026, ассеты — NewAssets/07_ui, tools/menu_v2_assets.py): череп в венке
+# между двумя половинками шипастого разделителя, название, подпись и разделитель целиком. Аквила с бликом и логотип
+# logo_eagle* больше не используются (прежние файлы — assets/source_sheets/_backup_before_redesign_2026-11-15/ui/menu_anim)
+const HEADER_WREATH = "res://assets/ui/menu/header_wreath.png"
+const HEADER_RULE = "res://assets/ui/menu/header_rule.png"
+const WREATH_HEIGHT: float = 80.0
+const RULE_WIDTH: float = 280.0         # разделитель целиком; половинки у венка — по RULE_WIDTH / 2.4
+# Кнопка: иконка | вертикальный разделитель | надпись (эталон). Иконка — UITheme.MENU_ICON_SIZE от левого поля
+const BUTTON_DIVIDER_X: float = 70.0
+const BUTTON_DIVIDER_COLOR = Color("8a4a30", 0.85)
 const MENU_ICON_TEX: int = 72            # px текстуры иконки кнопки — ×2 к UITheme.MENU_ICON_SIZE
 
 var continue_button: Button = null
+var _col: VBoxContainer = null   # колонка меню (аквила, название, кнопки)
+var _launching: bool = false
 var _scene_art: Control = null   # живая сцена: десантник оборачивается, пока курсор на кнопке меню
 var _menu_buttons: Array = []
 var info_label: Label = null
-var _eagle: TextureRect = null
-var _shine_time: float = 0.0
 
 func _ready() -> void:
 	AudioManager.play_music("menu")
@@ -67,25 +51,12 @@ func _build_layout() -> void:
 	theme = UITheme.get_theme()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(_make_backdrop())
-	for n in NEBULAE:   # туманности — мягкие пятна света (ADD) по космосу за меню
-		add_child(_make_nebula(n[0], n[1], n[2]))
-	# Звёзды: при целой планете (MenuSceneArt.has_wide_planet) — под сценой: проступают сквозь прозрачный край её
-	# космоса, планета их закрывает; иначе — поверх полосы растворения сцены (гаснут к её левому краю)
-	var stars = MenuStarfield.new()
-	stars.name = "Starfield"
-	stars.fade_width = SCENE_FADE_WIDTH
-	var wide: bool = MenuSceneArt.available() and MenuSceneArt.has_wide_planet()
-	if wide:
-		add_child(stars)
-		stars.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var art := _add_scene_art(not wide)
-	_scene_art = art
-	stars.mask_node = art
-	if not wide:
-		add_child(stars)
-		stars.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_scene_art = _add_scene_art()
+	add_child(_make_column_shade())
 
 	var col = VBoxContainer.new()
+	col.name = "MenuColumn"
+	_col = col
 	col.set_anchors_preset(Control.PRESET_LEFT_WIDE)
 	col.offset_left = MENU_LEFT
 	col.offset_right = MENU_LEFT + BUTTON_SIZE.x
@@ -95,22 +66,20 @@ func _build_layout() -> void:
 
 	col.add_child(_make_title_block())
 	col.add_child(_spacer(14))
-	continue_button = _make_button("ПРОДОЛЖИТЬ", "icon_continue", _on_continue_pressed)
+	continue_button = _make_button("ПРОДОЛЖИТЬ", "icon_chevrons", _on_continue_pressed)
 	col.add_child(continue_button)
-	var new_run = _make_button("НОВЫЙ ЗАБЕГ", "icon_eagle", _on_new_run_pressed)
+	var new_run = _make_button("НОВЫЙ ЗАБЕГ", "icon_wreath", _on_new_run_pressed)
 	new_run.name = "NewRunButton"
 	col.add_child(new_run)
-	var arsenal = _make_button("АРСЕНАЛ", "icon_skull", _on_arsenal_pressed)
+	var arsenal = _make_button("АРСЕНАЛ", "icon_ammo", _on_arsenal_pressed)
 	arsenal.name = "ArsenalButton"
 	col.add_child(arsenal)
 	if RunManager.test_mode_available():   # тестовый режим — только в сборке для разработки
-		# своя иконка — UI_NEEDED 7.2 (icon_test.png), пока нет — череп, как у «Арсенала»
-		var test_icon := "icon_test" if ResourceLoader.exists(ART_DIR + "icon_test.png") else "icon_skull"
-		var test = _make_button("ТЕСТОВЫЙ РЕЖИМ", test_icon, _on_test_mode_pressed)
+		var test = _make_button("ТЕСТОВЫЙ РЕЖИМ", "icon_gear", _on_test_mode_pressed)
 		test.name = "TestModeButton"
 		col.add_child(test)
-	col.add_child(_make_button("НАСТРОЙКИ", "icon_settings", _on_settings_pressed))
-	col.add_child(_make_button("ВЫХОД", "icon_quit", _on_quit_pressed))
+	col.add_child(_make_button("НАСТРОЙКИ", "icon_gear", _on_settings_pressed))
+	col.add_child(_make_button("ВЫХОД", "icon_exit", _on_quit_pressed))
 
 	info_label = UITheme.make_label("", "SmallLabel")
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -159,76 +128,57 @@ func _make_nebula(color: Color, center: Vector2, radius: float) -> TextureRect:
 
 # Сцена справа на всю высоту; левый край растворяется в фоне
 # (живая — слоями пакета assets/ui/menu/anim, MenuSceneArt; нет пакета — неподвижная menu_scene.png)
-func _add_scene_art(fade_edge: bool = true) -> Control:
-	var art: Control
-	if MenuSceneArt.available():
-		art = MenuSceneArt.new()
-		art.name = "MenuSceneArt"
-		add_child(art)
-		art.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
-		art.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	else:
-		var still = TextureRect.new()
-		still.texture = load(ART_DIR + "menu_scene.png")
-		still.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		still.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-		still.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		still.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-		still.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-		still.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(still)
-		art = still
-	if not fade_edge:   # край сцены растворяет её собственный космос (layer_space_edge) — полоса не нужна
-		return art
-	# Растворение: от цвета фона к прозрачному поверх левого края сцены
+# Затемнение под колонкой меню (эталон 16.11.2026: слева облака темнее): надписи шапки читаются поверх флагмана и облаков
+func _make_column_shade() -> TextureRect:
 	var g = Gradient.new()
-	g.set_color(0, Palette.SPACE_DEEP)
-	g.set_color(1, Color(Palette.SPACE_DEEP, 0.0))
+	g.set_color(0, Color(0.02, 0.01, 0.03, COLUMN_SHADE))
+	g.set_color(1, Color(0.02, 0.01, 0.03, 0.0))
 	var tex = GradientTexture2D.new()
 	tex.gradient = g
-	var fade = TextureRect.new()
-	fade.texture = tex
-	fade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	fade.stretch_mode = TextureRect.STRETCH_SCALE
-	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Полоса — дочерняя сцене, прижата к её левому краю на всю высоту
-	art.add_child(fade)
-	fade.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
-	fade.offset_left = -2.0
-	fade.offset_right = SCENE_FADE_WIDTH
+	tex.fill_from = Vector2(0.0, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	var r = TextureRect.new()
+	r.name = "ColumnShade"
+	r.texture = tex
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_SCALE
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.anchor_right = COLUMN_SHADE_WIDTH
+	r.anchor_bottom = 1.0
+	return r
+
+func _add_scene_art() -> Control:
+	if not MenuSceneArt.available():
+		return null
+	var art := MenuSceneArt.new()
+	art.name = "MenuSceneArt"
+	add_child(art)
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)   # сцена — на всё окно, меню — поверх неё
 	return art
 
-# Аквила, название, подпись — как шапка меню в концепте
+# Шапка: венок с черепом между половинками разделителя, название, подпись, разделитель — как в эталоне
 func _make_title_block() -> VBoxContainer:
 	var box = VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	var eagle = TextureRect.new()
-	if ResourceLoader.exists(LOGO_HD) or ResourceLoader.exists(UITheme.WINDOW_EAGLE):
-		if ResourceLoader.exists(LOGO_HD):
-			eagle.texture = load(LOGO_HD)
-			eagle.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-		else:
-			var atlas = AtlasTexture.new()
-			atlas.atlas = load(UITheme.WINDOW_EAGLE)
-			atlas.region = LOGO_REGION
-			eagle.texture = atlas
-		var shader = Shader.new()
-		shader.code = SHINE_SHADER
-		var mat = ShaderMaterial.new()
-		mat.shader = shader
-		mat.set_shader_parameter("width", SHINE_WIDTH)
-		mat.set_shader_parameter("strength", SHINE_STRENGTH)
-		mat.set_shader_parameter("glow", Palette.GOLD_PALE)
-		eagle.material = mat
-		_eagle = eagle
-	else:
-		eagle.texture = load(ART_DIR + "logo_eagle.png")
-	var tex_size = eagle.texture.get_size()
-	eagle.custom_minimum_size = Vector2(LOGO_WIDTH, LOGO_WIDTH * tex_size.y / tex_size.x) 		if eagle.texture.resource_path == LOGO_HD else tex_size * LOGO_SCALE
-	eagle.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	eagle.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	box.add_child(eagle)
-	var title = UITheme.make_label("WH40KINGS", "TitleLabel")
+	box.add_theme_constant_override("separation", 6)
+	var rule: Texture2D = load(HEADER_RULE) if ResourceLoader.exists(HEADER_RULE) else null
+	var wreath: Texture2D = load(HEADER_WREATH) if ResourceLoader.exists(HEADER_WREATH) else null
+	if wreath:
+		var top = HBoxContainer.new()
+		top.alignment = BoxContainer.ALIGNMENT_CENTER
+		top.add_theme_constant_override("separation", 0)
+		if rule:
+			top.add_child(_rule_part(rule, true))
+		var w = TextureRect.new()
+		w.texture = wreath
+		w.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		w.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		w.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		w.custom_minimum_size = Vector2(WREATH_HEIGHT * wreath.get_width() / wreath.get_height(), WREATH_HEIGHT)
+		top.add_child(w)
+		if rule:
+			top.add_child(_rule_part(rule, false))
+		box.add_child(top)
+	var title = UITheme.make_label("GRIM KINGDOM", "TitleLabel")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", UITheme.ui_px(42))
 	title.add_theme_color_override("font_color", Palette.MENU_TITLE)   # светлый беж (образец exampel.png)
@@ -239,15 +189,31 @@ func _make_title_block() -> VBoxContainer:
 	sub.add_theme_color_override("font_color", Palette.MENU_SUBTITLE)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(sub)
-	if ResourceLoader.exists(UITheme.DIVIDER_SKULL):   # разделитель с черепом листа UI_assets.png
+	if rule:
 		var divider = TextureRect.new()
-		divider.texture = load(UITheme.DIVIDER_SKULL)
-		divider.custom_minimum_size = Vector2(0, divider.texture.get_height() * UITheme.UI_ART_SCALE)   # арт ×2
+		divider.texture = rule
 		divider.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		divider.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		divider.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		divider.custom_minimum_size = Vector2(0, RULE_WIDTH * rule.get_height() / rule.get_width())
 		box.add_child(divider)
 	return box
+
+# Половинка разделителя: левая (шип у правого конца) или правая — по краям венка
+func _rule_part(rule: Texture2D, left: bool) -> TextureRect:
+	var half := RULE_WIDTH / 2.4
+	var atlas := AtlasTexture.new()
+	atlas.atlas = rule
+	var w := rule.get_width() / 2.0
+	atlas.region = Rect2(0.0 if left else w, 0.0, w, rule.get_height())
+	var r = TextureRect.new()
+	r.texture = atlas
+	r.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	r.custom_minimum_size = Vector2(half, half * rule.get_height() / rule.get_width() * 2.0)
+	r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return r
 
 # Иконка кнопки меню (128 px, UI_NEEDED 7.2) — заранее уменьшена фильтром Lanczos до ×2 к экрану (MENU_ICON_TEX):
 # иконку кнопки рисует сама кнопка, а её фильтр с мип-уровнями размыл бы и пиксельный шрифт надписи
@@ -271,9 +237,9 @@ static func _menu_icon(icon_name: String) -> Texture2D:
 	_icon_cache[icon_name] = out
 	return out
 
-# Блик по аквиле: полоса света проходит слева направо за SHINE_TIME раз в SHINE_PERIOD
+# Окна кораблей горят ярче, пока курсор на кнопке меню (MenuSceneArt.set_menu_hover)
 func _process(delta: float) -> void:
-	if _scene_art and _scene_art.has_method("set_marine_look"):
+	if _scene_art and _scene_art.has_method("set_menu_hover"):
 		if _menu_buttons.is_empty():
 			_menu_buttons = find_children("*", "Button", true, false).filter(
 				func(b): return b.theme_type_variation == "MainMenuButton")
@@ -282,13 +248,7 @@ func _process(delta: float) -> void:
 			if is_instance_valid(b) and b.visible and b.is_hovered():
 				hovered = true
 				break
-		_scene_art.set_marine_look(hovered)
-	if _eagle == null:
-		return
-	_shine_time = fmod(_shine_time + delta, SHINE_PERIOD)
-	var t = _shine_time / SHINE_TIME
-	var pos = lerpf(-SHINE_WIDTH * 2.0, 1.0 + SHINE_WIDTH * 2.0, t) if t <= 1.0 else -1.0
-	_eagle.material.set_shader_parameter("pos", pos)
+		_scene_art.set_menu_hover(hovered)
 
 func _spacer(h: float) -> Control:
 	var c = Control.new()
@@ -302,7 +262,14 @@ func _make_button(text: String, icon_name: String, handler: Callable) -> Button:
 	b.icon = _menu_icon(icon_name)
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	b.custom_minimum_size = BUTTON_SIZE
+	var sep := ColorRect.new()   # вертикальный разделитель между иконкой и надписью (эталон меню 16.11.2026)
+	sep.color = BUTTON_DIVIDER_COLOR
+	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sep.position = Vector2(BUTTON_DIVIDER_X, 12.0)
+	sep.size = Vector2(2.0, BUTTON_SIZE.y - 24.0)
+	b.add_child(sep)
 	b.pressed.connect(handler)
+	ButtonVolume.attach(b, 6.0)   # объём и отклик, как у кнопок окон (стилизация 12.11.2026)
 	b.mouse_entered.connect(b.grab_focus)   # наведение и фокус — одна подсветка
 	b.mouse_exited.connect(func():   # курсор ушёл — кнопка гаснет (фокус не держит подсветку)
 		if b.has_focus():
@@ -329,8 +296,40 @@ func _on_new_run_pressed() -> void:
 func _open_race_select() -> void:
 	var dialog = RaceSelectDialog.new()
 	add_child(dialog)
+	_track_select(dialog)
 	dialog.setup()
 	dialog.chosen.connect(_on_race_chosen)
+
+# Выбор расы / ордена — на фоне меню без самого меню (решение пользователя 13.11.2026: «меню должно уезжать
+# влево, колесо — на фоне космоса, солдата»): с первым окном выбора колонка уезжает за левый край, когда окон
+# цепочки (раса → орден → сложность → стартовая карта) не осталось и забег не стартовал — возвращается
+const MENU_SLIDE_TIME: float = 0.35
+const SELECT_DIALOGS = ["RaceSelectDialog", "ChapterSelectDialog", "DifficultySelectDialog", "StartCardDialog"]
+
+func _track_select(dialog: Node) -> void:
+	slide_menu(true)
+	dialog.tree_exited.connect(func(): _check_menu_return.call_deferred())
+
+func _check_menu_return() -> void:
+	if _launching or not is_inside_tree():
+		return
+	for c in get_children():
+		if c.get_script() and SELECT_DIALOGS.has(c.get_script().get_global_name()) and not c.is_queued_for_deletion():
+			return
+	slide_menu(false)
+
+var menu_hidden: bool = false
+func slide_menu(out: bool) -> void:
+	if _col == null or menu_hidden == out:
+		return
+	menu_hidden = out
+	var x := -_col.size.x - 40.0 if out else MENU_LEFT
+	var tw := _col.create_tween().set_parallel(true)
+	tw.tween_property(_col, "position:x", x, MENU_SLIDE_TIME).set_trans(Tween.TRANS_CUBIC) 		.set_ease(Tween.EASE_IN if out else Tween.EASE_OUT)
+	tw.tween_property(_col, "modulate:a", 0.0 if out else 1.0, MENU_SLIDE_TIME)
+	_col.mouse_filter = Control.MOUSE_FILTER_IGNORE if out else Control.MOUSE_FILTER_PASS
+	for b in _col.find_children("*", "Button", true, false):
+		b.disabled = out   # уехавшее меню не ловит Enter / клики
 
 # Раса с орденами / богами (Космодесант, Хаос) — следом их выбор, затем сложности; «Отмена» в любом
 # окне — забег не начат
@@ -340,12 +339,14 @@ func _on_race_chosen(faction: String) -> void:
 		return
 	var dialog = ChapterSelectDialog.new()
 	add_child(dialog)
+	_track_select(dialog)
 	dialog.setup(faction)
 	dialog.chosen.connect(func(chapter): _open_difficulty_select(faction, chapter))
 
 func _open_difficulty_select(faction: String, chapter: String) -> void:
 	var dialog = DifficultySelectDialog.new()
 	add_child(dialog)
+	_track_select(dialog)
 	dialog.setup()
 	dialog.chosen.connect(func(level): _open_start_card_select(faction, chapter, level))
 
@@ -356,6 +357,7 @@ func _open_start_card_select(faction: String, chapter: String, level: int) -> vo
 		return
 	var dialog = StartCardDialog.new()
 	add_child(dialog)
+	_track_select(dialog)
 	dialog.setup(faction)
 	dialog.chosen.connect(func(card_id):
 		MetaProgress.select_start_card(card_id)
@@ -373,6 +375,7 @@ func _start_new_run(faction: String, chapter: String, level: int) -> void:
 
 const MenuLaunch = preload("res://scenes/menu/MenuLaunch.gd")
 func _play_launch() -> void:
+	_launching = true
 	var col := find_children("*", "VBoxContainer", false, false)
 	for c in col:   # колонка меню уезжает вбок за левый край (решение пользователя 08.11.2026: «не вниз, а в бок»)
 		var tw := c.create_tween().set_parallel(true)
@@ -387,6 +390,7 @@ func _play_launch() -> void:
 func _on_test_mode_pressed() -> void:
 	var dialog = RaceSelectDialog.new()
 	add_child(dialog)
+	_track_select(dialog)
 	dialog.setup()
 	dialog.chosen.connect(func(faction):
 		if not Chapters.has_chapters(faction):
@@ -394,6 +398,7 @@ func _on_test_mode_pressed() -> void:
 			return
 		var chapters = ChapterSelectDialog.new()
 		add_child(chapters)
+		_track_select(chapters)
 		chapters.setup(faction, true)
 		chapters.chosen.connect(func(chapter): RunManager.start_test_mode(faction, chapter)))
 

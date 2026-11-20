@@ -15,10 +15,17 @@ const FIRE_SHADOW_ALPHA: float = 1.0   # грунт тёмный и в отсв�
 const FIRE_SHADOW_LEN = Vector2(20.0, 38.0)   # px мира × sprite_scale: у огня — короче, на краю радиуса — длиннее
 const FIRE_SHADOW_WIDTH: float = 7.0          # px мира × sprite_scale
 const FIRE_SHADOW_JITTER: float = 0.12        # доля длины — дрожь с пламенем
+# Тень прыгающего бойца (Assault) в верхней точке дуги: на столько меньше и бледнее (Soldier._leap_prev / _leap_t)
+const CONTACT_WIDTH: float = 11.0    # px мира × sprite_scale
+const CONTACT_FLATTEN: float = 0.45
+const CONTACT_ALPHA: float = 0.55
+const JUMP_SHADOW_SHRINK: float = 0.35
+const JUMP_SHADOW_FADE: float = 0.5
 
 var units: Node2D                          # контейнер отрядов (BattleScene.units_container)
 var _fire: MultiMeshInstance2D = null
 var _t: float = 0.0
+var _fire_count: int = 0   # из них тени от огня (в том же MultiMesh лежат и отброшенные тени — fire_shadow_count)
 static var _texture: Texture2D
 static var _fire_texture: Texture2D
 
@@ -55,76 +62,175 @@ func setup(units_container: Node2D) -> void:
 	_fire.multimesh = fm
 	add_child(_fire)
 
+# Данные экземпляров пишутся в массив и уходят в MultiMesh одним присваиванием buffer (оптимизация 14.11.2026:
+# по 2 вызова set_instance_* на тень × 2 тени × 300 бойцов — 1.2 мс кадра; вызов сервера отрисовки на каждую
+# тень дороже записи 12 чисел). Формат экземпляра (TRANSFORM_2D + цвет), 12 чисел:
+# [x.x, y.x, 0, origin.x,  x.y, y.y, 0, origin.y,  r, g, b, a]
+const STRIDE: int = 12
+var _buf := PackedFloat32Array()
+var _fbuf := PackedFloat32Array()
+
 func _process(delta: float) -> void:
 	if units == null:
 		return
 	_t += delta
+	var cast_dir: Vector2 = WorldLight.param("shadow_dir")
+	var cast_len: float = Soldier.TARGET_SPRITE_HEIGHT * float(WorldLight.param("unit_cast_length"))
+	var cast_width := float(WorldLight.param("unit_cast_width"))
+	var cast_alpha := float(WorldLight.param("unit_cast_alpha"))
 	var fires := IsoGridRenderer.fire_sources()
+	var has_fires := not fires.is_empty()
 	var mm := multimesh
-	var to_local_xf := global_transform.affine_inverse()
+	var fm := _fire.multimesh
+	var xf := global_transform.affine_inverse()
+	# отброшенная тень: поворот и сдвиг центра одинаковы у всех — считаются раз за кадр
+	var cast_cos := cos(cast_dir.angle())
+	var cast_sin := sin(cast_dir.angle())
+	var cast_half: Vector2 = xf.basis_xform(cast_dir) * 0.5
+	var ring_k: float = Soldier.SHADOW_RADIUS * Soldier.SHADOW_SOFT_SCALE * 2.0
+	var flat: float = Soldier.SHADOW_FLATTEN
+	var tick_alpha := BattleManager.get_tick_alpha()
+	if _buf.size() != mm.instance_count * STRIDE:
+		_buf.resize(mm.instance_count * STRIDE)
+	if _fbuf.size() != fm.instance_count * STRIDE:
+		_fbuf.resize(fm.instance_count * STRIDE)
+	var buf := _buf
+	var fbuf := _fbuf
 	var n := 0
 	var nf := 0
+	_fire_count = 0
 	for squad in units.get_children():
 		if not (squad is Squad) or not squad.is_visible_in_tree():
 			continue   # враги скрыты до боя — и их тени
 		var ring := Color(Palette.PLAYER_SIDE if squad.team == GameConstants.TEAM_PLAYER else Palette.ENEMY_SIDE)
+		var fade: float = squad.modulate.a
+		if not BattleManager.is_battle_running():
+			ring.a = 0.0   # на расстановке жёлтого кольца под отрядами нет (решение пользователя 18.11.2026); в бою оно показывает сторону
+		ring.a *= fade   # отряд проявляется (выход врагов на «В БОЙ») — тень и кольцо вместе с ним
+		var shadow_a := cast_alpha * fade
 		for s in squad.soldiers:
 			if not is_instance_valid(s) or s.current_state == Soldier.State.DEAD or s.data == null:
 				continue
+			var gp: Vector2 = s.global_position + Vector2(0.0, Soldier.GROUND_SINK)   # тень и кольцо — под втопленными ступнями
+			var pos: Vector2 = xf * gp
+			var k: float = s.data.sprite_scale
+			# отброшенная тень бойца от общего света поля (WorldLight): вытянутый эллипс от ног вдоль shadow_dir
+			if (nf + 1) * STRIDE > fbuf.size():
+				fbuf.resize(fbuf.size() * 2)
+			# в прыжке (Assault) спрайт над землёй: тень меньше и бледнее, чем выше — тем сильнее
+			var lift := 0.0
+			if s._leap_prev < 1.0:
+				lift = sin(PI * lerpf(s._leap_prev, s._leap_t, tick_alpha))
+			var length := cast_len * k * (1.0 - JUMP_SHADOW_SHRINK * lift)
+			var w := cast_width * k * (1.0 - JUMP_SHADOW_SHRINK * lift)
+			var o := nf * STRIDE
+			fbuf[o] = cast_cos * length
+			fbuf[o + 1] = -cast_sin * w
+			fbuf[o + 2] = 0.0
+			fbuf[o + 3] = pos.x + cast_half.x * length
+			fbuf[o + 4] = cast_sin * length
+			fbuf[o + 5] = cast_cos * w
+			fbuf[o + 6] = 0.0
+			fbuf[o + 7] = pos.y + cast_half.y * length
+			fbuf[o + 8] = 1.0
+			fbuf[o + 9] = 1.0
+			fbuf[o + 10] = 1.0
+			fbuf[o + 11] = shadow_a * (1.0 - JUMP_SHADOW_FADE * lift)
+			nf += 1
+			# контактная тень (18.11.2026): тугое тёмное пятно прямо под подошвами — модель «стоит» на земле
+			if (nf + 1) * STRIDE > fbuf.size():
+				fbuf.resize(fbuf.size() * 2)
+			var cd: float = CONTACT_WIDTH * k
+			o = nf * STRIDE
+			fbuf[o] = cd
+			fbuf[o + 1] = 0.0
+			fbuf[o + 2] = 0.0
+			fbuf[o + 3] = pos.x
+			fbuf[o + 4] = 0.0
+			fbuf[o + 5] = cd * CONTACT_FLATTEN
+			fbuf[o + 6] = 0.0
+			fbuf[o + 7] = pos.y
+			fbuf[o + 8] = 1.0
+			fbuf[o + 9] = 1.0
+			fbuf[o + 10] = 1.0
+			fbuf[o + 11] = CONTACT_ALPHA * fade * (1.0 - JUMP_SHADOW_FADE * lift)
+			nf += 1
 			if s.data.special_kind != "":
 				continue   # примарх: своя большая тень и кольцо с рунами (BossFx.ground)
-			if n >= mm.instance_count:
-				_grow()
-				mm = multimesh
-			var d: float = Soldier.SHADOW_RADIUS * s.data.sprite_scale * Soldier.SHADOW_SOFT_SCALE * 2.0
-			var pos: Vector2 = to_local_xf * s.global_position
-			mm.set_instance_transform_2d(n, Transform2D(0.0, Vector2(d, d * Soldier.SHADOW_FLATTEN), 0.0, pos))
-			mm.set_instance_color(n, ring)
+			if (n + 1) * STRIDE > buf.size():
+				buf.resize(buf.size() * 2)
+			var d: float = ring_k * k * (1.0 - Soldier.STEP_SHADOW_SHRINK * float(s.step_lift))   # шаг: на ступне шире, к середине шага уже
+			o = n * STRIDE
+			buf[o] = d
+			buf[o + 1] = 0.0
+			buf[o + 2] = 0.0
+			buf[o + 3] = pos.x
+			buf[o + 4] = 0.0
+			buf[o + 5] = d * flat
+			buf[o + 6] = 0.0
+			buf[o + 7] = pos.y + Soldier.SHADOW_DROP * k
+			buf[o + 8] = ring.r
+			buf[o + 9] = ring.g
+			buf[o + 10] = ring.b
+			buf[o + 11] = ring.a * (1.0 - Soldier.STEP_SHADOW_FADE * float(s.step_lift))
 			n += 1
-			for f in fires:
-				nf = _add_fire_shadow(nf, s, f, pos, to_local_xf)
-	mm.visible_instance_count = n
-	if _fire:
-		_fire.multimesh.visible_instance_count = nf
+			if has_fires:
+				for f in fires:
+					# грубо отсечь далёких без вызова и sqrt: пар боец × огонь — сотни
+					var r: float = f[1]
+					var away: Vector2 = gp - f[0]
+					if absf(away.x) >= r or absf(away.y) * 2.0 >= r:
+						continue
+					if (nf + 1) * STRIDE > fbuf.size():
+						fbuf.resize(fbuf.size() * 2)
+					if _write_fire_shadow(fbuf, nf, away, r, f[2], k, pos, xf):
+						nf += 1
+						_fire_count += 1
+	_buf = buf
+	_fbuf = fbuf
+	_flush(mm, buf, n)
+	_flush(fm, fbuf, nf)
 
-# Тень бойца s от огня f [точка, радиус, фаза]: вытянутый эллипс от ног прочь от огня
-func _add_fire_shadow(nf: int, s: Soldier, f: Array, pos: Vector2, xf: Transform2D) -> int:
-	if _fire == null:
-		return nf
-	var away: Vector2 = s.global_position - f[0]
-	var r: float = f[1]
-	if absf(away.x) >= r or absf(away.y) * 2.0 >= r:   # грубо отсечь далёких без sqrt: пар боец × огонь — сотни
-		return nf
+# Массив — в MultiMesh: мест меньше, чем в массиве, — расширить (instance_count сбрасывает данные — их пишем заново)
+func _flush(mm: MultiMesh, buf: PackedFloat32Array, count: int) -> void:
+	if mm.instance_count * STRIDE != buf.size():
+		mm.visible_instance_count = -1
+		mm.instance_count = buf.size() / STRIDE
+	mm.buffer = buf
+	mm.visible_instance_count = count
+
+# Тень от огня (away — от огня к бойцу, r — радиус, phase — фаза пламени): вытянутый эллипс от ног прочь от огня.
+# false — боец вне круга огня, ничего не записано
+func _write_fire_shadow(fbuf: PackedFloat32Array, nf: int, away: Vector2, r: float, phase: float, k: float,
+		pos: Vector2, xf: Transform2D) -> bool:
 	var dist := Vector2(away.x, away.y * 2.0).length()   # расстояние по земле (изометрия 2:1)
 	if dist >= r or dist < 2.0:
-		return nf
-	var fm := _fire.multimesh
-	if nf >= fm.instance_count:   # данные сбрасываются — их всё равно пишем заново каждый кадр
-		fm.visible_instance_count = -1
-		fm.instance_count = fm.instance_count * 2
-		fm.visible_instance_count = 0
+		return false
 	var u := dist / r
-	var flicker := IsoGridRenderer.fire_flicker(_t, f[2])
-	var k: float = s.data.sprite_scale
+	var flicker := IsoGridRenderer.fire_flicker(_t, phase)
 	var jitter := 1.0 + FIRE_SHADOW_JITTER * (flicker - 1.0) / IsoGridRenderer.GLOW_FLICKER
 	var length := lerpf(FIRE_SHADOW_LEN.x, FIRE_SHADOW_LEN.y, u) * k * jitter
 	var dir := away.normalized()
 	var center := pos + xf.basis_xform(dir) * length * 0.5
-	fm.set_instance_transform_2d(nf, Transform2D(dir.angle(), Vector2(length, FIRE_SHADOW_WIDTH * k), 0.0, center))
-	fm.set_instance_color(nf, Color(1, 1, 1, minf(FIRE_SHADOW_ALPHA * (1.0 - u * 0.7) * flicker, 1.0)))
-	return nf + 1
+	var w := FIRE_SHADOW_WIDTH * k
+	var o := nf * STRIDE
+	fbuf[o] = dir.x * length
+	fbuf[o + 1] = -dir.y * w
+	fbuf[o + 2] = 0.0
+	fbuf[o + 3] = center.x
+	fbuf[o + 4] = dir.y * length
+	fbuf[o + 5] = dir.x * w
+	fbuf[o + 6] = 0.0
+	fbuf[o + 7] = center.y
+	fbuf[o + 8] = 1.0
+	fbuf[o + 9] = 1.0
+	fbuf[o + 10] = 1.0
+	fbuf[o + 11] = minf(FIRE_SHADOW_ALPHA * (1.0 - u * 0.7) * flicker, 1.0)
+	return true
 
 # Сколько теней от огня сейчас рисуется (тесты)
 func fire_shadow_count() -> int:
-	return _fire.multimesh.visible_instance_count if _fire else 0
-
-# Бойцов больше, чем мест: instance_count сбрасывает данные — их всё равно пишем заново каждый кадр
-func _grow() -> void:
-	var mm := multimesh
-	var count := mm.instance_count * 2
-	mm.visible_instance_count = -1
-	mm.instance_count = count
-	mm.visible_instance_count = 0
+	return _fire_count if _fire else 0
 
 # Текстура тени от огня: мягкий чёрный эллипс без кольца, у ног (левый край) плотнее
 static func _get_fire_texture() -> Texture2D:

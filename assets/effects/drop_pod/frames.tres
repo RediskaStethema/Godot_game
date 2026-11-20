@@ -1,0 +1,133 @@
+[gd_resource type="SpriteFrames" load_steps=29 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fall/0.png" id="fall_0"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fall/1.png" id="fall_1"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fall/2.png" id="fall_2"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fall/3.png" id="fall_3"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fall/4.png" id="fall_4"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fall/5.png" id="fall_5"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/0.png" id="land_0"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/1.png" id="land_1"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/2.png" id="land_2"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/3.png" id="land_3"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/4.png" id="land_4"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/5.png" id="land_5"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/6.png" id="land_6"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/7.png" id="land_7"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/8.png" id="land_8"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/9.png" id="land_9"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/10.png" id="land_10"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/land/11.png" id="land_11"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fade/0.png" id="fade_0"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fade/1.png" id="fade_1"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fade/2.png" id="fade_2"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fade/3.png" id="fade_3"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fade/4.png" id="fade_4"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fade/5.png" id="fade_5"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fade/6.png" id="fade_6"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fade/7.png" id="fade_7"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fade/8.png" id="fade_8"]
+[ext_resource type="Texture2D" path="res://assets/effects/drop_pod/fade/9.png" id="fade_9"]
+
+[resource]
+metadata/anchor = Vector2(320, 600)
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("fall_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fall_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fall_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fall_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fall_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fall_5")
+}],
+"loop": true,
+"name": &"fall",
+"speed": 16.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("land_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("land_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("land_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("land_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("land_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("land_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("land_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("land_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("land_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("land_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("land_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("land_11")
+}],
+"loop": false,
+"name": &"land",
+"speed": 20.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("fade_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fade_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fade_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fade_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fade_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fade_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fade_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fade_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fade_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("fade_9")
+}],
+"loop": false,
+"name": &"fade",
+"speed": 16.0
+}]

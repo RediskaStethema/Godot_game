@@ -127,7 +127,7 @@ func _main() -> void:
 			texts.append(l.text)
 	var text = "\n".join(texts)
 	_check("босс повержен на 3 → открыт 4, на экране итога: «Открыта новая сложность», «Сложность 3»",
-		sv.unlocked_difficulty == 4 and "Открыта новая сложность: Сложность 4" in text and "Сложность 3 · Ветеран" in text)
+		sv.unlocked_difficulty == 4 and "Открыта новая сложность: Сложность 4" in text and "Сложность 3 · Седоусый" in text)
 
 	scene.queue_free()
 	bm.reset_run()

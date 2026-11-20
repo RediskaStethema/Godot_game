@@ -66,6 +66,12 @@ func _main() -> void:
 	s._play_building_card(CardFactory.fortress_wall(), Vector2i(0, 0))
 	_check("стена → ур.2 (%s): звено %.0f → %.0f HP" % [verdict1, hp1, segs[0].max_hp],
 		verdict1 == "compatible" and card.building_level == 2 and is_equal_approx(segs[0].max_hp, hp1 * 1.5))
+	# Высота: ур.2 — на 10% выше, звено дорастает за GROW_TIME
+	var grow_from: float = segs[0].shown_scale
+	await create_timer(wall.GROW_TIME + 0.3).timeout
+	_check("стена ур.2 выше на 10%%: %.4f → %.4f (цель %.4f)" % [grow_from, segs[0].shown_scale, wall.height_scale()],
+		is_equal_approx(grow_from, 1.0) and is_equal_approx(wall.height_scale(), 1.1)
+		and is_equal_approx(segs[0].shown_scale, 1.1))
 	s._play_building_card(CardFactory.fortress_wall(), Vector2i(0, 0))
 	_check("ур.3 — максимум: карта не тратится, ромб «нельзя»",
 		not s._play_building_card(CardFactory.fortress_wall(), Vector2i(0, 0))

@@ -121,7 +121,9 @@ func _init() -> void:
 	body_margin.add_theme_constant_override("margin_bottom", 4)
 	col.add_child(body_margin)
 	_body = RichTextLabel.new()
-	_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Ловит мышь: подсказки [hint] по названиям бафов (решение пользователя 10.11.2026); клик по тексту
+	# справки до поля не доходит — справка не закрывается и не выбирает отряд под ней
+	_body.mouse_filter = Control.MOUSE_FILTER_PASS
 	_body.bbcode_enabled = true
 	_body.fit_content = true
 	_body.scroll_active = false
@@ -214,6 +216,13 @@ static func color_numbers(text: String, color: Color) -> String:
 	var re := RegEx.new()
 	re.compile("([+−-]?\\d+(?:[.,]\\d+)?%?)")
 	return re.sub(text, "[color=#%s]$1[/color]" % color.to_html(false), true)
+
+# Название бафа с подсказкой при наведении (BBCode [hint], подчёркнуто): tip — коротко, что делает.
+# Кавычки в подсказке экранировать нельзя — двойные заменяются одинарными
+static func hint(text: String, tip: String) -> String:
+	if tip == "":
+		return text
+	return "[hint=\"%s\"]%s[/hint]" % [tip.replace("\"", "'"), text]
 
 # Строка «Подпись: значение» со значением цветом
 static func stat(label: String, value: String, color: Color = Palette.GOLD_BRIGHT) -> String:

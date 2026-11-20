@@ -56,6 +56,7 @@ const MENU_ICON_SIZE: int = 36                 # иконка кнопки ме�
 const MENU_ICON_IDLE = Color(0.8, 0.8, 0.84)      # иконка кнопки меню в покое
 const MENU_ICON_PRESSED = Color(0.85, 0.78, 0.66)
 const BUTTON_TEXTURE_MARGIN = Vector4(32, 28, 32, 28)
+const MENU_BUTTON_TEXTURE_MARGIN = Vector4(48, 30, 48, 30)   # кнопки главного меню (рамка пакета 07_ui, 16.11.2026): углы крупнее
 const BUTTON_CONTENT_MARGIN = Vector4(18, 8, 18, 8)
 const WINDOW_FRAME_MARGIN = Vector4(96, 88, 96, 88)
 # Раздел 8 (окна боя и магазина): поля 9-slice в px текстуры ×2, содержимое — на экране
@@ -315,6 +316,16 @@ static func set_button_icon(b: Button, group: String, name: String, width: int =
 	b.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 const BUTTON_ICON_SIZE: int = 24
+const COIN_ICON_SIZE: int = 18
+
+# Цена на кнопке — число и монета справа (решение пользователя 12.11.2026: «убери Req, оставь монеты и их число»);
+# on = false — без монеты (бесплатно, рука полна)
+static func set_coin_icon(b: Button, on: bool = true, width: int = COIN_ICON_SIZE) -> void:
+	if not on:
+		b.icon = null
+		return
+	set_button_icon(b, "hud", "requisition", width)
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 # Курсоры пакета интерфейса (assets/ui/cursor, горячие точки — hotspots.txt художника): стрелка-копьё,
 # латная перчатка над картой руки (CURSOR_DRAG — BenchCard), прицел орудия (CURSOR_CROSS — ArtilleryReticle).
@@ -364,7 +375,7 @@ static func make_chapter_badge() -> Control:
 		return null
 	badge.name = "ChapterBadge"
 	badge.mouse_filter = Control.MOUSE_FILTER_STOP
-	var tip: String = "%s — %s" % [c["name"], c.get("desc", "")]
+	var tip: String = "%s — %s" % [Names.of(c["name"]), c.get("desc", "")]
 	if c.has("malus_desc"):
 		tip += "\nМинус: " + c["malus_desc"]
 	badge.tooltip_text = tip
@@ -392,16 +403,16 @@ static func _menu_button_styles(t: Theme) -> void:
 	# (решение пользователя 08.11.2026, образец exampel.png: потёртая серая сталь — tools/menu_button_weather.py,
 	# button_menu_*) важнее
 	var pre := "button_menu_" if ResourceLoader.exists(UI_ART_DIR + "button_menu_normal.png") else "button_"
-	var normal_tex := art_style(pre + "normal", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
-	var hover_tex := art_style(pre + "hover", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
-	var pressed_tex := art_style(pre + "pressed", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	var normal_tex := art_style(pre + "normal", MENU_BUTTON_TEXTURE_MARGIN if pre == "button_menu_" else BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	var hover_tex := art_style(pre + "hover", MENU_BUTTON_TEXTURE_MARGIN if pre == "button_menu_" else BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+	var pressed_tex := art_style(pre + "pressed", MENU_BUTTON_TEXTURE_MARGIN if pre == "button_menu_" else BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
 	if normal_tex and hover_tex and pressed_tex:
 		t.set_stylebox("normal", type, normal_tex)
 		t.set_stylebox("hover", type, hover_tex)
 		t.set_stylebox("focus", type, hover_tex)
 		t.set_stylebox("pressed", type, pressed_tex)
 		# своя текстура неактивной (button_disabled), нет — обычная приглушённая
-		var disabled := art_style(pre + "disabled", BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
+		var disabled := art_style(pre + "disabled", MENU_BUTTON_TEXTURE_MARGIN if pre == "button_menu_" else BUTTON_TEXTURE_MARGIN, BUTTON_CONTENT_MARGIN)
 		if disabled == null:
 			disabled = normal_tex.duplicate() as ScaledNinePatch
 			disabled.modulate_color = Color(0.55, 0.55, 0.6, 0.8)
@@ -423,7 +434,7 @@ static func _menu_button_styles(t: Theme) -> void:
 	t.set_color("icon_pressed_color", type, MENU_ICON_PRESSED)
 	t.set_color("icon_hover_pressed_color", type, Color.WHITE)
 	t.set_constant("icon_max_width", type, MENU_ICON_SIZE)
-	t.set_constant("h_separation", type, 16)
+	t.set_constant("h_separation", type, 34)   # иконка | разделитель | надпись (MainMenu.BUTTON_DIVIDER_X)
 
 # Карточка окон выбора (раса, орден / бог, сложность) — SelectCard: железная пластина card_select,
 # наведение и фокус — светлее с янтарной надписью, закрытая — темнее (стилизация 20.10.2026: янтарные
@@ -512,7 +523,7 @@ static func panel_style(bg: Color, border: Color, border_w: int, radius: int, ma
 	s.set_corner_radius_all(radius)
 	s.corner_detail = 1
 	s.set_content_margin_all(margin)
-	s.anti_aliasing = true
+	s.anti_aliasing = false   # пиксельно: срез угла ступенькой без «мыла» (стилизация 12.11.2026)
 	return s
 
 # Пластины интерфейса assets/ui/panels/<имя>.png (tools/ui_panels_gen.py, пиксель ×2): поля 9-slice
@@ -749,7 +760,7 @@ const CARD_FRAME_LAYOUT = {
 		"cost": Vector2(40, 65), "suit": Vector2(309, 446), "medallion": 19.0, "plate": Rect2(78, 31, 204, 46)},
 	"epic": {"window": Rect2(50, 85, 259, 328), "title": Rect2(100, 58, 160, 31),
 		"cost": Vector2(50, 65), "suit": Vector2(317, 430), "medallion": 21.0, "plate": Rect2(86, 51, 188, 44),
-		"footer": Rect2(95, 414, 165, 34)},
+		"footer": Rect2(92, 409, 170, 29)},
 }
 # Плашка маленькой карты (скамейка, перетаскивание; решение пользователя 06.11.2026 — название на папирусе, как в
 # магазине): плашка рамки ("plate" — с кромкой) крупнее в CARD_SMALL_PLATE_SCALE и шире до CARD_SMALL_PLATE_WIDTH
@@ -790,6 +801,33 @@ static func _card_file(name: String) -> Texture2D:
 	var path := CARD_ART_DIR + name + ".png"
 	return load(path) if ResourceLoader.exists(path) else null
 
+# Цвет карт в палитру игры (решение пользователя 18.11.2026, «единый стиль»): иллюстрации и рамки были в холодной
+# сине-стали и выбивались из бордо поля и интерфейса — приглушить насыщенность и повести тона к тёплому бордо.
+# Рамка — слабее (цвет редкости — смысл), иллюстрация — сильнее
+const CARD_GRADE_SHADER := """shader_type canvas_item;
+uniform float sat = 0.8;
+uniform vec3 tint = vec3(1.04, 0.93, 0.95);
+uniform float shade_warm = 0.015;
+void fragment() {
+	vec4 c = COLOR;
+	float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+	c.rgb = mix(vec3(l), c.rgb, sat) * tint + vec3(shade_warm, 0.0, shade_warm * 0.6) * (1.0 - l);
+	COLOR = c;
+}"""
+static var _card_grade: Dictionary = {}
+static func card_grade_material(strong: bool) -> ShaderMaterial:
+	var key := "strong" if strong else "soft"
+	if _card_grade.has(key):
+		return _card_grade[key]
+	var sh := Shader.new()
+	sh.code = CARD_GRADE_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	m.set_shader_parameter("sat", 0.76 if strong else 0.9)
+	m.set_shader_parameter("tint", Vector3(1.06, 0.92, 0.94) if strong else Vector3(1.02, 0.97, 0.97))
+	_card_grade[key] = m
+	return m
+
 # Лицо игральной карты шириной width: арт в окне рамки редкости, название на плашке, цена (cost_text,
 # "" — без цены) в верхнем медальоне, масть — в нижнем. Узлы: Art, Frame, Title, Cost, Suit (Footer)
 static func make_card_face(card: CardData, width: float, cost_text: String = "") -> Control:
@@ -815,6 +853,7 @@ static func make_card_face(card: CardData, width: float, cost_text: String = "")
 	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.material = card_grade_material(true)
 	clip.add_child(art)
 	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if frame:
@@ -825,16 +864,19 @@ static func make_card_face(card: CardData, width: float, cost_text: String = "")
 		f.stretch_mode = TextureRect.STRETCH_SCALE
 		f.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		f.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		f.material = card_grade_material(false)
 		face.add_child(f)
 		f.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var title_rect := Rect2(layout["title"].position * k, layout["title"].size * k)
+	var small_plate := false
 	if ui_px(int(title_rect.size.y * CARD_PLATE_FONT)) >= CARD_PLATE_READABLE:
-		face.add_child(_plate_label("Title", card.title, title_rect))
+		face.add_child(_plate_label("Title", card.display_title(), title_rect))
 	elif frame:   # маленькая карта — на плашке крупнее рамочной, кегль читаемый
+		small_plate = true
 		var text_rect := _add_small_plate(face, frame, layout, k)
-		face.add_child(_plate_label("Title", card.title, text_rect, CARD_PLATE_READABLE, 1.0, CARD_PLATE_SMALL_MIN))
+		face.add_child(_plate_label("Title", card.display_title(), text_rect, CARD_PLATE_READABLE, 1.0, CARD_PLATE_SMALL_MIN))
 	else:
-		face.add_child(_plate_label("Title", card.title, title_rect, CARD_PLATE_READABLE, CARD_PLATE_SMALL_ROOM,
+		face.add_child(_plate_label("Title", card.display_title(), title_rect, CARD_PLATE_READABLE, CARD_PLATE_SMALL_ROOM,
 			CARD_PLATE_SMALL_MIN))
 	if layout.has("footer"):
 		var kind: String = TYPE_NAMES.get(card.card_type, "")
@@ -842,11 +884,14 @@ static func make_card_face(card: CardData, width: float, cost_text: String = "")
 			kind += " ×%d" % card.unit_count
 		face.add_child(_plate_label("Footer", kind, Rect2(layout["footer"].position * k, layout["footer"].size * k)))
 	var r: float = layout["medallion"] * k
+	if small_plate:
+		r *= CARD_MEDALLION_CUT   # на маленькой карте медальон крупнее — число по его кругу, по центру
 	var cost := make_label(cost_text, "ValueLabel")
 	cost.name = "Cost"
 	cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cost.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	cost.add_theme_font_size_override("font_size", maxi(ui_px(int(r * 1.15)), 9))
+	cost.add_theme_font_size_override("font_size", maxi(ui_px(int(r * (1.45 if small_plate else 1.15))), 9))
+	cost.clip_text = false
 	cost.add_theme_color_override("font_color", CARD_COST_COLOR)
 	cost.position = layout["cost"] * k - Vector2(r, r)
 	cost.size = Vector2(r, r) * 2.0
@@ -954,23 +999,6 @@ static func _plate_textures(frame: Texture2D, layout: Dictionary) -> Dictionary:
 	_plate_parts[key] = parts
 	return parts
 
-# Иллюстрация фоном маленькой карты (рука магазина, скамейка): по большей стороне, верх — лицо / силуэт,
-# приглушена под текст (CARD_BACKDROP_DIM); арта нет — null
-const CARD_BACKDROP_DIM = Color(0.5, 0.5, 0.55)
-static func make_card_backdrop(card: CardData) -> TextureRect:
-	var tex := card_art(card)
-	if tex == null:
-		return null
-	var bg = TextureRect.new()
-	bg.name = "CardArt"
-	bg.texture = tex
-	bg.modulate = CARD_BACKDROP_DIM
-	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return bg
-
 # Надпись на костяной плашке рамки: жирный гротеск тёмными чернилами (решение пользователя 20.10.2026: антиква
 # мелкая и съезжала вниз — у неё большой межстрочный запас), кегль — по высоте плашки, длинное название
 # уменьшается под её ширину
@@ -1003,13 +1031,6 @@ static func _plate_label(name: String, text: String, rect: Rect2, start_size: in
 	l.size = Vector2(rect.size.x, font.get_height(size))
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
-
-# Кегль не больше max_size, при котором text шрифтом font влезает в width (не меньше min_size)
-static func fit_font_size(font: Font, text: String, width: float, max_size: int, min_size: int) -> int:
-	var size := max_size
-	while size > min_size and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > width:
-		size -= 1
-	return size
 
 # Фон-виньетка: холодная ночь — светлее в центре, к краям в черноту
 static func make_background() -> TextureRect:
@@ -1055,6 +1076,32 @@ static func roll_number(label: Label, to: int, fmt: Callable, flash: bool = true
 		var f := label.create_tween().set_ignore_time_scale(true)
 		f.tween_property(label, "self_modulate", Color.WHITE, ROLL_TIME)
 
+# Характеристики карты отряда плашками (решение пользователя 12.11.2026, «подсказки карт»: строка «×6 HP 66 УРН 14
+# ДАЛ 320» рвалась посередине — «ДАЛ» на одной строке, «30» на другой): каждая — своя плашка, переносится целиком,
+# цвет по смыслу (бойцы — золото, HP — лечение, урон — красный, дальность — сталь щита); не отряд — null
+const STAT_CHIP_COLORS := {"count": Palette.GOLD_BRIGHT, "hp": Palette.HEAL, "damage": Palette.RED_BRIGHT,
+	"range": Palette.SHIELD_BLUE}
+static func make_stat_chips(card: CardData, font_px: int = 12) -> Control:
+	var st: Dictionary = card.get_stats() if card else {}
+	if st.is_empty():
+		return null
+	var flow := HFlowContainer.new()
+	flow.alignment = FlowContainer.ALIGNMENT_CENTER
+	flow.add_theme_constant_override("h_separation", 4)
+	flow.add_theme_constant_override("v_separation", 3)
+	flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for item in [["count", "×%d"], ["hp", "HP %d"], ["damage", "УРН %d"], ["range", "ДАЛ %d"]]:
+		var chip := PanelContainer.new()
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chip.add_theme_stylebox_override("panel", panel_style(Color(0, 0, 0, 0.45), Color(STAT_CHIP_COLORS[item[0]], 0.45), 1, 2, 2))
+		var l := make_label(item[1] % st[item[0]], "SmallLabel")
+		l.add_theme_font_size_override("font_size", text_px(font_px))
+		l.add_theme_color_override("font_color", STAT_CHIP_COLORS[item[0]])
+		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chip.add_child(l)
+		flow.add_child(chip)
+	return flow
+
 static func make_label(text: String, variation: String = "") -> Label:
 	var l = Label.new()
 	l.text = text
@@ -1079,16 +1126,10 @@ static func make_button(text: String, variation: String = "", on_pressed: Callab
 		b.theme_type_variation = variation
 	if on_pressed.is_valid():
 		b.pressed.connect(on_pressed)
-	b.pressed.connect(play_click)
+	# щелчок — AudioManager сам у всех кнопок дерева (node_added), здесь не подключаем — иначе два щелчка
 	return b
 
 # Щелчок кнопки (AudioManager «ui_click»); автолоад — из дерева, без имени при компиляции
-static func play_click() -> void:
-	var tree := Engine.get_main_loop() as SceneTree
-	var audio = tree.root.get_node_or_null("AudioManager") if tree else null
-	if audio:
-		audio.play("ui_click")
-
 static func make_spacer() -> Control:
 	var c = Control.new()
 	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL

@@ -1,6 +1,6 @@
 """Лист анимаций PNG (ряды idle / бег / стрельба / смерть, необязательно — боевой клич) → кадры PNG + frames.tres для Soldier.gd.
 
-    python tools/sheet_to_frames.py assets/source_sheets/assetlist.png assets/sprites/space_marine_v2
+    python tools/sheet_to_frames.py assets/source_sheets/assetlist.png assets/units/space_marines/v2
 
 Лист: прозрачный фон, анимации — ряды сверху вниз в порядке ROW_ANIMS, кадры в ряду — слева
 направо с промежутками. Подписи (заголовки рядов, номера кадров) — низкие полосы, пропускаются

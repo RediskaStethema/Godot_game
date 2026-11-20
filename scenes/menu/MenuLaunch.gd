@@ -35,6 +35,7 @@ static func start(parent: Control, done: Callable) -> void:
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP   # меню во время взлёта не нажать
+	material = Vfx.mix_material()   # лучи, разрыв варпа, затемнение — пиксельно, как эффекты боя (12.11.2026)
 	_rng.seed = 77
 	var colors := [Palette.LAUNCH_ASH, Palette.LAUNCH_ASH, Palette.LAUNCH_ASH, Palette.LAUNCH_EMBER]
 	for i in STREAKS:

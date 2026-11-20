@@ -69,8 +69,8 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/pleasure_shrine/idle_3/23.png" id="idle_3_23"]
 
 [resource]
-metadata/level_shift = {2: Vector2(-44, 6), 3: Vector2(6, 0)}
-metadata/level_scale = {2: 1.095, 3: 1.128}
+metadata/level_shift = {2: Vector2(-64, 0), 3: Vector2(-10, 1)}
+metadata/level_scale = {2: 1.071, 3: 1.107}
 metadata/level_static = []
 animations = [{
 "frames": [{

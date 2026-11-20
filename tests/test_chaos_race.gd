@@ -8,6 +8,7 @@ const EPS: float = 0.001
 const BATTLE = "battle"
 
 func _initialize() -> void:
+	root.get_node("GameSettings").names_language = "en"   # тесты сверяют английские названия (по умолчанию игроку показываются русские)
 	root.get_node("SaveManager").enabled = false
 	root.get_node("GameSettings").battle_speed = 1.0
 	_main()
@@ -94,7 +95,7 @@ func _main() -> void:
 	rm.player_faction = "space_marines"
 	var found = CardFactory.create("warp_strike")
 	_check("карта Хаоса находится по id при любой расе (сохранение), пул по умолчанию — раса забега",
-		found != null and found.title == "Warp Strike" and found.event_type == "orbital_strike"
+		found != null and found.title == "Hali Surge" and found.event_type == "orbital_strike"
 		and CardFactory.build_pool().size() == sm_ids.size())
 	_check("стартовая карта: карта той же роли расы забега, мета открывает обе",
 		CardFactory.equivalent("scout_squad", "chaos").id == "cultists"
@@ -144,17 +145,17 @@ func _main() -> void:
 	_check("бой за Хаос: враги — Космодесант (%d бойцов), дальность ≤ %d" % [base["enemies"].size(), EnemyWaves.MAX_ENEMY_RANGE],
 		not base["enemies"].is_empty() and enemies_sm and range_ok)
 	_check("синергия Хаоса: 5 юнитов chaos → «Path to Glory», доход +2, в панели — Chaos",
-		"Path to Glory" in base["panel"] and base["income"] == 2 and "Chaos: 5" in base["panel"])
+		("Thane's Path" in base["panel"] or "Путь тана" in base["panel"]) and base["income"] == 2 and "Кровоподписанты: 5" in base["panel"])
 	var k = await _battle("khorne")
 	await _finish()
-	# Минус бога (решение пользователя 25.10.2026; было −20% урона): Кхорн презирает стрелков — их HP −10%
-	_check("Кхорн: +20% урона Raptors (ближний бой), Chaos Marines −10% HP (минус бога), в панели «Метка Khorne»",
+	# Минус бога (решение пользователя 25.10.2026; было −20% урона): Кипящий презирает стрелков — их HP −10%
+	_check("Кипящий: +20% урона Raptors (ближний бой), Chaos Marines −10% HP (минус бога), в панели «Метка Khorne»",
 		_near(k["chaos_raptor"]["damage"], base["chaos_raptor"]["damage"] * 1.2)
 		and _near(k["chaos_marine"]["damage"], base["chaos_marine"]["damage"])
-		and _near(k["chaos_marine"]["hp"], base["chaos_marine"]["hp"] * 0.9) and "Метка Khorne" in k["panel"])
+		and _near(k["chaos_marine"]["hp"], base["chaos_marine"]["hp"] * 0.9) and ("Метка The Seething" in k["panel"] or "Метка Кипящий" in k["panel"]))
 	var n = await _battle("nurgle")
 	await _finish()
-	_check("Нургл: +15% HP всем", _near(n["chaos_marine"]["hp"], base["chaos_marine"]["hp"] * 1.15)
+	_check("Дедушка Тысячи: +15% HP всем", _near(n["chaos_marine"]["hp"], base["chaos_marine"]["hp"] * 1.15)
 		and _near(n["chaos_raptor"]["hp"], base["chaos_raptor"]["hp"] * 1.15))
 	var m = await _battle("", 10, "miniboss")
 	await _finish()
@@ -185,7 +186,7 @@ func _main() -> void:
 	var unit: UnitData = bm.player_units[0] if not bm.player_units.is_empty() else null
 	_check("сохранение за Хаос: раса и бог, рука %s, Hellbrute на клетке (2 бойца)" % [hand_titles],
 		loaded and rm.player_faction == "chaos" and rm.player_chapter == "nurgle"
-		and hand_titles == ["Heretic Autocannon", "Warp Strike", "Hellbrute"]
+		and hand_titles == ["Sacrilege Cannon", "Hali Surge", "Heath-King"]
 		and unit != null and unit.factory_id == "hellbrute" and unit.faction == "chaos"
 		and unit.saved_hp.size() == 2 and bm.player_placements.get(unit) == Vector2i(1, 1))
 	sv.delete_save()

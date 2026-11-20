@@ -48,6 +48,9 @@ const EFFECTS = {
 	# взрыв залпа Thunderfire: огненный шар (+ "explosion" и "impact" — дым и обломки)
 	"fireball":   {"sheet": "Fire+Sparks-Sheet.png", "size": Vector2i(96, 96), "frames": 19, "fps": 22.0,
 		"add": true, "loop": false, "scale": 0.9, "pivot": Vector2(52, 92)},
+	# разрыв черепа цитадели Хаоса (пакет пользователя 10.11.2026): осколки кости, бордо и варп, 8 кадров
+	"skull_burst": {"sheet": "res://assets/effects/skull_shot/explosion.png", "size": Vector2i(64, 64), "frames": 8,
+		"fps": 12.0, "loop": false, "scale": 0.8, "pivot": Vector2(32, 34)},
 	# вспышка выстрела орудия — поджиг ракеты (первые кадры листа ракеты)
 	"muzzle_flash": {"sheet": "Rocket Fire 2-Sheet.png", "size": Vector2i(150, 150), "frames": 5,
 		"fps": 20.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(68, 78)},
@@ -87,7 +90,11 @@ const EFFECTS = {
 		"loop": false, "scale": 1.5, "pivot": Vector2(16, 37)},
 	"citadel_shield": {"sheet": PIXEL_DIR + "magic/shield.png", "size": Vector2i(32, 32), "frames": 11, "fps": 12.0,
 		"loop": false, "scale": 5.0, "pivot": Vector2(16, 28)},
-	# боец встал (Apothecarion), высадка Deep Strike
+	# Deep Strike Терминаторов (EFFECTS_NEEDED 5.3, лист художника — решение пользователя 09.11.2026 вместо полос
+	# кодом): высадка — вперёд (spawn), уход — задом наперёд (spawn_reversed); пик разряда — кадры 7–8
+	"teleport":   {"sheet": FX_DIR + "teleport/spritesheet.png", "size": Vector2i(64, 128), "frames": 12, "fps": 16.0,
+		"loop": false, "add": true, "scale": 0.9, "pivot": Vector2(32, 124)},
+	# боец встал (Apothecarion)
 	"poof":       {"sheet": PIXEL_DIR + "movement/poof_side.png", "size": Vector2i(32, 32), "frames": 8, "fps": 12.0,
 		"loop": false, "scale": 1.5, "pivot": Vector2(16, 37)},
 	# статусы на теле бойца — StatusEffects.VFX (EFFECTS_NEEDED 7.1–7.4, листы художника 09.11.2026, стилизация —
@@ -132,14 +139,19 @@ const EFFECTS = {
 		"frames": 6, "fps": 8.0, "loop": false, "scale": 0.38, "pivot": Vector2(64, 64)},
 	# ауры знамени и зданий в бою — AuraRing (кольцо кодом), не листы
 	# Orbital Strike: удар в начале боя (метка до боя — TileGlow "strike")
+	# обычное смешивание (решение пользователя 12.11.2026: «инородно» — с ADD дым листа светился розовой пеленой
+	# поверх поля); вспышку и вес удару даёт BattleScene._strike_impact (свет на земле, тряска, подпалина, пыль)
 	"orbital_strike": {"sheet": FX_DIR + "orbital_strike/spritesheet.png", "size": Vector2i(256, 384), "frames": 16,
-		"fps": 18.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(128, 340)},
+		"fps": 18.0, "add": false, "loop": false, "scale": 1.0, "pivot": Vector2(128, 340)},
 	# удар варпа: в пакете кадры 8+9 и 10+11 — половинки одной широкой картинки, fx_fix склеил (кадр 512)
+	# Удар варпа, ремонт Кузней, шлейф прыжка, взрыв Hellfire: дым и камни листа — обычным смешиванием (решение пользователя 12.11.2026, «эффекты без свечения»: со
+	# сложением дым светился пеленой поверх поля; сверено на поле — удар варпа, взрыв Hellfire, ремонт Кузней, шлейф
+	# прыжка); свечение по земле (клич, тревога штурма, статусы, искры) — по-прежнему ADD
 	"orbital_strike_chaos": {"sheet": FX_DIR + "warp_strike/spritesheet.png", "size": Vector2i(512, 384), "frames": 14,
-		"fps": 18.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(256, 340)},
+		"fps": 18.0, "add": false, "loop": false, "scale": 1.0, "pivot": Vector2(256, 340)},
 	# здания: ремонт цитадели, череп алтаря
 	"forge_repair":  {"sheet": FX_DIR + "buildings/forge_repair.png", "size": Vector2i(256, 256), "frames": 10,
-		"fps": 14.0, "add": true, "loop": false, "scale": 0.45, "pivot": Vector2(128, 200),
+		"fps": 14.0, "add": false, "loop": false, "scale": 0.45, "pivot": Vector2(128, 200),
 		"modulate": Color(1, 1, 1, 0.75)},
 	"skull_add":     {"sheet": FX_DIR + "buildings/skull_add.png", "size": Vector2i(64, 64), "frames": 6,
 		"fps": 12.0, "loop": false, "scale": 0.6, "pivot": Vector2(32, 62)},
@@ -149,7 +161,7 @@ const EFFECTS = {
 		"fps": 16.0, "add": true, "loop": false, "scale": 1.0 / 250.0, "pivot": Vector2(256, 96),
 		"modulate": Color(1, 1, 1, 0.55)},
 	"jump_trail":    {"sheet": FX_DIR + "jump_trail/spritesheet.png", "size": Vector2i(64, 32), "frames": 6,
-		"fps": 16.0, "add": true, "loop": true, "scale": 1.2, "pivot": Vector2(60, 16), "behind": true},
+		"fps": 16.0, "add": false, "loop": true, "scale": 1.2, "pivot": Vector2(60, 16), "behind": true},
 	"jump_land":     {"sheet": FX_DIR + "jump_land/spritesheet.png", "size": Vector2i(128, 64), "frames": 9,   # 10-й съехал вверх
 		"fps": 16.0, "loop": false, "scale": 1.2, "pivot": Vector2(64, 50)},
 	"retreat_dust":  {"sheet": FX_DIR + "retreat_dust/spritesheet.png", "size": Vector2i(32, 16), "frames": 6,
@@ -163,7 +175,7 @@ const EFFECTS = {
 		"fps": 20.0, "add": true, "loop": false, "scale": 1.6, "pivot": Vector2(16, 16)},
 	# взрыв Hellfire Mortar (Хаос) — вместо огня и дыма Thunderfire
 	"hellfire_blast": {"sheet": FX_DIR + "hellfire_blast/spritesheet.png", "size": Vector2i(192, 192), "frames": 12,
-		"fps": 18.0, "add": true, "loop": false, "scale": 0.35, "pivot": Vector2(96, 176)},
+		"fps": 18.0, "add": false, "loop": false, "scale": 0.35, "pivot": Vector2(96, 176)},
 	# цитадель: начало штурма
 	"siege_alarm":   {"sheet": FX_DIR + "siege_alarm/spritesheet.png", "size": Vector2i(352, 256), "frames": 7,
 		"fps": 12.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(176, 128), "flat": true},
@@ -199,9 +211,10 @@ const BLOOD_COLORS = {
 }
 # Листы крови красные: яркость красного канала → оттенок крови (тени брызг сохраняются)
 const BLOOD_SHADER = """shader_type canvas_item;
+#include "res://shaders/fx_pixel.gdshaderinc"
 uniform vec3 blood;
 void fragment() {
-	COLOR = vec4(blood * clamp(COLOR.r / 0.7, 0.0, 1.3), COLOR.a);
+	COLOR = fx_pixel(vec4(blood * clamp(COLOR.r / 0.7, 0.0, 1.3), COLOR.a), FRAGCOORD.xy);
 }"""
 static var _blood_shader: Shader
 static var _blood_materials: Dictionary = {}   # цвет крови → ShaderMaterial (общие на все брызги)
@@ -230,6 +243,7 @@ var _fade_in := 0.0
 var _age := 0.0
 var _dismiss_left := -1.0
 var _hold := false   # разовый, но держит последний кадр, пока не снимут (dismiss)
+var _reverse := false   # проигрывается задом наперёд (spawn_reversed): угасание — к кадру 0
 
 # Разовый эффект в мировой точке. size — множитель масштаба, angle — поворот (радианы)
 static func spawn(parent: Node, kind: String, at: Vector2, size: float = 1.0, angle: float = 0.0) -> Vfx:
@@ -248,6 +262,15 @@ static func spawn(parent: Node, kind: String, at: Vector2, size: float = 1.0, an
 		_hits_alive += 1
 		_hits_this_frame += 1
 		v.tree_exited.connect(_free_hit_slot)
+	return v
+
+# Разовый эффект задом наперёд (уход телепортом — тот же лист, что высадка)
+static func spawn_reversed(parent: Node, kind: String, at: Vector2, size: float = 1.0) -> Vfx:
+	var v := spawn(parent, kind, at, size)
+	if v:
+		v._reverse = true
+		v.play_backwards("play")
+		v._apply_fade()
 	return v
 
 # Эффект интерфейса поверх прямоугольника rect (экран): рамка листа ("frame", вокруг pivot) — по rect, без
@@ -284,16 +307,62 @@ static func spawn_blood(parent: Node, at: Vector2, victim: UnitData, shot: bool,
 	if blood == "oil":
 		spawn(parent, "ricochet", at, size * 0.5)   # рикошет по броне; мельче брызг — масло под ним видно
 
-static var _add: CanvasItemMaterial
+static var _add: Material
+static var _mix: Material
+# Пиксельные эффекты (решение пользователя 12.11.2026, «эффекты — пиксельные»): у всех листов цвет и прозрачность
+# ступенями с дизерингом — shaders/fx_pixel*.gdshader (сложение / обычное); кровь — тот же код в BLOOD_SHADER,
+# снаряды — Projectile. Параметры ступеней — в shaders/fx_pixel.gdshaderinc
+const FX_SHADER := preload("res://shaders/fx_pixel.gdshader")
+const FX_ADD_SHADER := preload("res://shaders/fx_pixel_add.gdshader")
 static var _sheet_scale: Dictionary = {}   # вид → во сколько раз лист крупнее исходного (_get_frames)
 # Фильтрация листов эффектов и снарядов (пиксель-арт — NEAREST; сравнение стилей — tests/capture_style.gd)
 static var filter: CanvasItem.TextureFilter = CanvasItem.TEXTURE_FILTER_NEAREST
 
-static func _add_material() -> CanvasItemMaterial:
+# Общие материалы пиксельных эффектов — и для эффектов кодом (AuraRing, BossFx, BuildingFx, LevelUpGlow, свет поля…)
+static func add_material() -> Material:
+	return _add_material()
+
+static func mix_material() -> Material:
+	return _mix_material()
+
+# Мягкие пиксельные материалы — для больших слабых заливок (свет костров и вспышек на земле, тени и круги
+# аур у зданий): прозрачность SOFT_ALPHA_STEPS ступенями, дизеринг в клетке 1 px (решение пользователя 12.11.2026,
+# `Screenshot 2026-11-12 143816.png`: у костров «слишком явные шейдеры и тени» — при 4 ступенях слабый свет
+# рассыпался в крупную сетку точек)
+const SOFT_ALPHA_STEPS: float = 16.0
+const SOFT_LEVELS: float = 12.0
+const SOFT_DITHER_PX: float = 1.0
+static var _soft_add: ShaderMaterial
+static var _soft_mix: ShaderMaterial
+static func soft_add_material() -> Material:
+	if _soft_add == null:
+		_soft_add = _soft(FX_ADD_SHADER)
+	return _soft_add
+
+static func soft_mix_material() -> Material:
+	if _soft_mix == null:
+		_soft_mix = _soft(FX_SHADER)
+	return _soft_mix
+
+static func _soft(shader: Shader) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = shader
+	m.set_shader_parameter("fx_alpha_steps", SOFT_ALPHA_STEPS)
+	m.set_shader_parameter("fx_levels", SOFT_LEVELS)
+	m.set_shader_parameter("fx_dither_px", SOFT_DITHER_PX)
+	return m
+
+static func _add_material() -> Material:
 	if _add == null:
-		_add = CanvasItemMaterial.new()
-		_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		_add = ShaderMaterial.new()
+		_add.shader = FX_ADD_SHADER
 	return _add
+
+static func _mix_material() -> Material:
+	if _mix == null:
+		_mix = ShaderMaterial.new()
+		_mix.shader = FX_SHADER
+	return _mix
 
 # Перекрашенный лист (tools/vfx_grade.py), если он есть, иначе исходный
 static func graded_path(path: String) -> String:
@@ -330,6 +399,8 @@ static func attach(owner: Node2D, kind: String, size: float = 1.0) -> Vfx:
 	if owner == null or not EFFECTS.has(kind):
 		return null
 	var v := _make(kind, size)
+	if owner.has_method("body_sink"):
+		v.position.y += owner.body_sink()   # боец втоплен в землю — эффекты на нём ниже вместе со спрайтом
 	owner.add_child(v)
 	if EFFECTS[kind].get("behind", false):
 		owner.move_child(v, 0)   # дети рисуются по порядку: первым — за спрайтом
@@ -350,8 +421,7 @@ static func _make(kind: String, size: float) -> Vfx:
 	v._base_scale = v.scale
 	v._fade_in = LOOP_FADE_IN if e["loop"] else FADE_IN
 	v._hold = e.get("hold", false)
-	if e.get("add", false):
-		v.material = _add_material()
+	v.material = _add_material() if e.get("add", false) else _mix_material()
 	if not e["loop"] and not e.get("hold", false):
 		v.animation_finished.connect(v.queue_free)
 	# кадры перетекают; ADD — родитель гаснет на ту же долю. Быстрым листам (кровь, лужа, искры — 24–33 к/с) узел
@@ -393,7 +463,8 @@ func _apply_fade() -> void:
 	if not loop and not _hold:
 		var count := sprite_frames.get_frame_count("play")
 		var tail := maxf(count * FADE_TAIL, 1.0)
-		a *= clampf((count - frame - frame_progress) / tail, 0.0, 1.0)
+		var left: float = (frame + frame_progress) if _reverse else (count - frame - frame_progress)
+		a *= clampf(left / tail, 0.0, 1.0)
 	if _dismiss_left >= 0.0:
 		a *= _dismiss_left / FADE_OUT
 	modulate.a = _base_alpha * a

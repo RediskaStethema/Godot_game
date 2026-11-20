@@ -1,7 +1,7 @@
 """Цвет вспышки выстрела модели → metadata/muzzle_color в frames.tres (снаряд перекрашивается в него,
 Projectile.launch — решение пользователя 17.10.2026: снаряд того же цвета, что выстрел на листе).
 
-    python tools/muzzle_color.py assets/sprites/space_marine_tactical [папка …]
+    python tools/muzzle_color.py assets/units/space_marines/tactical [папка …]
 
 Берёт кадр shot_frame анимации attack, окно у точки muzzle (ствол → вперёд по выстрелу) и в нём
 яркие насыщенные пиксели — вспышку (оранжевую у болтеров, синюю у лучей). Цвет — медиана по ним,

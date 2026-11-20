@@ -10,24 +10,27 @@ extends Node2D
 var grid: IsoGrid
 
 # --- Плоты королевства (полупрозрачная подсветка поверх плит) ---
-const COLOR_NORMAL   = Color(0.30, 0.40, 0.58, 0.10)   # сталь
-const COLOR_HOVER    = Color(0.94, 0.83, 0.55, 0.40)   # светлое золото
-const COLOR_OCCUPIED = Color(UITheme.PLAYER_SIDE, 0.22)   # золото
+# Стилизация сетки расстановки (решение пользователя 18.11.2026): жёлтой заливки занятой клетки нет, сетка —
+# тёмная заливка и тусклая медная пунктирная линия, наведение — мягкий свет
+const COLOR_NORMAL   = Color(0.0, 0.0, 0.0, 0.14)
+const COLOR_HOVER    = Color(UITheme.GOLD_DIM, 0.26)
+const COLOR_OCCUPIED = Color(0.0, 0.0, 0.0, 0.14)   # как пустая: занятость видна по бойцам
+const GRID_DASH: float = 6.0
 const COLOR_SAME_SQUAD = Color(0.98, 0.72, 0.29, 0.45)  # отряд карты под курсором (скамейка)
 const LINE_SAME_SQUAD  = Color(1.0, 0.82, 0.45, 1.0)
 const COLOR_EFFECT = Color(0.35, 0.72, 0.70, 0.24)     # зона действия здания (Казармы — соседи)
 const LINE_EFFECT  = Color(0.45, 0.82, 0.78, 0.85)
-const LINE_PLAYER    = Color(UITheme.PLAYER_SIDE, 0.45)
-const BORDER_PLAYER  = Color(UITheme.PLAYER_SIDE, 0.95)
+const LINE_PLAYER    = Color(UITheme.GOLD_DIM, 0.55)
+const BORDER_PLAYER  = Color(UITheme.GOLD_DIM, 0.85)
 # --- Закрытые клетки рамки королевства ---
 const LINE_LOCKED    = Color(UITheme.PLAYER_SIDE, 0.12)
 # Можно купить (решение пользователя 24.10.2026: была плоская бледно-зелёная заливка — выбивалась из стиля):
 # янтарная пунктирная кромка — «будущая» клетка своих, под курсором — сплошная и ярче; цена — на тёмной плашке
 # со значком Req, не хватает Req — число красным
-const COLOR_BUYABLE  = Color(UITheme.PLAYER_SIDE, 0.07)
-const COLOR_BUYABLE_HOVER = Color(UITheme.PLAYER_SIDE, 0.24)
-const LINE_BUYABLE   = Color(UITheme.AMBER_LIGHT, 0.7)
-const LINE_BUYABLE_HOVER = Color(UITheme.AMBER_LIGHT, 1.0)
+const COLOR_BUYABLE  = Color(0.0, 0.0, 0.0, 0.10)   # стиль сетки 18.11.2026: без жёлтого — тёмная заливка, медная кромка
+const COLOR_BUYABLE_HOVER = Color(0.55, 0.38, 0.30, 0.22)
+const LINE_BUYABLE   = Color(0.55, 0.38, 0.30, 0.8)
+const LINE_BUYABLE_HOVER = Color(0.66, 0.46, 0.36, 1.0)
 const BUYABLE_DASH: float = 7.0
 const PRICE_FONT_SIZE: int = 15
 const PRICE_ICON: float = 14.0       # значок Req на плашке цены, px мира
@@ -95,13 +98,25 @@ const LIT_Z: int = 35
 const LIT_STRENGTH: float = 0.4
 const LIT_RAISE: float = 14.0   # px: пятно приподнято к корпусам
 var _lit: Node2D = null
+const HALO_SHARE: float = 0.55   # ореол огня над землёй ("glow_height") — доля радиуса пятна
+const HALO_ALPHA: float = 2.2    # ×альфа пятна: пятно на земле тусклое, огонь — ярче
+# Объём поля (тема "platform" {shade, side, shade_inset}, решение пользователя 10.11.2026 — образец «Мимо сетки…»):
+# тень стены края на земле (_shade — над полом, под дымкой и светом; от контура пола минус shade_inset клеток — у
+# Хаоса основание стены кодом FieldWall, у Космодесанта — внутренний край кольца плит-стены) и грань платформы под
+# ближним краем (_base — под полом); только вид
+const WALL_SHADE_DEPTH: float = 0.9    # клетки: тень от основания стены внутрь поля
+const PLATFORM_DEPTH: float = 46.0     # px: высота грани платформы
+const PLATFORM_TOP_LIGHT: float = 1.08     # плиты поля боя ярче
+const PLATFORM_EDGE_THICK: float = 14.0    # px: толщина боковой грани помоста у плит поля
+var _shade: Node2D = null
+var _base: Node2D = null
 static var _glow_tex: GradientTexture2D
 # Отсвет на бойце (решение пользователя 08.11.2026, Soldier._update_light): источники "glow" раскладки в мировых
 # координатах [точка, цвет × альфа, радиус]; сила — (1 − d / (радиус × LIGHT_REACH))² × LIGHT_GAIN,
 # расстояние по изометрии (вертикаль ×2, как пятно на земле). Только вид
-const LIGHT_REACH: float = 1.5
+const LIGHT_REACH: float = 1.8
 const FIRE_SHADOW_REACH: float = 1.6   # тень от огня — у бойцов ближе glow_radius × столько
-const LIGHT_GAIN: float = 0.9
+const LIGHT_GAIN: float = 1.2
 static var _lights: Array = []
 # Огни-ориентиры (костёр, жаровня): [точка мира, радиус, фаза мерцания] — тени от огня (SoldierShadows, 09.11.2026)
 static var _fires: Array = []
@@ -112,7 +127,7 @@ static var _fx_rng := RandomNumberGenerator.new()
 # него сам). Не больше MAX_FLASHES живых; без поля (тесты) и без «Атмосферы» — нет
 const MAX_FLASHES: int = 24
 const FLASH_GROUND: float = 0.8   # яркость пятна на земле
-const FLASH_UNITS: float = 0.5    # доля вспышки на теле бойца (сам стрелок у ствола — тоже)
+const FLASH_UNITS: float = 0.7    # доля вспышки на теле бойца (сам стрелок у ствола — тоже)
 static var _active: IsoGridRenderer = null
 var _flashes: Array = []   # [точка (локальная), цвет, радиус, осталось, всего]
 var _flash_layer: Node2D = null
@@ -132,31 +147,42 @@ func setup(iso_grid: IsoGrid) -> void:
 	_lights = []
 	_fires = []
 	_active = self
+	if theme.has("platform"):
+		_base = Node2D.new()
+		_base.show_behind_parent = true
+		_base.draw.connect(_draw_platform_side)
+		add_child(_base)
+	var void_fx := VoidFx.new()   # огни и дым за краем помоста (18.11.2026)
+	add_child(void_fx)
+	void_fx.setup(grid, FLOOR_PAD_TILES, map_seed() + 977)
 	_floor = Node2D.new()
 	_floor.show_behind_parent = true
 	_floor.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # пиксель-арт без размытия
 	var lift: float = theme.get("floor_brightness", 1.0)   # тема: грунт светлее, объекты на нём — нет
 	_floor.modulate = Color(lift, lift, lift)
 	_floor.draw.connect(_draw_floor)
+	_floor.material = _floor_calm_material(theme)
 	add_child(_floor)
+	if theme.has("platform"):
+		_shade = Node2D.new()
+		_shade.draw.connect(_draw_wall_shade)
+		add_child(_shade)
 	_mist = Node2D.new()
 	_mist.draw.connect(_draw_mist)
 	add_child(_mist)
 	_glow = Node2D.new()
-	var add := CanvasItemMaterial.new()
-	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	_glow.material = add
+	_glow.material = Vfx.soft_add_material()   # свет костров и вспышек — мягкий пиксельный ADD (мелкие ступени)
 	_glow.draw.connect(_draw_glow.bind(_glow, 1.0, 0.0))
 	add_child(_glow)
 	GameSettings.changed.connect(_glow.queue_redraw)
 	_lit = Node2D.new()
-	_lit.material = add
+	_lit.material = Vfx.soft_add_material()
 	_lit.z_index = LIT_Z
 	_lit.draw.connect(_draw_glow.bind(_lit, LIT_STRENGTH, LIT_RAISE))
 	add_child(_lit)
 	GameSettings.changed.connect(_lit.queue_redraw)
 	_flash_layer = Node2D.new()
-	_flash_layer.material = add
+	_flash_layer.material = Vfx.soft_add_material()
 	_flash_layer.draw.connect(_draw_flashes)
 	add_child(_flash_layer)
 	refresh_floor()
@@ -205,6 +231,18 @@ func _tick_river_splash(delta: float) -> void:
 
 # Пол пересчитывается при изменении королевства (покупка клетки) или темы;
 # между ними — только смена кадра анимированных плит
+# Спокойный грунт (скилл game-art, 12.11.2026): узор пола тише по яркости — силуэты бойцов на нём читаются.
+# contrast — доля прежнего перепада яркости, pivot — опорная яркость (средняя плит). Тема — ключ "floor_calm"
+const FLOOR_CALM := {"contrast": 0.6, "pivot": 0.07}
+const FLOOR_CALM_SHADER := preload("res://shaders/floor_calm.gdshader")
+static func _floor_calm_material(theme: Dictionary) -> ShaderMaterial:
+	var fc: Dictionary = FLOOR_CALM.merged(theme.get("floor_calm", {}), true)
+	var m := ShaderMaterial.new()
+	m.shader = FLOOR_CALM_SHADER
+	m.set_shader_parameter("contrast", float(fc["contrast"]))
+	m.set_shader_parameter("pivot", float(fc["pivot"]))
+	return m
+
 func refresh_floor() -> void:
 	_layout.clear()
 	_animated = _theme_has_frames()
@@ -409,14 +447,15 @@ func map_seed() -> int:
 # Плитки, допустимые на клетке: высокие — не в боевой полосе, знамёна — только на стороне игрока.
 # Ключ темы "clear_strip" (Хаос, решение пользователя 06.11.2026, Screenshot 2026-10-25 212920.png: группа
 # обелисков с ямой глаз стояла посреди поля боя) — в боевой полосе только ровные плиты: без объектов
-# ("prop"), анимированных деталей ("frames") и света ("glow") — они по бокам локации
+# ("prop"), анимированных деталей ("frames"), света ("glow") и руин, нарисованных на плите ("ruin"; решение
+# пользователя 11.11.2026, `Screenshot 2026-11-11 123048.png`: бункер-руины в зоне врага) — они по бокам локации
 func _tiles_allowed_at(c: Vector2i, tiles: Array) -> Array:
 	var in_strip := _is_battle_strip(c)
 	var player_side := _is_player_side(c)
 	var clear := _in_clear_zone(c)
 	return tiles.filter(func(t): return not (t is Dictionary and (
 		(in_strip and t.get("tall", false)) or (not player_side and t.get("flag", false))
-		or (clear and (t.has("prop") or t.has("frames") or t.has("glow"))))))
+		or (clear and (t.has("prop") or t.has("frames") or t.has("glow") or t.get("ruin", false))))))
 
 # Клетка годится группе: свободна, плитка на ней допустима, не касается прошлых групп того же вида
 func _cluster_cell_ok(c: Vector2i, tiles: Array, taken: Dictionary, kind: Dictionary) -> bool:
@@ -480,16 +519,30 @@ func _draw_floor() -> void:
 	for step in _layout["plan"]:
 		var c: Vector2i = step[0]
 		var top: Vector2 = step[1]
+		var k := _platform_light(c)
 		match step[2]:
 			PLAN_TILE:
-				TerrainTiles.draw_theme_tile(_floor, step[3], top, step[4], step[5], _cell_time(c))
+				var tint: Color = step[4]
+				TerrainTiles.draw_theme_tile(_floor, step[3], top, Color(tint.r * k, tint.g * k, tint.b * k, tint.a), step[5], _cell_time(c))
 			PLAN_EDGE:
 				_draw_line_tile(theme["edge"], c, top, step[3])
 			PLAN_RIVER:
 				_draw_river_tile(c, top, step[3])
 		var deco: Array = step[6]
 		if not deco.is_empty():
-			TerrainTiles.draw_prop(_floor, deco[0], deco[1], FLOOR_TINT, deco[2], _cell_time(c))
+			TerrainTiles.draw_prop(_floor, deco[0], deco[1], Color(FLOOR_TINT.r * k, FLOOR_TINT.g * k, FLOOR_TINT.b * k, FLOOR_TINT.a),
+				deco[2], _cell_time(c))
+
+# Помост (решение пользователя 18.11.2026): плиты поля боя чуть светлее, земля вокруг — заметно темнее
+func _platform_light(_c: Vector2i) -> float:
+	if not theme.has("platform"):
+		return 1.0
+	return PLATFORM_TOP_LIGHT   # весь пол — верх помоста; темнее — только пустота за его краем
+
+# Плиты, допустимые на клетке (_tiles_allowed_at); ни одной — грунт темы (в чистой полосе пол — без руин)
+func _plain_tiles(tiles: Array, c: Vector2i) -> Array:
+	var ok := _tiles_allowed_at(c, tiles)
+	return ok if not ok.is_empty() else theme.get("ground", tiles)
 
 const PLAN_TILE := 0
 const PLAN_EDGE := 1
@@ -505,6 +558,8 @@ func _floor_plan() -> Array:
 		var step: Array
 		if grid.is_valid_tile(c):
 			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(theme["kingdom"], c), Color.WHITE, false]
+		elif _is_floor_edge(c) and theme.has("field_wall"):   # кольцо — под стеной кодом: грунт
+			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(theme.get("ground", theme["floor"]), c), FLOOR_TINT, false]
 		elif _is_floor_edge(c) and theme.has("edge"):
 			# Края с постоянным u идут вдоль оси v, с постоянным v — вдоль u
 			var along_v = c.x == -FLOOR_PAD_TILES or c.x == grid.get_layout_cols() + FLOOR_PAD_TILES - 1
@@ -514,9 +569,9 @@ func _floor_plan() -> Array:
 		elif terrain.has(c):
 			step = [c, top, PLAN_TILE, terrain[c][0], FLOOR_TINT, terrain[c][1]]
 		elif _is_enemy_cell(c):
-			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(theme["enemy"], c), FLOOR_TINT, false]
+			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(_plain_tiles(theme["enemy"], c), c), FLOOR_TINT, false]
 		else:
-			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(theme["floor"], c), FLOOR_TINT, false]
+			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(_plain_tiles(theme["floor"], c), c), FLOOR_TINT, false]
 		step.append(_cell_decoration(c, top, rivers, terrain))
 		plan.append(step)
 	return plan
@@ -602,6 +657,15 @@ static func flash_light(at: Vector2, color: Color, radius: float, time: float) -
 			var k := 1.0 - sqrt(dd) / radius
 			s.add_flash_light(col * (k * k * FLASH_UNITS), time)
 
+# Тлеющий свет (горящий боец): только пятно на земле, без отсвета на бойцах (дёшево — боец горит каждые
+# полсекунды) и не занимает последние EMBER_RESERVE мест — выстрелы и взрывы важнее
+const EMBER_RESERVE: int = 8
+static func ember_light(at: Vector2, color: Color, radius: float, time: float) -> void:
+	if _active == null or not GameSettings.atmosphere or _active._flashes.size() >= MAX_FLASHES - EMBER_RESERVE:
+		return
+	var col := Color(color.r * color.a, color.g * color.a, color.b * color.a)
+	_active._flashes.append([_active.to_local(at), col, radius, time, time])
+
 func _tick_flashes(delta: float) -> void:
 	for f in _flashes:
 		f[3] -= delta
@@ -655,8 +719,60 @@ func _glow_sources() -> Array:
 			if not _layout["landmarks"].has(c):
 				# "glow_offset" — свет из своей точки клетки (красные глаза Хаоса — из ямы в середине грани)
 				center += e.get("glow_offset", Vector2(0.0, IsoGrid.TILE_HEIGHT / 2.0))
-			out.append([center, e["glow"], e.get("glow_radius", 60.0), TerrainTiles.hash_cell(c, 53) % 100 / 100.0 * TAU])
+			# 5-е — высота огня над землёй (ориентир "glow_height": ореол у самого пламени, не у основания)
+			out.append([center, e["glow"], e.get("glow_radius", 60.0), TerrainTiles.hash_cell(c, 53) % 100 / 100.0 * TAU,
+				e.get("glow_height", 0.0)])
+	if theme.has("field_wall"):   # фонари стены края — пятна у основания внутрь поля
+		var fw: Dictionary = theme["field_wall"]
+		for l in FieldWall.lantern_lights(grid, fw):
+			out.append([l[0], fw["lantern_glow"], fw["lantern_radius"], float(l[1] * 37 % 100) / 100.0 * TAU])
 	return out
+
+# Тень стены края на земле: полоса от основания внутрь поля, к полю — в ноль (углы перекрываются — темнее, как в углу)
+func _draw_wall_shade() -> void:
+	var pf: Dictionary = theme["platform"]
+	var inset: float = pf.get("shade_inset", 0.0)
+	var pad := FLOOR_PAD_TILES
+	var r := Rect2(-pad - 0.5 + inset, -pad - 0.5 + inset, grid.get_layout_cols() + 2 * pad - 2.0 * inset,
+		grid.get_layout_rows() + 2 * pad - 2.0 * inset)
+	var col: Color = pf["shade"]
+	var clear := Color(col, 0.0)
+	var d := WALL_SHADE_DEPTH
+	var sides := [   # [от, до, внутрь] в координатах сетки
+		[Vector2(r.position.x, r.position.y), Vector2(r.end.x, r.position.y), Vector2(0.0, d)],
+		[Vector2(r.end.x, r.position.y), r.end, Vector2(-d, 0.0)],
+		[r.end, Vector2(r.position.x, r.end.y), Vector2(0.0, -d)],
+		[Vector2(r.position.x, r.end.y), Vector2(r.position.x, r.position.y), Vector2(d, 0.0)],
+	]
+	for s in sides:
+		var a: Vector2 = s[0]
+		var b: Vector2 = s[1]
+		var n: Vector2 = s[2]
+		var pts := PackedVector2Array([grid.lattice_to_screen(a.x, a.y), grid.lattice_to_screen(b.x, b.y),
+			grid.lattice_to_screen(b.x + n.x, b.y + n.y), grid.lattice_to_screen(a.x + n.x, a.y + n.y)])
+		_shade.draw_polygon(pts, PackedColorArray([col, col, clear, clear]))
+
+# Грань платформы под ближним краем пола (правый-нижний и левый-нижний): поле — помост над пустотой
+func _draw_platform_side() -> void:
+	var pad := FLOOR_PAD_TILES
+	var u1 := grid.get_layout_cols() + pad - 0.5
+	var v1 := grid.get_layout_rows() + pad - 0.5
+	var u0 := -pad - 0.5
+	var v0 := -pad - 0.5
+	var col: Color = theme["platform"]["side"]
+	# Весь пол — помост (решение пользователя 18.11.2026): сплошная грань PLATFORM_EDGE_THICK, ниже — тень в ноль
+	var solid := Vector2(0.0, PLATFORM_EDGE_THICK)
+	var down := Vector2(0.0, PLATFORM_DEPTH)
+	var top_col := col.lerp(Color.BLACK, 0.25)
+	var bottom_col := col.lerp(Color.BLACK, 0.7)
+	for e in [[Vector2(u1, v0), Vector2(u1, v1)], [Vector2(u1, v1), Vector2(u0, v1)]]:
+		var p := grid.lattice_to_screen(e[0].x, e[0].y)
+		var q := grid.lattice_to_screen(e[1].x, e[1].y)
+		_base.draw_polygon(PackedVector2Array([p, q, q + solid, p + solid]),
+			PackedColorArray([top_col, top_col, bottom_col, bottom_col]))
+		_base.draw_polygon(PackedVector2Array([p + solid, q + solid, q + down, p + down]),
+			PackedColorArray([bottom_col, bottom_col, Color(bottom_col, 0.0), Color(bottom_col, 0.0)]))
+		_base.draw_line(p, q, Color(col.lerp(Color.WHITE, 0.2), 0.6), 1.0)
 
 # Туманные клетки: [клетка, центр грани, тема дымки]
 func _mist_sources() -> Array:
@@ -719,6 +835,11 @@ func _draw_glow(canvas: Node2D, strength: float, raise: float) -> void:
 		# пятно на земле — сплющено под изометрию
 		var at: Vector2 = src[0] - Vector2(0.0, raise)
 		canvas.draw_texture_rect(_glow_tex, Rect2(at - Vector2(r, r * 0.55), Vector2(r * 2.0, r * 1.1)), false, col)
+		# огонь над землёй (жаровня): круглый ореол у пламени — свет идёт от огня, а не от основания (только земной слой)
+		if src.size() > 4 and src[4] > 0.0 and canvas == _glow:
+			var hr: float = r * HALO_SHARE
+			var halo := Color(col, col.a * HALO_ALPHA)
+			canvas.draw_texture_rect(_glow_tex, Rect2(src[0] - Vector2(hr, src[4] + hr), Vector2(hr, hr) * 2.0), false, halo)
 
 func _cheb(d: Vector2i) -> int:
 	return maxi(absi(d.x), absi(d.y))
@@ -771,8 +892,15 @@ func _draw_kingdom() -> void:
 			color = COLOR_SAME_SQUAD
 		elif occupied_tiles_player.has(tile):
 			color = COLOR_OCCUPIED
-		_draw_diamond(grid.tile_to_screen(tile, false), color, LINE_PLAYER)
-	_draw_kingdom_border(BORDER_PLAYER, 3.0)
+		var c: Vector2 = grid.tile_to_screen(tile, false)
+		var hw := IsoGrid.TILE_WIDTH / 2.0
+		var hh := IsoGrid.TILE_HEIGHT / 2.0
+		var top := c + Vector2(0, -hh)
+		draw_colored_polygon(PackedVector2Array([top, c + Vector2(hw, 0), c + Vector2(0, hh), c + Vector2(-hw, 0)]), color)
+		# пунктиром только два верхних ребра — общие рёбра соседей не рисуются дважды
+		draw_dashed_line(c + Vector2(-hw, 0), top, LINE_PLAYER, 1.0, GRID_DASH, true, true)
+		draw_dashed_line(top, c + Vector2(hw, 0), LINE_PLAYER, 1.0, GRID_DASH, true, true)
+	_draw_kingdom_border(LINE_PLAYER, 1.0)
 	# Контур подсвеченных клеток — поверх общей рамки, чтобы читался и на краю королевства
 	for tile in highlighted_tiles:
 		_draw_diamond(grid.tile_to_screen(tile, false), Color(0, 0, 0, 0), LINE_SAME_SQUAD, 3.0)
@@ -805,15 +933,16 @@ func _draw_buyable(tile: Vector2i) -> void:
 	var icon_w := PRICE_ICON if icon else 0.0
 	var size := Vector2(icon_w + (3.0 if icon else 0.0) + text_w, maxf(PRICE_ICON, PRICE_FONT_SIZE)) + PRICE_PAD * 2.0
 	var plate := Rect2(center - size / 2.0, size)
-	draw_rect(plate, PRICE_PLATE)
-	draw_rect(plate, LINE_BUYABLE_HOVER if hover else Color(UITheme.GOLD_DIM, 0.9), false, 1.0)
 	var x := plate.position.x + PRICE_PAD.x
 	if icon:
 		draw_texture_rect(icon, Rect2(Vector2(x, center.y - PRICE_ICON / 2.0), Vector2(icon_w, PRICE_ICON)), false)
 		x += icon_w + 3.0
 	var affordable: bool = EconomyManager.requisition >= expansion_cost
-	draw_string(font, Vector2(x, center.y + PRICE_FONT_SIZE * 0.35), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs,
-		UITheme.GOLD_BRIGHT if affordable else UITheme.RED_BRIGHT)
+	var text_pos := Vector2(x, center.y + PRICE_FONT_SIZE * 0.35)
+	# без прямоугольной плашки (решение пользователя 18.11.2026): число с тёмной обводкой прямо на клетке
+	draw_string_outline(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0.0, 0.0, 0.0, 0.9))
+	draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs,
+		UITheme.TEXT if affordable else UITheme.RED_BRIGHT)
 
 # Контур королевства — только внешние рёбра открытых клеток
 # (после покупки клеток королевство может быть не прямоугольным)
@@ -833,7 +962,7 @@ func _draw_kingdom_border(color: Color, width: float) -> void:
 		var c = grid.tile_to_screen(tile, false)
 		for n in edges:
 			if not grid.is_valid_tile(tile + n):
-				draw_line(c + edges[n][0], c + edges[n][1], color, width, true)
+				draw_dashed_line(c + edges[n][0], c + edges[n][1], color, width, GRID_DASH, true, true)
 
 func set_expansion(tiles: Array[Vector2i], cost: int) -> void:
 	expansion_tiles = tiles

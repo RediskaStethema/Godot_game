@@ -11,7 +11,7 @@ extends RefCounted
 static func tactical_squad() -> CardData:
 	var c = CardData.new()
 	c.id = "tactical_squad"
-	c.title = "Tactical Squad"
+	c.title = "Crispin Line"
 	c.description = "Надёжные бойцы линии фронта"
 	c.faction = "space_marines"
 	c.cost = 5
@@ -24,7 +24,7 @@ static func tactical_squad() -> CardData:
 static func assault_squad() -> CardData:
 	var c = CardData.new()
 	c.id = "assault_squad"
-	c.title = "Assault Squad"
+	c.title = "Ariel Wing"
 	c.description = "Ближний бой. Раз за бой прыгают на вражеских стрелков: удар при приземлении и оглушение"
 	c.faction = "space_marines"
 	c.cost = 5
@@ -37,7 +37,7 @@ static func assault_squad() -> CardData:
 static func scout_squad() -> CardData:
 	var c = CardData.new()
 	c.id = "scout_squad"
-	c.title = "Scout Squad"
+	c.title = "Nightstrider Squad"
 	c.description = "Снайперы: бьют дальше всех, но хрупкие; добивают раненых"
 	c.faction = "space_marines"
 	c.cost = 4
@@ -50,7 +50,7 @@ static func scout_squad() -> CardData:
 static func devastator_squad() -> CardData:
 	var c = CardData.new()
 	c.id = "devastator_squad"
-	c.title = "Devastator Squad"
+	c.title = "Dunsinane Battery"
 	c.description = "Тяжёлое оружие, бьют самых опасных. Стоят на месте — окапываются: до +30% урона за 2 с"
 	c.faction = "space_marines"
 	c.cost = 7
@@ -63,7 +63,7 @@ static func devastator_squad() -> CardData:
 static func terminator_squad() -> CardData:
 	var c = CardData.new()
 	c.id = "terminator_squad"
-	c.title = "Terminator"
+	c.title = "Virgilian"
 	c.description = "Элита ближнего боя. Deep Strike: через 1 с боя телепортируются к ближайшему врагу"
 	c.faction = "space_marines"
 	c.cost = 10
@@ -76,7 +76,7 @@ static func terminator_squad() -> CardData:
 static func apothecary_card() -> CardData:
 	var c = CardData.new()
 	c.id = "apothecary"
-	c.title = "Apothecary"
+	c.title = "Friar-Leech"
 	c.description = "Лечит раненых союзников рядом"
 	c.faction = "space_marines"
 	c.cost = 7
@@ -89,7 +89,7 @@ static func apothecary_card() -> CardData:
 static func librarian_card() -> CardData:
 	var c = CardData.new()
 	c.id = "librarian"
-	c.title = "Librarian"
+	c.title = "Armitager"
 	c.description = "Псайкер: после каста удар оглушает цель на 1 с"
 	c.faction = "space_marines"
 	c.cost = 10
@@ -102,7 +102,7 @@ static func librarian_card() -> CardData:
 static func chaplain_card() -> CardData:
 	var c = CardData.new()
 	c.id = "chaplain"
-	c.title = "Chaplain"
+	c.title = "Bursak"
 	c.description = "Аура: союзники ближнего боя рядом +20% урона"
 	c.faction = "space_marines"
 	c.cost = 8
@@ -115,7 +115,7 @@ static func chaplain_card() -> CardData:
 static func land_speeder_card() -> CardData:
 	var c = CardData.new()
 	c.id = "land_speeder"
-	c.title = "Land Speeder"
+	c.title = "Wind Skiff"
 	c.description = "Быстрая техника: бьёт дальний тыл врага, стреляет на ходу, кружа вокруг цели"
 	c.faction = "space_marines"
 	c.cost = 9
@@ -128,7 +128,7 @@ static func land_speeder_card() -> CardData:
 static func dreadnought_card() -> CardData:
 	var c = CardData.new()
 	c.id = "dreadnought"
-	c.title = "Dreadnought"
+	c.title = "Shadeking"
 	c.description = "Шагающая машина: удар отбрасывает врага"
 	c.faction = "space_marines"
 	c.cost = 14
@@ -141,7 +141,7 @@ static func dreadnought_card() -> CardData:
 static func chapter_master_card() -> CardData:
 	var c = CardData.new()
 	c.id = "chapter_master"
-	c.title = "Chapter Master"
+	c.title = "Monstruwacan"
 	c.description = "Командир: +15% урона всей армии"
 	c.faction = "space_marines"
 	c.cost = 16
@@ -158,7 +158,7 @@ static func chapter_master_card() -> CardData:
 static func bolter_turret() -> CardData:
 	var c = CardData.new()
 	c.id = "bolter_turret"
-	c.title = "Bolter Turret"
+	c.title = "Petard Tower"
 	c.description = "Турель: стреляет в ближайшего врага на всём поле. Стоит между раундами."
 	c.faction = "space_marines"
 	c.cost = 7   # в TDD турели нет — Rare по шкале цен TDD
@@ -179,7 +179,7 @@ static func bolter_turret() -> CardData:
 static func thunderfire_cannon() -> CardData:
 	var c = CardData.new()
 	c.id = "thunderfire_cannon"
-	c.title = "Thunderfire Cannon"
+	c.title = "Dunsinane Thunder"
 	c.description = "Орудие: в бою кликните по полю — залп по площади. Перезарядка 4 с."
 	c.faction = "space_marines"
 	c.cost = 8
@@ -201,7 +201,7 @@ static func thunderfire_cannon() -> CardData:
 static func barracks() -> CardData:
 	var c = CardData.new()
 	c.id = "barracks"
-	c.title = "Barracks"
+	c.title = "Kuren"
 	c.description = "После победы лечат отряды на соседних клетках по сторонам (+20 / 30 / 45% HP) и возвращают павших (2 / 3 / 4 по уровню)."
 	c.faction = "space_marines"
 	c.cost = 7
@@ -218,7 +218,7 @@ static func barracks() -> CardData:
 static func fortress_wall() -> CardData:
 	var c = CardData.new()
 	c.id = "fortress_wall"
-	c.title = "Fortress Wall"
+	c.title = "Redoubt Wall"
 	c.description = "Стена вокруг владений: враги ломают её, прежде чем войти. Щит цитадели +200 в каждом бою."
 	c.faction = "space_marines"
 	c.cost = 5   # TDD: Common 3–5
@@ -240,8 +240,8 @@ static func fortress_wall() -> CardData:
 static func plasma_generatorium() -> CardData:
 	var c = CardData.new()
 	c.id = "plasma_generatorium"
-	c.title = "Plasma Generatorium"
-	c.description = "+2 Req после каждого боя. Стоит между раундами."
+	c.title = "Current Well"
+	c.description = "+2 монеты после каждого боя. Стоит между раундами."
 	c.faction = "space_marines"
 	c.cost = 8
 	c.rarity = "rare"
@@ -257,7 +257,7 @@ static func plasma_generatorium() -> CardData:
 static func apothecarion() -> CardData:
 	var c = CardData.new()
 	c.id = "apothecarion"
-	c.title = "Apothecarion"
+	c.title = "Friar's Cell"
 	c.description = "Павший боец отряда на соседней клетке по сторонам встаёт с 30% HP (шанс 15%, раз за бой)."
 	c.faction = "space_marines"
 	c.cost = 8
@@ -276,8 +276,8 @@ static func apothecarion() -> CardData:
 static func blessed_armour() -> CardData:
 	var c = CardData.new()
 	c.id = "blessed_armour"
-	c.title = "Blessed Armour"
-	c.description = "Отряд Marines: +25% HP"
+	c.title = "Hallowed Plate"
+	c.description = "Отряд Криспинцев: +25% HP"
 	c.faction = "space_marines"
 	c.cost = 7
 	c.rarity = "rare"
@@ -290,8 +290,8 @@ static func blessed_armour() -> CardData:
 static func battle_fury() -> CardData:
 	var c = CardData.new()
 	c.id = "battle_fury"
-	c.title = "Battle Fury"
-	c.description = "Отряд Marines: +20% урона"
+	c.title = "Tiger's Action"
+	c.description = "Отряд Криспинцев: +20% урона"
 	c.faction = "space_marines"
 	c.cost = 7
 	c.rarity = "rare"
@@ -304,8 +304,8 @@ static func battle_fury() -> CardData:
 static func iron_halo() -> CardData:
 	var c = CardData.new()
 	c.id = "iron_halo"
-	c.title = "Iron Halo"
-	c.description = "Отряд Marines: щит 30% HP каждому бойцу в начале боя"
+	c.title = "Beatrice's Halo"
+	c.description = "Отряд Криспинцев: щит 30% HP каждому бойцу в начале боя"
 	c.faction = "space_marines"
 	c.cost = 7
 	c.rarity = "rare"
@@ -318,8 +318,8 @@ static func iron_halo() -> CardData:
 static func combat_stimms() -> CardData:
 	var c = CardData.new()
 	c.id = "combat_stimms"
-	c.title = "Combat Stimms"
-	c.description = "Отряд Marines: +20% скорости бега и атаки"
+	c.title = "Friar's Draught"
+	c.description = "Отряд Криспинцев: +20% скорости бега и атаки"
 	c.faction = "space_marines"
 	c.cost = 7
 	c.rarity = "rare"
@@ -332,7 +332,7 @@ static func combat_stimms() -> CardData:
 static func chapter_banner() -> CardData:
 	var c = CardData.new()
 	c.id = "chapter_banner"
-	c.title = "Chapter Banner"
+	c.title = "Crispin's Banner"
 	c.description = "Знамя отряду: союзники рядом +15% урона (не суммируется с аурами)"
 	c.faction = "space_marines"
 	c.cost = 7
@@ -351,7 +351,7 @@ static func chapter_banner() -> CardData:
 static func emergency_reinforcements() -> CardData:
 	var c = CardData.new()
 	c.id = "emergency_reinforcements"
-	c.title = "Emergency Reinforcements"
+	c.title = "Redoubt Relief"
 	c.description = "Случайный Common отряд на пустую клетку"
 	c.faction = "space_marines"
 	c.cost = 3
@@ -366,7 +366,7 @@ static func emergency_reinforcements() -> CardData:
 static func orbital_strike() -> CardData:
 	var c = CardData.new()
 	c.id = "orbital_strike"
-	c.title = "Orbital Strike"
+	c.title = "Current Lance from Above"
 	c.description = "В начале боя: 160 урона всем врагам в радиусе 130 — по самой плотной группе"
 	c.faction = "space_marines"
 	c.cost = 7
@@ -383,63 +383,63 @@ static func orbital_strike() -> CardData:
 static func special_card(id: String) -> CardData:
 	match id:
 		"honour_guard":
-			return _squad_card(id, "Victrix Honour Guard", "Стража Ультрамара: стойкая элита, в начале боя щит 25% HP",
+			return _squad_card(id, "Expounders", "Стража Ультрамара: стойкая элита, в начале боя щит 25% HP",
 				"space_marines", 15, "honour_guard", 2)
 		"sanguinary_guard":
-			return _squad_card(id, "Sanguinary Guard", "Прыжок к стрелкам: удар ×2 по площади и оглушение 0.7 с",
+			return _squad_card(id, "Hunger Tower Guard", "Прыжок к стрелкам: удар ×2 по площади и оглушение 0.7 с",
 				"space_marines", 15, "sanguinary_guard", 6)
 		"centurion_devastators":
-			return _squad_card(id, "Centurion Devastators", "Тяжёлая огневая точка: дальность 300, окапываются до +40% урона",
+			return _squad_card(id, "Walking Bastions", "Тяжёлая огневая точка: дальность 300, окапываются до +40% урона",
 				"space_marines", 14, "centurion_devastators", 2)
 		"thunderwolf_cavalry":
-			return _squad_card(id, "Thunderwolf Cavalry", "Быстрая кавалерия: удар отбрасывает врага",
+			return _squad_card(id, "Erl-Riders", "Быстрая кавалерия: удар отбрасывает врага",
 				"space_marines", 15, "thunderwolf_cavalry", 2)
 		"firedrakes":
-			return _squad_card(id, "Firedrakes", "Огнемёты вблизи: поджог 4 ур/с на 3 с",
+			return _squad_card(id, "Devil-Saddlers", "Огнемёты вблизи: поджог 4 ур/с на 3 с",
 				"space_marines", 14, "firedrakes", 6)
 		"khorne_berzerkers":
-			return _squad_card(id, "Khorne Berzerkers", "Ярость Кхорна: быстрые удары, не отступают",
+			return _squad_card(id, "Seethers", "Ярость Кипящего: быстрые удары, не отступают",
 				"chaos", 14, "khorne_berzerkers", 9)
 		"plaguebearers":
-			return _squad_card(id, "Plaguebearers", "Демоны Нургла: живучие, удар отравляет (3 ур/с, 4 с)",
+			return _squad_card(id, "Goatspawn", "Демоны Дедушки Тысячи: живучие, удар отравляет (3 ур/с, 4 с)",
 				"chaos", 14, "plaguebearers", 9)
 		"rubric_marines":
-			return _squad_card(id, "Rubric Marines", "Варп-болты: сильный выстрел на 220 px",
+			return _squad_card(id, "Dustplate", "Варп-болты: сильный выстрел на 220 px",
 				"chaos", 15, "rubric_marines", 6)
 		"noise_marines":
-			return _squad_card(id, "Noise Marines", "Звуковое оружие: попадание оглушает на 0.25 с",
+			return _squad_card(id, "Second Act Chorus", "Звуковое оружие: попадание оглушает на 0.25 с",
 				"chaos", 14, "noise_marines", 9)
 		"codex_bastion":
-			return _building_card(id, "Codex Bastion", "Отряды на соседних клетках начинают бой со щитом 25% HP.",
+			return _building_card(id, "Lexicon Bastion", "Отряды на соседних клетках начинают бой со щитом 25% HP.",
 				"space_marines", 8, "codex_bastion", {"shield_ratio": 0.25}, {"shield_ratio": 0.3})
 		"blood_chalice":
-			return _building_card(id, "Blood Chalice", "Отряды на соседних клетках лечатся на 20% урона ближнего боя.",
+			return _building_card(id, "Hunger Tower", "Отряды на соседних клетках лечатся на 20% урона ближнего боя.",
 				"space_marines", 8, "blood_chalice", {"lifesteal": 0.2}, {"lifesteal": 0.25})
 		"fists_bastion":
-			return _building_card(id, "Bastion", "Стена с турелью: щит цитадели +150 и стрельба по ближайшему врагу.",
+			return _building_card(id, "Redoubt Pyramid", "Стена с турелью: щит цитадели +150 и стрельба по ближайшему врагу.",
 				"space_marines", 9, "fists_bastion", {"shield": 150.0, "damage": 12.0, "attack_speed": 1.2},
 				{"shield": 0.5, "damage": 0.25})
 		"wolf_totem":
-			return _building_card(id, "Wolf Totem", "В начале боя клич: отряды на соседних клетках +20% урона на 8 с.",
+			return _building_card(id, "Erlthrone", "В начале боя клич: отряды на соседних клетках +20% урона на 8 с.",
 				"space_marines", 7, "wolf_totem", {"empower": 0.2, "duration": 8.0}, {"empower": 0.25, "duration": 0.25})
 		"vulkan_forge":
-			return _building_card(id, "Vulkan's Forge", "Соседние отряды +10% урона. После боя чинит цитадель на 50 HP.",
+			return _building_card(id, "Vakula's Forge", "Соседние отряды +10% урона. После боя чинит цитадель на 50 HP.",
 				"space_marines", 8, "vulkan_forge", {"damage_bonus": 0.1, "repair": 50.0}, {"damage_bonus": 0.5, "repair": 0.5})
 		"skull_altar":
-			# отрядам Кхорна — ещё +5% за убийство (решение пользователя 25.10.2026)
-			return _building_card(id, "Altar of Skulls", "Каждый убитый враг: +1% урона всей армии, отрядам Кхорна ещё +5%, до конца боя (до +30%).",
+			# отрядам Кипящего — ещё +5% за убийство (решение пользователя 25.10.2026)
+			return _building_card(id, "Seething Font", "Каждый убитый враг: +1% урона всей армии, отрядам Кипящего ещё +5%, до конца боя (до +30%).",
 				"chaos", 8, "skull_altar", {"per_kill": 0.01, "khorne_per_kill": 0.05, "max_bonus": 0.3},
 				{"per_kill": 0.25, "khorne_per_kill": 0.25, "max_bonus": 0.25})
 		"plague_cauldron":
 			# атаки соседей — с ядом (решение пользователя 25.10.2026)
-			return _building_card(id, "Plague Cauldron", "Травит врагов рядом: яд 4 ур/с в круге 140 px. Атаки отрядов на соседних клетках отравляют (2 ур/с).",
+			return _building_card(id, "Thousandfold Cauldron", "Травит врагов рядом: яд 4 ур/с в круге 140 px. Атаки отрядов на соседних клетках отравляют (2 ур/с).",
 				"chaos", 8, "plague_cauldron", {"poison": 4.0, "poison_radius": 140.0, "neighbour_poison": 2.0},
 				{"poison": 0.3, "poison_radius": 0.2, "neighbour_poison": 0.3})
 		"warp_spire":
-			return _building_card(id, "Warp Spire", "Молния варпа по ближайшему врагу: 30 урона и оглушение 0.6 с, раз в 2.5 с.",
+			return _building_card(id, "Herald's Spire", "Молния варпа по ближайшему врагу: 30 урона и оглушение 0.6 с, раз в 2.5 с.",
 				"chaos", 9, "warp_spire", {"damage": 30.0, "attack_speed": 0.4, "stun": 0.6}, {"damage": 0.25, "attack_speed": 0.2})
 		"pleasure_shrine":
-			return _building_card(id, "Shrine of Excess", "Замедляет врагов рядом на 45% в круге 160 px.",
+			return _building_card(id, "Second Act Theatre", "Замедляет врагов рядом на 45% в круге 160 px.",
 				"chaos", 7, "pleasure_shrine", {"slow_mult": 0.55, "slow_radius": 160.0}, {"slow_radius": 0.2})
 	return null
 
@@ -492,37 +492,37 @@ static func _chaos_squad(id: String, title: String, desc: String, cost: int, rar
 	return c
 
 static func chaos_marines() -> CardData:
-	return _chaos_squad("chaos_marines", "Chaos Marines", "Предатели с болтерами: бьют сильнее Tactical, но ближе",
+	return _chaos_squad("chaos_marines", "Bloodsigned Squad", "Предатели с болтерами: бьют сильнее Crispin Plate, но ближе",
 		5, "common", "chaos_marine", 9)
 
 static func cultists() -> CardData:
-	return _chaos_squad("cultists", "Cultists", "Дешёвая толпа фанатиков со стабберами", 3, "common", "chaos_cultist", 12)
+	return _chaos_squad("cultists", "Pallid Masquers", "Дешёвая толпа фанатиков со стабберами", 3, "common", "chaos_cultist", 12)
 
 static func raptors() -> CardData:
-	return _chaos_squad("raptors", "Raptors", "Прыжковые ранцы: быстро летят к стрелкам врага", 5, "common", "chaos_raptor", 6)
+	return _chaos_squad("raptors", "Hookwings", "Прыжковые ранцы: быстро летят к стрелкам врага", 5, "common", "chaos_raptor", 6)
 
 static func havocs() -> CardData:
-	return _chaos_squad("havocs", "Havocs", "Тяжёлые огнемёты: бьют самых опасных, поджигают", 7, "rare", "chaos_havoc", 6)
+	return _chaos_squad("havocs", "Walpurgers", "Тяжёлые огнемёты: бьют самых опасных, поджигают", 7, "rare", "chaos_havoc", 6)
 
 static func plague_marines() -> CardData:
-	return _chaos_squad("plague_marines", "Plague Marines", "Живучие носители чумы: удар отравляет", 7, "rare", "plague_marine", 6)
+	return _chaos_squad("plague_marines", "Thousand-Young", "Живучие носители чумы: удар отравляет", 7, "rare", "plague_marine", 6)
 
 static func chaos_champions() -> CardData:
-	return _chaos_squad("chaos_champions", "Chaos Champions", "Пара избранных бойцов ближнего боя", 7, "rare", "chaos_champion", 2)
+	return _chaos_squad("chaos_champions", "Thanes", "Пара избранных бойцов ближнего боя", 7, "rare", "chaos_champion", 2)
 
 static func hellbrute_card() -> CardData:
-	return _chaos_squad("hellbrute", "Hellbrute", "Безумная машина: удар отбрасывает врага", 14, "epic", "hellbrute", 2)
+	return _chaos_squad("hellbrute", "Heath-King", "Безумная машина: удар отбрасывает врага", 14, "epic", "hellbrute", 2)
 
 static func chaos_lord_card() -> CardData:
-	return _chaos_squad("chaos_lord", "Chaos Lord", "Командир: +15% урона всей армии", 16, "epic", "chaos_lord_player", 2)
+	return _chaos_squad("chaos_lord", "Signatory Lord", "Командир: +15% урона всей армии", 16, "epic", "chaos_lord_player", 2)
 
 # Благословения богов Хаоса (решение пользователя 25.10.2026, ChaosGods): «Blessing of <бог>» — на отряд этого бога
 # (до 3 раз), «Chaos Gods' Blessing» — сменить бога отряда (бог — на выбор игрока в окне). Во всех забегах Хаоса
 const BLESSING_TEXT = {
-	"khorne": ["Blessing of Khorne", "Отряд Кхорна: +15% урона бойцам ближнего боя, не отступает. До 3 раз"],
-	"nurgle": ["Blessing of Nurgle", "Отряд Нургла: +20% HP, атаки отравляют (2 ур/с), −10% урона. До 3 раз"],
-	"tzeentch": ["Blessing of Tzeentch", "Стрелки Тзинча: +15% дальности, +5 урона, −10% скорострельности. До 3 раз"],
-	"slaanesh": ["Blessing of Slaanesh", "Отряд Слаанеш: шанс поработить врага при попадании (3 / 5 / 10%), все статы −5 / −8 / −10%. До 3 раз"],
+	"khorne": ["Gift of the Seething", "Отряд Кипящего: +15% урона бойцам ближнего боя, не отступает. До 3 раз"],
+	"nurgle": ["Gift of the Grandfather", "Отряд Дедушки Тысячи: +20% HP, атаки отравляют (2 ур/с), −10% урона. До 3 раз"],
+	"tzeentch": ["Gift of the Herald", "Стрелки Вестника: +15% дальности, +5 урона, −10% скорострельности. До 3 раз"],
+	"slaanesh": ["Gift of the King", "Отряд Короля Второго Акта: шанс поработить врага при попадании (3 / 5 / 10%), все статы −5 / −8 / −10%. До 3 раз"],
 }
 const BLESSING_COPIES: int = 1
 const CHANGE_GOD_COPIES: int = 2
@@ -544,8 +544,8 @@ static func god_blessing(god: String) -> CardData:
 static func chaos_gods_blessing() -> CardData:
 	var c = CardData.new()
 	c.id = "chaos_gods_blessing"
-	c.title = "Chaos Gods' Blessing"
-	c.description = "Любой отряд Хаоса (и Common) служит богу на ваш выбор; прежние благословения пропадают"
+	c.title = "Recasting"
+	c.description = "Любой отряд Кровоподписантов (и Common) служит Внешнему на ваш выбор; прежние благословения пропадают"
 	c.faction = "chaos"
 	c.cost = 5
 	c.rarity = "rare"
@@ -557,19 +557,19 @@ static func chaos_gods_blessing() -> CardData:
 # Общие карты (здания, улучшения, события) — механика Космодесанта, свои id и названия:
 # id Космодесанта → [id, название, описание]. Улучшения — на свои отряды (тег chaos)
 const CHAOS_RESKINS = {
-	"bolter_turret": ["heretic_autocannon", "Heretic Autocannon", "Турель: стреляет в ближайшего врага на всём поле. Стоит между раундами."],
-	"thunderfire_cannon": ["hellfire_mortar", "Hellfire Mortar", "Орудие: в бою кликните по полю — залп по площади. Перезарядка 4 с."],
-	"barracks": ["cult_shrine", "Cult Shrine", "После победы возвращают павших (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Отряд бога Хаоса рядом — павшие других соседей встают его бойцами (сила — по редкости отряда)."],
-	"fortress_wall": ["spiked_barricade", "Spiked Barricade", "Частокол с шипами вокруг владений: враги ломают его, прежде чем войти. Щит цитадели +200 в каждом бою."],
-	"plasma_generatorium": ["dark_altar", "Dark Altar", "+2 Req после каждого боя. Стоит между раундами."],
-	"apothecarion": ["warp_rift", "Warp Rift", "Павший боец отряда на соседней клетке по сторонам встаёт с 30% HP (шанс 15%, раз за бой)."],
-	"blessed_armour": ["daemonic_armour", "Daemonic Armour", "Отряд Хаоса: +25% HP"],
-	"battle_fury": ["blood_rage", "Blood Rage", "Отряд Хаоса: +20% урона"],
-	"iron_halo": ["warp_ward", "Warp Ward", "Отряд Хаоса: щит 30% HP каждому бойцу в начале боя"],
-	"combat_stimms": ["combat_drugs", "Combat Drugs", "Отряд Хаоса: +20% скорости бега и атаки"],
-	"chapter_banner": ["icon_of_chaos", "Icon of Chaos", "Икона отряду: союзники рядом +15% урона (не суммируется с аурами)"],
-	"emergency_reinforcements": ["cult_uprising", "Cult Uprising", "Случайный Common отряд на пустую клетку"],
-	"orbital_strike": ["warp_strike", "Warp Strike", "В начале боя: 160 урона всем врагам в радиусе 130 — по самой плотной группе"],
+	"bolter_turret": ["heretic_autocannon", "Sacrilege Cannon", "Турель: стреляет в ближайшего врага на всём поле. Стоит между раундами."],
+	"thunderfire_cannon": ["hellfire_mortar", "Phlegethon Mortar", "Орудие: в бою кликните по полю — залп по площади. Перезарядка 4 с."],
+	"barracks": ["cult_shrine", "Masque Hall", "После победы возвращают павших (2 / 3 / 4 по уровню) отрядам на соседних клетках по сторонам. Отряд Внешнего рядом — павшие других соседей встают его бойцами (сила — по редкости отряда)."],
+	"fortress_wall": ["spiked_barricade", "Wall of Dis", "Частокол с шипами вокруг владений: враги ломают его, прежде чем войти. Щит цитадели +200 в каждом бою."],
+	"plasma_generatorium": ["dark_altar", "Altar of the Pact", "+2 монеты после каждого боя. Стоит между раундами."],
+	"apothecarion": ["warp_rift", "Hali Rift", "Павший боец отряда на соседней клетке по сторонам встаёт с 30% HP (шанс 15%, раз за бой)."],
+	"blessed_armour": ["daemonic_armour", "Bloodsigned Plate", "Отряд Кровоподписантов: +25% HP"],
+	"battle_fury": ["blood_rage", "The Seethe", "Отряд Кровоподписантов: +20% урона"],
+	"iron_halo": ["warp_ward", "Yellow Seal", "Отряд Кровоподписантов: щит 30% HP каждому бойцу в начале боя"],
+	"combat_stimms": ["combat_drugs", "Cauldron Brew", "Отряд Кровоподписантов: +20% скорости бега и атаки"],
+	"chapter_banner": ["icon_of_chaos", "Icon of the Act", "Икона отряду: союзники рядом +15% урона (не суммируется с аурами)"],
+	"emergency_reinforcements": ["cult_uprising", "Masquerade Rising", "Случайный Common отряд на пустую клетку"],
+	"orbital_strike": ["warp_strike", "Hali Surge", "В начале боя: 160 урона всем врагам в радиусе 130 — по самой плотной группе"],
 }
 # Отряд Космодесанта → отряд Хаоса той же роли (стартовая карта мета-прогрессии в забеге за Хаос)
 const CHAOS_SQUAD_EQUIVALENTS = {
@@ -617,6 +617,17 @@ const FACTIONS = ["space_marines", "chaos"]
 # Веса по TDD ~60/30/10: common 26, rare 15, epic 4 — из 45 копий.
 # Новая карта по id (сохранения). Все карты игрока есть в пуле магазина своей расы; id у рас
 # разные — карта находится при любой текущей расе (сохранение грузит руку раньше расы)
+# Описание карты по названию (UnitData.applied_upgrades хранит названия): подсказка к улучшению в справке
+# отряда; карты обеих рас и особые карты орденов / богов, кэш по первому вызову. Нет — ""
+static var _desc_by_title: Dictionary = {}
+static func description_by_title(title: String) -> String:
+	if _desc_by_title.is_empty():
+		for faction in FACTIONS:
+			for card in test_cards(faction):
+				if not _desc_by_title.has(card.title):
+					_desc_by_title[card.title] = card.description
+	return _desc_by_title.get(title, "")
+
 static func create(id: String) -> CardData:
 	for faction in FACTIONS:
 		for card in build_pool(faction):

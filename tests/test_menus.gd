@@ -63,6 +63,43 @@ func _main() -> void:
 	gs.master_volume = 1.0
 	gs._load()
 	_check("настройки: запись и чтение", is_equal_approx(gs.battle_speed, 2.0) and is_equal_approx(gs.master_volume, 0.4))
+	# Громкость по видам: сражение / интерфейс / музыка — свои шины, в файле, щелчок — на шине UI, выстрел — SFX
+	gs.set_volume("battle_volume", 0.3)
+	gs.set_volume("ui_volume", 0.0)
+	gs.set_volume("music_volume", 0.7)
+	gs.battle_volume = 1.0
+	gs.ui_volume = 1.0
+	gs.music_volume = 1.0
+	gs._load()
+	gs.apply()
+	var am = root.get_node("AudioManager")
+	var ui_bus := AudioServer.get_bus_index("UI")
+	var sfx_bus := AudioServer.get_bus_index("SFX")
+	var music_bus := AudioServer.get_bus_index("Music")
+	var levels_ok: bool = is_equal_approx(gs.battle_volume, 0.3) and is_equal_approx(gs.ui_volume, 0.0) \
+		and is_equal_approx(gs.music_volume, 0.7) and AudioServer.is_bus_mute(ui_bus) \
+		and is_equal_approx(AudioServer.get_bus_volume_db(sfx_bus), linear_to_db(0.3)) \
+		and is_equal_approx(AudioServer.get_bus_volume_db(music_bus), linear_to_db(0.7))
+	var wav := AudioStreamWAV.new()
+	wav.data = PackedByteArray([0, 0, 0, 0])
+	am.set_streams("ui_click", [wav])
+	am.set_streams("shot_bolt", [wav])
+	am._last_play.erase("ui_click")
+	am._last_play.erase("shot_bolt")
+	var buses: Array = []
+	for ev in ["ui_click", "shot_bolt"]:
+		am.play(ev)
+		for v in am._voices:
+			if v.playing and v.stream == wav and not buses.has(String(v.bus)):
+				buses.append(String(v.bus))
+		for v in am._voices:
+			v.stop()
+	am.set_streams("ui_click", [])
+	am.set_streams("shot_bolt", [])
+	_check("громкость раздельно: сражение / интерфейс / музыка — в файле и на своих шинах, щелчок на UI, выстрел на SFX (%s)" % str(buses),
+		levels_ok and buses == ["UI", "SFX"])
+	for key in gs.VOLUME_BUSES:
+		gs.set_volume(key, 1.0)
 	gs.cycle_battle_speed()
 	var to_three: bool = is_equal_approx(gs.battle_speed, 3.0)
 	gs.cycle_battle_speed()
@@ -132,7 +169,7 @@ func _main() -> void:
 	esc.action = "ui_cancel"
 	esc.pressed = true
 	extra._unhandled_input(esc)
-	await _frames(2)
+	await create_timer(0.3).timeout   # окно гаснет ModalOverlay.CLOSE_TIME
 	_check("Esc закрывает окно выбора расы без старта", not is_instance_valid(extra) and current_scene == menu)
 	race.choose("tyranids")   # закрытая раса — ничего
 	await _frames(2)
@@ -174,7 +211,7 @@ func _main() -> void:
 	difficulty.choose(3)
 	await _frames(4)
 	_check("выбрали сложность → магазин волны 1, раса, орден и сложность в забеге, в магазине есть пауза",
-		current_scene.name == "ShopScene" \
+		current_scene.get("shop") != null \
 		and root.get_node("EconomyManager").round_number == 1 \
 		and root.get_node("RunManager").player_faction == "space_marines" \
 		and root.get_node("RunManager").player_chapter == "ultramarines" \
@@ -234,7 +271,7 @@ func _main() -> void:
 	shop_pause._confirm_surrender()
 	var confirm = shop_pause._dialog
 	_check("магазин: «Сдаться» → подтверждение, забег цел", confirm != null and _is(confirm, "ConfirmDialog") \
-		and current_scene.name == "ShopScene" and sv.has_save())
+		and current_scene.get("shop") != null and sv.has_save())
 	confirm._on_yes()
 	await _frames(4)
 	_check("магазин: сдался → главное меню, сохранения нет", current_scene.name == "MainMenu" and not paused \

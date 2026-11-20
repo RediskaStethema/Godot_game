@@ -131,17 +131,41 @@ func _main() -> void:
 	var no_blast_vfx = not load("res://scripts/battle/Vfx.gd").EFFECTS.has("tile_blast")
 	var chaos_citadel: Dictionary = chaos.get("citadel", {})
 	_check("Хаос: %d плит на месте, цитадель — крепость из листа, пол анимирован, кристаллов / знамён-плит / окопов / извержений нет, глаза — %d кадров, туман на %d клетках, взрыва клетки при ударе нет, реки нет" % [unique.size(), eyes.size(), mist_cells],
-		unique.size() == 45 and eyes.size() == 10 and mist_cells > 0 and ResourceLoader.exists(chaos_citadel.get("sheet", "")) and missing.is_empty() and battle.renderer._animated \
+		unique.size() == 46 and eyes.size() == 10 and mist_cells > 0 and ResourceLoader.exists(chaos_citadel.get("sheet", "")) and missing.is_empty() and battle.renderer._animated \
 		and not chaos.has("river") and battle.renderer._layout["rivers"].is_empty() \
 		and removed.is_empty() and no_blast_vfx)
+	# Стена края поля кодом (FieldWall, 10.11.2026, образец «Мимо сетки…»): у Хаоса — две стороны (дальняя раньше
+	# бойцов, ближняя после), фонари светят на землю; у Космодесанта с 12.11.2026 — тоже кодом (плиты края выбивались
+	# из стиля, решение пользователя), без спрайтов; тень и грань — у обеих
+	var fw_script = load("res://scripts/battle/FieldWall.gd")
+	var sm_walls = battle.units_container.get_children().filter(func(n): return n.get("segs") != null)
+	var lanterns: Array = fw_script.lantern_lights(battle.iso_grid, chaos["field_wall"])
+	var glow_lanterns: int = battle.renderer._layout["glow"].filter(func(g): return g[1] == chaos["field_wall"]["lantern_glow"]).size()
+	var holder := Node2D.new()
+	root.add_child(holder)
+	var fw = fw_script.build(holder, battle.iso_grid, chaos["field_wall"])
+	var sides: Array = fw.segments
+	var segs_total: int = sides.reduce(func(acc, sd): return acc + sd.segs.size(), 0)
+	# спрайты художника (10.11.2026): пролёты цепью, столбы с фонарём — там же, где свет; в углах — столбы с черепом;
+	# жаровня — лента 10 кадров
+	var lantern_posts: int = sides.reduce(func(acc, sd): return acc + sd.items.filter(func(it): return it[1] == "lantern").size(), 0)
+	var corner_posts: int = sides.reduce(func(acc, sd): return acc + sd.items.filter(func(it): return it[1] == "post").size(), 0)
+	var brazier: Dictionary = chaos["landmarks"]["campfire"]
+	_check("стена Хаоса спрайтами: атлас, %d столбов с фонарём = пятен света, %d угла; жаровня — %d кадров" % [lantern_posts, corner_posts, brazier.get("frames", 1)],
+		sides[0].parts.has("atlas") and lantern_posts == lanterns.size() and corner_posts == 4
+		and brazier.get("frames", 1) == 10 and ResourceLoader.exists(brazier["texture"]))
+	_check("стена края: у Космодесанта кодом — %d стороны (тень и грань платформы есть), у Хаоса — 2 стороны (%d звеньев), фонарей %d и все светят на земле" % [sm_walls.size(), segs_total, lanterns.size()],
+		sm_walls.size() == 2 and sides.size() == 2 and sides[0].position.y < sides[1].position.y and segs_total >= 40
+		and lanterns.size() > 5 and glow_lanterns == lanterns.size() and battle.renderer._shade != null and battle.renderer._base != null)
+	holder.queue_free()
 
-	# 3б. Цитадель Космодесанта — лист citadel_spacemarine_spritesheet: все ряды, снаряд — на кадре вспышки из ствола
+	# 3б. Цитадель Космодесанта — лист пакета citadel_sm_v3 (10.11.2026): все ряды по 12 кадров, снаряд — на кадре вспышки из ствола
 	var sm_cit: Dictionary = theme["citadel"]   # раса без темы → тема Космодесанта
 	citadel.apply_theme(sm_cit)   # выше проверялась пустая тема — башня из блоков
 	await _frames(2)
 	var sm_frames: SpriteFrames = citadel._sprite.sprite_frames
-	var counts_ok = sm_frames.get_frame_count("idle") == 1 and sm_frames.get_frame_count("attack") == 10 \
-		and sm_frames.get_frame_count("hit") == 10 and sm_frames.get_frame_count("fall") == 10 \
+	var counts_ok = sm_frames.get_frame_count("idle") == 12 and sm_frames.get_frame_count("attack") == 12 \
+		and sm_frames.get_frame_count("hit") == 12 and sm_frames.get_frame_count("fall") == 12 \
 		and is_equal_approx(sm_frames.get_animation_speed("attack"), 12.0)
 	var shots_before = bm.projectiles.size()
 	citadel._fire_at(citadel.global_position + Vector2(200, 0))
@@ -150,17 +174,28 @@ func _main() -> void:
 		citadel.tick(0.1)
 	var shot = bm.projectiles.back() if bm.projectiles.size() > shots_before else null
 	var muzzle = citadel.to_global(citadel._sprite.position + sm_cit["muzzle"] * citadel._sprite.scale)
-	_check("цитадель Космодесанта: 1/10/10/10 кадров (стоит неподвижно), снаряд — на кадре вспышки, из ствола",
+	_check("цитадель Космодесанта: 12/12/12/12 кадров (флаг на стойке развевается), снаряд — на кадре вспышки, из ствола",
 		counts_ok and none_yet and shot != null and shot.global_position.distance_to(muzzle) < 1.0)
 	bm.clear_projectiles()
-	# Цитадель Хаоса (кадры пользователя 25.10.2026) — те же ряды: выстрел, попадание, обрушение
+	# Цитадель Хаоса (пакет пользователя 10.11.2026) — те же ряды по 12 кадров; стреляет черепом из ворот
 	var ch_cit: Dictionary = chaos["citadel"]
 	citadel.apply_theme(ch_cit)
 	await _frames(2)
 	var ch_frames: SpriteFrames = citadel._sprite.sprite_frames
-	_check("цитадель Хаоса: 1/10/10/10 кадров, выстрел из ворот на кадре %d" % ch_cit["shot_frame"],
-		ch_frames.get_frame_count("idle") == 1 and ch_frames.get_frame_count("attack") == 10
-		and ch_frames.get_frame_count("hit") == 10 and ch_frames.get_frame_count("fall") == 10 and ch_cit.has("muzzle"))
+	var ch_before = bm.projectiles.size()
+	citadel._fire_at(citadel.global_position + Vector2(200, 0))
+	for i in range(int(ceil(float(ch_cit["shot_frame"]) / 12.0 / 0.1))):
+		citadel.tick(0.1)
+	var skull = bm.projectiles.back() if bm.projectiles.size() > ch_before else null
+	var gate = citadel.to_global(citadel._sprite.position + ch_cit["muzzle"] * citadel._sprite.scale)
+	var vfx_effects: Dictionary = load("res://scripts/battle/Vfx.gd").EFFECTS
+	_check("цитадель Хаоса: 12/12/12/12 кадров, череп из ворот на кадре %d, разрыв черепа" % ch_cit["shot_frame"],
+		ch_frames.get_frame_count("idle") == 12 and ch_frames.get_frame_count("attack") == 12
+		and ch_frames.get_frame_count("hit") == 12 and ch_frames.get_frame_count("fall") == 12
+		and skull != null and skull._kind == "skull_shot" and skull.global_position.distance_to(gate) < 1.0
+		and skull.impact_vfx.has("skull_burst") and vfx_effects.has("skull_burst")
+		and ResourceLoader.exists(vfx_effects["skull_burst"]["sheet"]))
+	bm.clear_projectiles()
 	citadel.apply_theme(sm_cit)
 	await _frames(2)
 

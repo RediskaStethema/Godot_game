@@ -14,21 +14,34 @@ const KNOCKBACK_STOP_SPEED: float = 5.0
 # спрайты разного исходного размера (marine 197 px, chaos 170 px) приводим к одной высоте.
 # Решение пользователя: бойцы вдвое мельче прежних 62 px, зато их в отряде втрое больше
 const TARGET_SPRITE_HEIGHT: float = 31.0
+const GROUND_SINK: float = 7.5   # px мира: на сколько ступни ниже точки бойца — стоит в земле, а не над ней
 # Эффекты на бойце (Vfx) подобраны под рост 62 px
 const EFFECT_SCALE: float = TARGET_SPRITE_HEIGHT / 62.0
 # Полоска HP и уровень — у отряда (SquadBar); у бойца — тень, кольцо стороны и точки статусов
 const STATUS_DOT_R: float = 1.5
 const STATUS_DOT_GAP: float = 3.0
-const SHADOW_RADIUS: float = 6.0       # × sprite_scale; эллипс сплюснут, как клетка изометрии
+# 17.11.2026 (решение пользователя: «юниты будто летают над текстурами, а не ходят»): тень была 6 × sprite_scale — у
+# Tactical эллипс 8 px при теле ~14 px, весь прятался за ступнями; теперь шире тела, а центр сдвинут вниз (SHADOW_DROP)
+const SHADOW_RADIUS: float = 8.5       # × sprite_scale; эллипс сплюснут, как клетка изометрии
+const SHADOW_DROP: float = 2.2         # × sprite_scale: центр тени ниже точки ног — из-под сапог выглядывает полумесяц тени
 const SHADOW_FLATTEN: float = 0.5
-const SHADOW_COLOR = Color(0, 0, 0, 0.35)
-const SHADOW_SOFT = Color(0, 0, 0, 0.16)   # мягкий край тени: шире и прозрачнее
+# Тень под ногами темнее (стилизация 12.11.2026, скилл game-art «читаемость — контраст по яркости»: свои бойцы
+# Хаоса медианой яркости 33 на грунте 29 — сливались; осветлять бойцов нельзя — решение пользователя 08.11.2026
+# «юниты слишком выделяются»): силуэт отделяет тёмная подложка, было 0.35 / 0.16
+const SHADOW_COLOR = Color(0, 0, 0, 0.55)
+const SHADOW_SOFT = Color(0, 0, 0, 0.26)   # мягкий край тени: шире и прозрачнее
 const SHADOW_SOFT_SCALE: float = 1.45
 const RING_WIDTH: float = 2.0   # кольцо стороны под бойцом (решение пользователя 24.10.2026: было 1.5 / 0.6 — еле видно)
 const RING_ALPHA: float = 0.85
 # Всплывающие цифры (FloatingText) — только в схватке: удар не меньше FLOAT_MIN_DAMAGE
 # (герои, техника, орудие; не каждый болт и не яд / огонь), лечение — порциями FLOAT_HEAL_STEP
 const FLOAT_MIN_DAMAGE: float = 20.0
+# Число урона крупнее от силы удара (доля max HP бойца): тяжёлый удар читается без цифр
+const FLOAT_HEAVY_RATIO: float = 0.3
+const FLOAT_HEAVY_SIZE: float = 1.3
+const FLOAT_MEDIUM_RATIO: float = 0.15
+const FLOAT_MEDIUM_SIZE: float = 1.15
+const EMBER_LIGHT_RADIUS: float = 34.0   # свет горящего бойца на земле, × sprite_scale
 const FLOAT_HEAL_STEP: float = 10.0
 const FLOAT_HIT_TO_ENEMY = Color(1.0, 0.86, 0.55)
 const FLOAT_HIT_TO_PLAYER = UITheme.HIT_RED
@@ -51,12 +64,33 @@ const TIMER_EPSILON: float = 0.001
 # 23.10.2026 (решение пользователя — компромисс): было 2 роста и ×2 — в листах шаг ≈ 0.7–0.9 роста за цикл
 # (размах ступней), ноги отставали от тела в 2.5 раза, бойцы «летели» (заметнее всего — Chapter Master).
 # 1 рост и ×3: ноги вдвое быстрее, самые быстрые (Scout, Raptor) упираются в ×3 и чуть скользят
-const WALK_CYCLE_HEIGHTS: float = 1.0
+# 17.11.2026: цикл короче / потолок выше (0.62 роста и ×5) пробовали — замер скольжения стопы по снимкам бегущего бойца на
+# однотонном фоне (опорная ступня по нижнему кластеру силуэта) оказался слишком шумным, чтобы подтвердить выигрыш, а бег ×4–5
+# мельтешит; оставлено прежнее (решение 23.10.2026), заземление — тень с шагом (STEP_SHADOW_*) и пыль
+const WALK_CYCLE_HEIGHTS: float = 0.8   # 18.11.2026 («скользят ногами»): шаг листа ≈ 0.7–0.9 роста за цикл — было 1.0, ноги отставали
+# Бег с весом (решение пользователя 18.11.2026): боец разгоняется и тормозит плавно (_run_k), на бегу чуть клонится
+# вперёд, шаг у каждого свой в пределах ±PACE_SPREAD/2 — строй не бежит стеной в одной фазе и скорости
+const RUN_ACCEL: float = 0.28          # с до полного темпа
+const RUN_DECEL: float = 0.22          # с до остановки
+const RUN_LEAN: float = 0.05           # рад (≈ 3°) наклон корпуса вперёд на полном бегу
+const PACE_SPREAD: float = 0.08        # разброс скорости между бойцами отряда (доля, по attack_stagger)
+const FACE_TURN_DOT: float = 0.25      # разворот лицом только при |x| направления больше — на вертикальном ходу не мерцает
 const WALK_SCALE_LIMITS = Vector2(0.5, 3.0)
 # Шаг кодом (решение пользователя 23.10.2026, Screenshot 2026-10-23 172747.png: «бегут по воздуху в одной позе»):
 # в листах бега ступни ходят на 2–4 px при росте бойца на поле ~40 px — шага не видно, строй скользит.
 # На каждом шаге корпус проседает (scale.y от ног — ступни на земле): STEP_DIP роста, STEPS_PER_CYCLE шагов за цикл
+# Позиция для выстрела (17.11.2026, решение пользователя: «юнит перемещается по полю для правильного положения для выстрела»,
+# модельку не наклонять): лист только отражается по горизонтали, ствол всегда горизонтален, а цель на изометрии бывает прямо
+# над или под стрелком — снаряд летел поперёк ствола. Стрелок, у которого цель круче AIM_TAN (≈ 35° от горизонтали), перед
+# выстрелом сдвигается по горизонтали в точку, откуда цель в пределах угла (дальность не превышается), и стреляет оттуда;
+# дольше AIM_SHIFT_MAX сек не ищет (цель убегает / путь закрыт) — стреляет как стоит
+const AIM_TAN: float = 0.7
+const AIM_SHIFT_MAX: float = 1.5
 const STEP_DIP: float = 0.06
+# Тень откликается на шаг (17.11.2026, «на бегу летают»): на ступне — темнее и шире (вес на земле), в середине шага (корпус
+# выпрямился) — бледнее и уже; step_lift 0..1 считает _process по той же фазе, что и приседание корпуса
+const STEP_SHADOW_FADE: float = 0.45
+const STEP_SHADOW_SHRINK: float = 0.16
 const STEPS_PER_CYCLE: float = 2.0
 # Бойцы отряда бьют вразнобой, а не залпом: первый удар после входа в ATTACK — со сдвигом
 # до этой доли перезарядки (доля бойца — по номеру в отряде, золотое сечение: без случайности)
@@ -100,6 +134,7 @@ var parent_squad: Squad     # отряд которому принадлежит
 var current_state: State = State.IDLE
 var previous_state: State = State.IDLE
 var attack_timer: float = 0.0
+var _run_k: float = 0.0           # 0..1 разгон бега (вид)
 var attack_stagger: float = 0.0   # доля сдвига первого удара [0, 1) — номер бойца в отряде
 const VISION_EVERY: int = 2       # марш: поиск врага в поле зрения раз в столько тиков (Soldier._state_move)
 var _vision_wait: int = -1        # тиков до следующего поиска; −1 — сдвиг ещё не задан (по attack_stagger)
@@ -152,9 +187,9 @@ var extra_on_hit_status_duration: float = 0.0
 # Особые бонусы и минусы ордена / бога и их зданий (решение пользователя 18.10.2026) — на этот бой:
 var damage_taken_mult: float = 1.0   # множитель получаемого урона (Slaanesh: ×1.1)
 var lifesteal: float = 0.0           # доля урона ближнего боя, которая лечит бойца (Чаша крови)
-# Благословения богов Хаоса и Котёл Нургла (решение пользователя 25.10.2026, ChaosGods) — на этот бой:
+# Благословения богов Хаоса и Котёл Дедушки Тысячи (решение пользователя 25.10.2026, ChaosGods) — на этот бой:
 var bonus_poison_power: float = 0.0  # яд в атаках поверх своего эффекта, ур/с (ChaosGods.POISON_TIME)
-var charm_chance: float = 0.0        # шанс поработить цель при попадании (Слаанеш)
+var charm_chance: float = 0.0        # шанс поработить цель при попадании (Король Второго Акта)
 var charmed: bool = false            # порабощён: бьётся за отряд, который поработил, после боя — не боец отряда
 # Эффекты на бойце (Vfx) — только вид: статусы, оглушение / каст, лечение
 var _status_vfx: Dictionary = {}   # статус → Vfx
@@ -253,6 +288,7 @@ const OUTLINE_WORLD_PX: float = 0.9
 # {tint, sat, knee, ao, light, shade, grad, light_color}. Пикселизация (пиксель арта PIXEL_WORLD_PX px мира, шейдер
 # pix) выключена — 0 (решение пользователя 08.11.2026, Screenshot 2026-11-08 092343: сетка в мире, при зуме камеры
 # бойцы — размытые кляксы, не узнать); > 0 — включает
+const UNIT_SHARPEN: float = 1.5      # резкость бойцов (нерезкая маска в UNIT_SHADER)
 const PIXEL_WORLD_PX: float = 0.0
 const UNIT_AO_FROM: float = 0.72   # затемнение к ногам: доля высоты кадра, откуда начинается
 # Отсвет костров и свечения поля (IsoGridRenderer.light_at) на теле: раз в LIGHT_EVERY с, self_modulate спрайта
@@ -265,6 +301,12 @@ uniform float armor = 0.0;
 uniform float target_hue = 0.0;
 uniform float sat_mult = 1.0;
 uniform float val_mult = 1.0;
+uniform float body_mix = 0.0;                       // тёмная нейтральная броня → тон ордена (Chapters "armor"."body")
+uniform vec3 body_hsv = vec3(0.0, 0.0, 1.0);        // тон, + насыщенность, × яркость
+uniform vec4 protect = vec4(0.0);                   // участок кадра в UV (x, y, ширина, высота), который цвет братства не трогает (лицо, мех)
+uniform float body_cap = 1.0;                       // мягкий потолок яркости тела: светлые бойцы (особые отряды) не светлее тёмных
+uniform float trim_mix = 0.0;                       // золотая отделка листа → цвет ордена ("armor"."trim")
+uniform vec3 trim_hsv = vec3(0.12, 1.0, 1.0);       // тон, × насыщенность, × яркость
 uniform float rim_px = 0.0;
 uniform vec3 rim_color = vec3(1.0);
 uniform float rim_strength = 0.5;
@@ -288,11 +330,34 @@ uniform float soften = 0.0;
 // отражённый враг освещён так же): верхние кромки светлее (vol_light, к цвету vol_color), нижние и боковые
 // темнее (vol_shade), корпус светлее к плечам (vol_grad)
 uniform float pix = 0.0;
+uniform float sharpen = 0.0;   // резкость (18.11.2026, «модели мыльные»): нерезкая маска — сжатие листа до ~31 px размывало мелочь
+// Стилизация 12.11.2026 (решение пользователя «бойцы — объём и свет», «здания и поле — единая палитра»):
+// bands — светотень ступенями: яркость пикселя к середине своей ступени (bands ступеней), доля band_mix — как
+// рисованный пиксель-арт в 2–3 тона; pal_mix — нейтральные (ненасыщенные) цвета к палитре расы pal_ramp по
+// яркости (gradient map), насыщенные акценты — золото, синий ордена, огонь — как были. 0 — выключено
+uniform float bands = 0.0;
+uniform float band_mix = 0.0;
+uniform sampler2D pal_ramp : source_color, filter_linear, repeat_disable;
+uniform float pal_mix = 0.0;
+uniform float pal_range = 1.0;
+// Стилизация зданий 12.11.2026 (решение пользователя «пройдись по моделькам зданий»): style_sat — насыщенность
+// краски (золото, жёлтый Imperial Fists, красный, синий ордена) к тону поля; свечение (почти белое по яркости и
+// насыщенное: плазма, огонь, варп) — как было, glow_keep 1 — беречь его. 1 / 0 — выключено
+uniform float style_sat = 1.0;
+uniform float glow_keep = 0.0;
 uniform vec3 env_tint = vec3(1.0);
 uniform float vol_light = 0.0;
 uniform float vol_shade = 0.0;
 uniform float vol_grad = 0.0;
 uniform vec3 vol_color = vec3(1.0);
+// Направленный свет (WorldLight, решение пользователя 12.11.2026 «свет и тени»): to_light — к свету на экране;
+// кромки силуэта со стороны света светлее (dir_light, к цвету dir_color), с теневой — темнее полосой dir_reach
+// клеток (dir_shade). Отражённый спрайт (враг смотрит влево) — по знаку dFdx(UV.x): свет с той же стороны экрана
+uniform vec2 to_light = vec2(0.0);
+uniform float dir_light = 0.0;
+uniform float dir_shade = 0.0;
+uniform float dir_reach = 3.0;
+uniform vec3 dir_color = vec3(1.0);
 // Статусы на теле (решение пользователя 08.11.2026, EFFECTS_NEEDED 7.1–7.4 — кодом): 0/1 по статусу, вид по TIME:
 // горение — мерцание огня, сильнее к верху; яд — зелёный налёт от ног, пульс; замедление — иней; усиление —
 // контур в цвет st_emp_color и пульсирует
@@ -326,6 +391,13 @@ void fragment() {
 	vec4 c = COLOR;   // уже текстура × modulate — texture() ещё раз дал бы цвет в квадрат
 	vec2 uv = UV;
 	float lod = -1.0;
+	if (sharpen > 0.0 && pix <= 0.0) {
+		vec2 px = UV / TEXTURE_PIXEL_SIZE;
+		float foot = max(length(dFdx(px)), length(dFdy(px)));
+		float l0 = log2(max(foot, 1.0));
+		vec4 soft = textureLod(TEXTURE, UV, l0 + 1.0) * tint;
+		c.rgb = clamp(c.rgb + (c.rgb - soft.rgb) * sharpen * c.a, 0.0, 1.5);
+	}
 	vec2 cell = TEXTURE_PIXEL_SIZE * max(outline_px, 1.0);   // шаг объёма: без пикселизации — толщина контура
 	if (pix > 0.0) {
 		cell = TEXTURE_PIXEL_SIZE * pix;
@@ -354,6 +426,26 @@ void fragment() {
 		float blue = smoothstep(0.50, 0.55, hsv.x) * (1.0 - smoothstep(0.72, 0.77, hsv.x)) * smoothstep(0.2, 0.35, hsv.y);
 		vec3 col = hsv2rgb(vec3(target_hue, clamp(hsv.y * sat_mult, 0.0, 1.0), clamp(hsv.z * val_mult, 0.0, 1.0)));
 		c.rgb = mix(c.rgb, col, blue);
+		// Листы Космодесанта после перерисовки — вороненая сталь с золотом: тело (нейтральные не слишком тёмные и не
+		// белые пиксели; чёрный контур и блики остаются) и отделка (золото: тон 0.09–0.18, насыщенное) — цвета ордена
+		// (17.11.2026: Terminator, Apothecary, Librarian, Chaplain, Chapter Master, Dreadnought, Land Speeder — серо-сиреневая броня
+		// светлее 0.62 оставалась как нарисована, а не цвета братства: маска по яркости шире, до 0.95)
+		float neutral = (1.0 - smoothstep(0.18, 0.40, hsv.y)) * smoothstep(0.07, 0.14, hsv.z) * (1.0 - smoothstep(0.80, 0.95, hsv.z));
+		// Лица и волосы не красятся (решение пользователя 17.11.2026: «только одежду и доспехи»): тёплая кожа и волосы — тон
+		// 0.02–0.11, насыщенность от 0.24, яркость 0.4–0.85 — в верхних 40% кадра (голова; в нижней части такие тона — плащи
+		// и ткань, их красим) из маски исключены
+		float skin = smoothstep(0.015, 0.03, hsv.x) * (1.0 - smoothstep(0.10, 0.12, hsv.x)) * smoothstep(0.20, 0.26, hsv.y)
+			* smoothstep(0.35, 0.45, hsv.z) * (1.0 - smoothstep(0.82, 0.9, hsv.z)) * (1.0 - smoothstep(0.36, 0.44, UV.y));
+		neutral *= 1.0 - skin;
+		vec2 pin = step(protect.xy, UV) * step(UV, protect.xy + protect.zw);
+		neutral *= 1.0 - pin.x * pin.y * step(0.0001, protect.z);
+		float bv = hsv.z * body_hsv.z;
+		bv = body_cap < 0.99 ? body_cap * tanh(bv / body_cap) : bv;
+		vec3 bcol = hsv2rgb(vec3(body_hsv.x, clamp(hsv.y + body_hsv.y, 0.0, 1.0), clamp(bv, 0.0, 1.0)));
+		c.rgb = mix(c.rgb, bcol, neutral * body_mix);
+		float gold = smoothstep(0.08, 0.10, hsv.x) * (1.0 - smoothstep(0.17, 0.20, hsv.x)) * smoothstep(0.35, 0.5, hsv.y) * smoothstep(0.25, 0.4, hsv.z);
+		vec3 tcol = hsv2rgb(vec3(trim_hsv.x, clamp(hsv.y * trim_hsv.y, 0.0, 1.0), clamp(hsv.z * trim_hsv.z, 0.0, 1.0)));
+		c.rgb = mix(c.rgb, tcol, gold * trim_mix);
 	}
 	if (rim_px > 0.0) {
 		vec2 d = pix > 0.0 ? cell : TEXTURE_PIXEL_SIZE * rim_px;
@@ -381,6 +473,34 @@ void fragment() {
 		c.rgb = mix(c.rgb, c.rgb * 1.45 + vol_color * 0.1, lit * vol_light);
 		c.rgb *= 1.0 - shade * vol_shade;
 		c.rgb *= 1.0 + vol_grad * (0.55 - UV.y);
+	}
+	if (dir_light > 0.0 || dir_shade > 0.0) {
+		float solid = step(0.5, c.a);
+		vec2 dl = normalize(to_light) * vec2(dFdx(UV.x) < 0.0 ? -1.0 : 1.0, 1.0) * cell;
+		float lit = (1.0 - step(0.5, ALPHA_AT(uv + dl * 1.5))) * solid;
+		float back = max(1.0 - step(0.5, ALPHA_AT(uv - dl * 1.5)),
+			(1.0 - step(0.5, ALPHA_AT(uv - dl * dir_reach))) * 0.55) * solid * (1.0 - lit);
+		c.rgb = mix(c.rgb, c.rgb * 1.3 + dir_color * 0.14, lit * dir_light);
+		c.rgb *= 1.0 - back * dir_shade;
+	}
+	if (style_sat < 1.0) {
+		float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+		float mx = max(c.r, max(c.g, c.b));
+		float sat = (mx - min(c.r, min(c.g, c.b))) / max(mx, 1e-4);
+		float emissive = smoothstep(0.82, 0.97, mx) * smoothstep(0.45, 0.7, sat) * glow_keep;
+		c.rgb = mix(vec3(l), c.rgb, mix(style_sat, 1.0, emissive));
+	}
+	if (bands > 0.0) {
+		float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+		float lq = (floor(l * bands) + 0.5) / bands;
+		c.rgb *= mix(1.0, clamp(lq / max(l, 0.02), 0.6, 1.6), band_mix);
+	}
+	if (pal_mix > 0.0) {
+		float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+		float mx = max(c.r, max(c.g, c.b));
+		float sat = (mx - min(c.r, min(c.g, c.b))) / max(mx, 1e-4);
+		vec3 p = texture(pal_ramp, vec2(clamp(l * pal_range, 0.0, 1.0), 0.5)).rgb;
+		c.rgb = mix(c.rgb, p, pal_mix * (1.0 - smoothstep(0.2, 0.5, sat)));
 	}
 	if (st_burn + st_poison + st_slow + st_emp > 0.0) {
 		float solid = step(0.5, c.a);
@@ -452,6 +572,7 @@ var _steps: int = 0
 var _recoil_left: float = 0.0   # сек до конца отдачи (_process, время дерева)
 var _sprite_k: float = 1.0       # масштаб спрайта без шага и отдачи (_load_animations)
 var _flash_left: float = 0.0   # сек до конца вспышки попадания (_process: время дерева, на паузе стоит)
+var step_lift: float = 0.0   # 0 — ступня на земле, 1 — середина шага (тень SoldierShadows бледнее и уже)
 var _walk_cycle_time: float = 0.0   # длина цикла бега листа, сек (0 — бега нет); темп бега — walk_anim_scale
 
 static func _get_frames(sprite_path: String) -> SpriteFrames:
@@ -536,11 +657,20 @@ func _process(delta: float) -> void:
 		_flash_left -= delta
 		if _flash_left <= 0.0:
 			sprite.material = _base_material
-	if sprite.animation == &"walk" and _leap_prev >= 1.0:
+	# Разгон и торможение бега, наклон корпуса (вид): без шага анимации сходит на нет за RUN_DECEL
+	var running := sprite.animation == &"walk" and _leap_prev >= 1.0
+	if running:
+		_run_k = move_toward(_run_k, 1.0, delta / RUN_ACCEL)
+	elif _run_k > 0.0:
+		_run_k = move_toward(_run_k, 0.0, delta / RUN_DECEL)
+	if _run_k > 0.0 or sprite.rotation != 0.0:
+		sprite.rotation = (-1.0 if sprite.flip_h else 1.0) * RUN_LEAN * _run_k if _leap_prev >= 1.0 else 0.0
+	if running:
 		# Шаг: плавная волна — ниже всего на ступне, выпрямился к середине шага (резкая посадка дёргала);
 		# и в бою, и на построении (BattleScene._deploy_army — бой ещё не идёт)
 		var phase := (sprite.frame + sprite.frame_progress) / sprite.sprite_frames.get_frame_count(&"walk")
-		sprite.scale.y = _sprite_k * (1.0 - STEP_DIP * 0.5 * (1.0 + cos(TAU * STEPS_PER_CYCLE * phase)))
+		sprite.scale.y = _sprite_k * (1.0 - STEP_DIP * (0.5 + 0.5 * _run_k) * 0.5 * (1.0 + cos(TAU * STEPS_PER_CYCLE * phase)))
+		step_lift = 0.5 * (1.0 - cos(TAU * STEPS_PER_CYCLE * phase))
 		var foot := int(phase * STEPS_PER_CYCLE)
 		if foot != _last_foot:   # нога встала — пыль (тяжёлые — каждый шаг, пехота — реже)
 			_last_foot = foot
@@ -548,15 +678,29 @@ func _process(delta: float) -> void:
 			var heavy := "vehicle" in data.tags or data.sprite_scale >= HEAVY_DUST_SCALE
 			if heavy or _steps % DustLayer.INFANTRY_EVERY == 0:
 				DustLayer.puff(global_position, (6.0 if heavy else 3.5) * data.sprite_scale)
+			if "vehicle" in data.tags and _steps % 2 == 0 and BattleManager.is_battle_running():   # след техники (18.11.2026)
+				ScarLayer.blood(feet(), 3.5 * data.sprite_scale, Color(0.02, 0.015, 0.02, 0.35))
 			if data.special_kind != "":   # шаг примарха: земля дрожит и трескается
 				_boss_step()
+			elif heavy:   # шаги — звук (AudioManager: предел частоты на событие, сотни бойцов не захлёбывают)
+				AudioManager.play("step_heavy")
+			elif _steps % DustLayer.INFANTRY_EVERY == 0:
+				AudioManager.play("step")
 	if _recoil_left > 0.0:
 		_tick_recoil(delta)
-	if not _has_tick_from or current_state == State.DEAD or not BattleManager.is_battle_running():
+	if not _has_tick_from or current_state == State.DEAD:
+		return
+	if _drawn_between and _tick_from == _tick_to and _leap_prev >= 1.0:
+		return   # стоит и уже учтён в этом тике — дальше нечего считать (и автолоад не спрашиваем)
+	if not BattleManager.is_battle_running():
 		return
 	if not _drawn_between:
 		_tick_to = global_position
 		_drawn_between = true
+	# Стоит на месте (в сшибке — большинство): узел уже в своей точке. Запись позиции будит пересчёт трансформаций
+	# детей и сортировку по глубине у каждого бойца каждый кадр — оптимизация 14.11.2026
+	if _tick_from == _tick_to and _leap_prev >= 1.0:
+		return
 	var alpha := BattleManager.get_tick_alpha()
 	global_position = _tick_from.lerp(_tick_to, alpha)
 	if _leap_prev < 1.0:   # дуга прыжка: спрайт над тенью
@@ -570,12 +714,14 @@ func _boss_step() -> void:
 		return
 	_step_shake_at = now
 	_shake_camera(BOSS_STEP_SHAKE)
-	BossFx.cracks(global_position, TARGET_SPRITE_HEIGHT * data.sprite_scale * 0.35, BOSS_STEP_CRACK_LIFE, data.special_color)
+	AudioManager.play("boss_step")
+	BossFx.cracks(feet(), TARGET_SPRITE_HEIGHT * data.sprite_scale * 0.35, BOSS_STEP_CRACK_LIFE, data.special_color)
 
 # Начало тика боя: узел — обратно в логическую позицию, от неё отсчитывается следующий шаг
 func restore_tick_position() -> void:
 	if _drawn_between:
-		global_position = _tick_to
+		if _tick_from != _tick_to:   # стоял — узел и так в логической точке
+			global_position = _tick_to
 		_drawn_between = false
 	_tick_from = global_position
 	_has_tick_from = true
@@ -586,6 +732,7 @@ func restore_tick_position() -> void:
 func _on_animation_changed() -> void:
 	sprite.speed_scale = 1.0
 	sprite.scale.y = _sprite_k   # шаг (STEP_DIP) — только у бега
+	step_lift = 0.0
 
 # Множитель скорости анимации бега при скорости speed (px/с): цикл листа — за WALK_CYCLE_HEIGHTS ростов
 # (зовётся каждый тик у каждого идущего — длина цикла посчитана в _load_animations)
@@ -633,7 +780,8 @@ func _load_animations() -> void:
 	sprite.scale = Vector2(k, k)
 	_sprite_k = k
 	# Ноги — в точке бойца (стоит на тайле, а не висит центром над ним)
-	sprite.offset = Vector2(0, -base_h / 2.0)
+	# Модель чуть «втоплена» в землю (решение пользователя 18.11.2026): спрайт ниже точки ног на GROUND_SINK px мира
+	sprite.offset = Vector2(0, -base_h / 2.0 + GROUND_SINK / maxf(k, 0.001))
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	sprite.modulate = data.tint
 	queue_redraw()
@@ -757,7 +905,7 @@ func _land_jump() -> void:
 		if data.jump_stun > 0.0:
 			e.apply_stun(data.jump_stun)
 	_clear_jump_trail()
-	Vfx.spawn(_world_parent(), "jump_land", global_position, data.sprite_scale * EFFECT_SCALE)
+	Vfx.spawn(_world_parent(), "jump_land", feet(), data.sprite_scale * EFFECT_SCALE)
 	AudioManager.play("jump_land")
 	DustLayer.puff(global_position, 8.0 * data.sprite_scale, 3, 6.0)
 	request_hitstop(self)
@@ -802,6 +950,11 @@ const ENRAGE_AT: float = 0.5           # ярость с этой доли HP
 const ENRAGE_COOLDOWN_MULT: float = 0.67   # перезарядка приёма в ярости (в 1.5 раза чаще)
 const ENRAGE_FIRST: float = 1.0        # после рёва приём не позже чем через столько
 const SCAR_RADIUS: float = 4.5          # px мира — пятно крови павшего (× sprite_scale; ScarLayer)
+const CORPSE_HOLD: float = 2.5          # тело бойца лежит на последнем кадре смерти
+const CORPSE_FADE: float = 1.5          # … потом темнеет в тон земли и тает
+const CORPSE_TINT := Color(0.3, 0.3, 0.34, 0.0)
+const MAX_CORPSES: int = 80             # больше — прежнее поведение (пропадают сразу), иначе дорого по отрисовке
+static var _corpses: int = 0
 const BOSS_CORPSE_HOLD: float = 1.5    # тело примарха лежит на последнем кадре смерти
 const BOSS_CORPSE_FADE: float = 2.0    # … потом темнеет и тает
 const BOSS_CORPSE_TINT := Color(0.35, 0.36, 0.42, 0.0)   # к тону грунта, прозрачно
@@ -887,6 +1040,7 @@ func is_using_special() -> bool:
 
 # Кадр срабатывания: урон по виду приёма, статус, оглушение; вид — свет, тряска, стоп-кадр
 func _release_special() -> void:
+	WorldGrade.pulse(0.55)   # приём босса — удар по экрану (аберрация)
 	var dmg := _roll_damage() * data.special_mult
 	var victims: Array = []
 	var foes: Array = SoldierRegistry.get_alive_soldiers_of_team(1 - team)
@@ -932,8 +1086,10 @@ func _special_bolt(dmg: float) -> void:
 	if not is_instance_valid(_special_target) or parent_squad == null:
 		return
 	var shot := Projectile.launch(parent_squad.get_parent(), data.special_projectile, _muzzle_point(), _special_target,
-		Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * _special_target.data.sprite_scale))
+		Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * _special_target.data.sprite_scale + GROUND_SINK))
 	shot.source = parent_squad
+	if data.projectile in ["bolt", "spark"] and "vehicle" not in data.tags:   # гильза из затвора (18.11.2026)
+		Casings.eject(parent_squad.get_parent(), _muzzle_point(), -1.0 if sprite.flip_h else 1.0)
 	shot.damage = dmg
 	shot.splash_radius = data.special_radius
 	shot.splash_team = 1 - team
@@ -989,7 +1145,7 @@ func _special_view() -> void:
 			Vfx.spawn(parent, "ground_slam", global_position, k)
 			Vfx.spawn(parent, "explosion", global_position, k * 0.8)
 	BossFx.shockwave(global_position, data.special_radius, data.special_color)
-	BossFx.cracks(global_position, data.special_radius * 0.8, BOSS_CRACK_LIFE, data.special_color)
+	BossFx.cracks(feet(), data.special_radius * 0.8, BOSS_CRACK_LIFE, data.special_color)
 	ScarLayer.scorch(global_position, data.special_radius * 0.35)   # шрам поля от удара приёма
 	AudioManager.play("boss_special")
 	IsoGridRenderer.flash_light(global_position, Color(data.special_color, 0.95), data.special_radius * 1.6, 0.4)
@@ -1128,10 +1284,11 @@ func _state_move(delta: float) -> void:
 # -------------------------------------------------------
 # ШТУРМ ЦИТАДЕЛИ — армия игрока пала, враги бьются с цитаделью
 # -------------------------------------------------------
+# Порядок проверок — по цене (зовётся каждым врагом каждый тик): чаще всего у игрока есть бойцы — дальше не идём
 func _is_sieging() -> bool:
-	return team == GameConstants.TEAM_ENEMY and BattleManager.has_citadel() \
-		and BattleManager.citadel_hp > 0.0 \
-		and SoldierRegistry.get_alive_soldiers_of_team(1 - team).is_empty()
+	return team == GameConstants.TEAM_ENEMY \
+		and SoldierRegistry.get_alive_soldiers_of_team(1 - team).is_empty() \
+		and BattleManager.citadel_hp > 0.0 and BattleManager.has_citadel()
 
 func _citadel_in_range() -> bool:
 	return global_position.distance_to(BattleManager.citadel.global_position) \
@@ -1213,6 +1370,8 @@ func _state_attack(delta: float) -> void:
 	_face(target.global_position - global_position)
 	attack_timer -= delta
 	if attack_timer <= TIMER_EPSILON:
+		if _aim_shift(delta):
+			return   # встаёт на линию выстрела; перезарядка уже готова — ударит, как встанет
 		attack_timer = 1.0 / (current_attack_speed * get_attack_speed_mult())
 		if data.cast_time > 0.0:
 			transition_to(State.CASTING)   # замах/каст перед ударом
@@ -1220,6 +1379,32 @@ func _state_attack(delta: float) -> void:
 			_do_attack()
 	if data.mobile_fire and current_state == State.ATTACK and _has_valid_target():
 		_strafe_around(target.global_position, delta)
+
+# Стрелок встаёт так, чтобы цель была в пределах угла ствола (AIM_TAN); true — ещё идёт на позицию (стрелять рано)
+var _aim_shift_time: float = 0.0
+func _aim_shift(delta: float) -> bool:
+	if data.projectile == "" or data.mobile_fire or data.special_kind != "" or not _has_valid_target():
+		return false
+	var d: Vector2 = target.global_position - global_position
+	if absf(d.x) * AIM_TAN >= absf(d.y):
+		_aim_shift_time = 0.0
+		return false   # цель в пределах угла ствола
+	if _aim_shift_time >= AIM_SHIFT_MAX:
+		_aim_shift_time = 0.0
+		return false   # не вышло за отведённое время — стреляет как стоит
+	var needed: float = absf(d.y) / AIM_TAN
+	if sqrt(needed * needed + d.y * d.y) > current_attack_range * 0.97:
+		return false   # из этой дальности ровно не встать
+	var side: float = signf(d.x) if absf(d.x) > 0.5 else (-1.0 if sprite.flip_h else 1.0)
+	var spot := Vector2(target.global_position.x - side * needed * 1.05, global_position.y)
+	_aim_shift_time += delta
+	var before := global_position
+	_move_towards(spot, delta)
+	_face(target.global_position - global_position)   # лицом к цели, а не по ходу сдвига
+	if global_position.is_equal_approx(before):
+		_aim_shift_time = AIM_SHIFT_MAX   # путь закрыт (стена) — не стоять
+		return false
+	return true
 
 # Каст: удар срабатывает через cast_time. Цель умерла — каст сорван.
 func _state_casting(delta: float) -> void:
@@ -1283,7 +1468,7 @@ func _tick_support(delta: float) -> void:
 			patient = ally
 	if patient:
 		patient.heal(current_heal_per_second * delta)
-	_show_heal_animation(patient != null)
+	_show_heal_animation(patient != null, patient)
 	# луч к раненому (себя лечит — без луча); только вид
 	if patient and patient != self and heal_beam == null:
 		heal_beam = HealBeam.for_healer(self)
@@ -1292,11 +1477,15 @@ func _tick_support(delta: float) -> void:
 
 # Лечение листа (Apothecary: ряд heal, если есть) — пока лечит и стоит (стойка между ударами);
 # бег и удар его перебивают, кончил лечить — снова стойка. Только вид
-func _show_heal_animation(healing: bool) -> void:
+func _show_heal_animation(healing: bool, patient: Soldier = null) -> void:
 	if not sprite.sprite_frames.has_animation("heal"):
 		return
 	if healing and sprite.animation in ["idle", "heal"]:
 		_play_animation("heal")
+		# Лицом к раненому (решение пользователя 11.11.2026: луч — из нартециума, а не из груди; прибор в руке
+		# со стороны взгляда — иначе луч шёл бы назад сквозь тело)
+		if is_instance_valid(patient) and patient != self:
+			_face(patient.global_position - global_position)
 	elif not healing and sprite.animation == "heal":
 		_play_animation("idle")
 
@@ -1345,7 +1534,7 @@ func _draw() -> void:
 	for effect in status_effects:
 		stacks += status_effects[effect]["stacks"]
 	var dot_x := -stacks * (STATUS_DOT_R * 2.0 + 1.0) / 2.0
-	var dot_y := -TARGET_SPRITE_HEIGHT * data.sprite_scale - STATUS_DOT_GAP
+	var dot_y := -TARGET_SPRITE_HEIGHT * data.sprite_scale - STATUS_DOT_GAP + GROUND_SINK
 	for effect in status_effects:
 		for i in status_effects[effect]["stacks"]:
 			draw_circle(Vector2(dot_x + STATUS_DOT_R, dot_y), STATUS_DOT_R, StatusEffects.COLORS.get(effect, Color.WHITE))
@@ -1356,7 +1545,7 @@ func _draw() -> void:
 # -------------------------------------------------------
 func _move_towards(point: Vector2, delta: float) -> void:
 	var direction = (point - global_position).normalized()
-	var speed = current_move_speed * get_move_speed_mult()   # замедление (ауры зданий игрока)
+	var speed = current_move_speed * get_move_speed_mult() * (1.0 + (attack_stagger - 0.5) * PACE_SPREAD)   # замедление (ауры зданий игрока); свой шаг у каждого
 	var step: Vector2 = direction * speed * delta
 	# Стена владений (решение пользователя 22.10.2026): враг снаружи не входит через целое звено — встаёт и ломает.
 	# Точка снаружи, а путь срезает угол владений — обходит вдоль звена (иначе стоял бы: ломать незачем, идти некуда)
@@ -1382,7 +1571,7 @@ func _move_towards(point: Vector2, delta: float) -> void:
 	sprite.speed_scale = walk_anim_scale(speed)
 
 func _face(direction: Vector2) -> void:
-	if absf(direction.x) > 0.01:
+	if absf(direction.x) > FACE_TURN_DOT:
 		sprite.flip_h = direction.x < 0.0
 
 func _has_valid_target() -> bool:
@@ -1411,7 +1600,7 @@ func apply_knockback(direction: Vector2, force: float) -> void:
 		return
 	knockback_velocity = direction.normalized() * force
 	transition_to(State.KNOCKBACK)
-	Vfx.spawn(_world_parent(), "ground_slam", global_position, data.sprite_scale * EFFECT_SCALE)
+	Vfx.spawn(_world_parent(), "ground_slam", feet(), data.sprite_scale * EFFECT_SCALE)
 	request_hitstop(self)
 
 # -------------------------------------------------------
@@ -1423,7 +1612,7 @@ func _do_attack() -> void:
 	if not is_instance_valid(target):
 		return
 	_play_attack_animation()
-	var shot := _shoot_projectile(target, Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * target.data.sprite_scale))
+	var shot := _shoot_projectile(target, Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * target.data.sprite_scale + GROUND_SINK))
 	if shot:
 		shot.damage = _roll_damage()
 		shot.stun = data.on_hit_stun
@@ -1494,12 +1683,22 @@ func _land_melee_hit(victim: Soldier) -> void:
 	if lifesteal > 0.0:
 		heal(dmg * lifesteal)
 		BuildingFx.lifesteal(self, data.sprite_scale)   # кровавые нити к груди (Чаша крови)
-	var body := victim.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * victim.data.sprite_scale)
+	var body := victim.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * victim.data.sprite_scale + GROUND_SINK)
 	Vfx.spawn_blood(_world_parent(), body, victim.data, false, EFFECT_SCALE)
 	Vfx.spawn(_world_parent(), "slash", body, EFFECT_SCALE, (victim.global_position - global_position).angle())
+	_hit_debris(victim, body)
+	if boss or data.on_hit_knockback > 0.0 or "vehicle" in data.tags:   # тяжёлый удар — волна по земле и пыль (18.11.2026)
+		BossFx.shockwave(victim.feet(), 26.0 * data.sprite_scale, Palette.DUST_PALE)
+		DustLayer.puff(victim.feet(), 7.0 * data.sprite_scale, 3, 8.0)
 	_apply_on_hit_effects()
 	if is_instance_valid(prev_target):
 		target = prev_target
+
+# Удар вплотную (решение пользователя 18.11.2026): пыль из-под ног жертвы, по броне техники — искры
+func _hit_debris(victim: Soldier, body: Vector2) -> void:
+	DustLayer.puff(victim.feet(), 5.0 * victim.data.sprite_scale, 1, 4.0)
+	if "vehicle" in victim.data.tags:
+		Vfx.spawn(_world_parent(), "hit_spark", body, EFFECT_SCALE)
 
 # Снаряд из ствола (метаданные muzzle кадров) на кадре вспышки (shot_frame);
 # null — юнит без снаряда (ближний бой)
@@ -1523,7 +1722,26 @@ func _muzzle_point() -> Vector2:
 	var muzzle: Vector2 = frames.get_meta("muzzle", Vector2(base_h * 0.3, -base_h * 0.5))
 	if sprite.flip_h:
 		muzzle.x = -muzzle.x
-	return global_position + muzzle * _sprite_k
+	return global_position + muzzle * _sprite_k + Vector2(0.0, GROUND_SINK)   # спрайт втоплен — ствол ниже на столько же
+
+# На сколько спрайт втоплен — эффекты на теле (Vfx.attach) смещаются так же
+func body_sink() -> float:
+	return GROUND_SINK
+
+# Точка ног с учётом втапливания — эффекты у земли
+func feet() -> Vector2:
+	return global_position + Vector2(0.0, GROUND_SINK)
+
+# Откуда луч лечения (HealBeam): metadata/heal_origin листа — прибор в руке (Apothecary — нартециум; решение
+# пользователя 11.11.2026), от центра низа кадра, как ствол; нет — грудь (HealBeam.CHEST роста)
+func heal_point() -> Vector2:
+	var frames := sprite.sprite_frames
+	if frames == null or not frames.has_meta("heal_origin"):
+		return global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * HealBeam.CHEST * data.sprite_scale + GROUND_SINK)
+	var origin: Vector2 = frames.get_meta("heal_origin")
+	if sprite.flip_h:
+		origin.x = -origin.x
+	return global_position + origin * _sprite_k + Vector2(0.0, GROUND_SINK)
 
 # Урон одного удара: аура союзников + разброс damage_variance
 func _roll_damage() -> float:
@@ -1542,13 +1760,13 @@ func _apply_on_hit_effects() -> void:
 		target.apply_status(st[0], st[1], st[2])
 		if st[0] == StatusEffects.BURNING:   # поджог (Salamanders) — язык пламени по удару
 			Vfx.spawn(_world_parent(), "flame_burst",
-				target.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * target.data.sprite_scale),
+				target.global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * 0.45 * target.data.sprite_scale + GROUND_SINK),
 				EFFECT_SCALE, (target.global_position - global_position).angle())
 	if data.on_hit_knockback > 0.0:
 		target.apply_knockback(target.global_position - global_position, data.on_hit_knockback)
 	apply_blessing_hit(target, bonus_poison_power, charm_chance, parent_squad)
 
-# Яд благословения / Котла и порабощение Слаанеш при попадании (удар — здесь, снаряд — Projectile._impact)
+# Яд благословения / Котла и порабощение Король Второго Акта при попадании (удар — здесь, снаряд — Projectile._impact)
 static func apply_blessing_hit(victim: Soldier, poison: float, charm: float, by: Squad) -> void:
 	if not is_instance_valid(victim) or victim.current_state == State.DEAD:
 		return
@@ -1561,7 +1779,7 @@ static func apply_blessing_hit(victim: Soldier, poison: float, charm: float, by:
 func can_be_charmed(by: Squad) -> bool:
 	return is_instance_valid(by) and by.is_alive() and team != by.team and not charmed 		and not ("elite" in data.tags or "commander" in data.tags)
 
-# Порабощён (благословение Слаанеш): уходит из своего отряда в отряд, который его поработил, и бьётся за него до
+# Порабощён (благословение Короля Второго Акта): уходит из своего отряда в отряд, который его поработил, и бьётся за него до
 # конца боя; после выигранного боя порабощённые возвращают павших этого отряда или лечат его
 # (BattleManager.apply_thralls). Бойцом отряда не становится — sync_army_from_squads его пропускает
 const CHARM_TINT = Color(1.0, 0.72, 0.92)
@@ -1617,13 +1835,21 @@ func take_damage(amount: float, flash: bool = true, big: bool = false) -> void:
 		var absorbed = minf(shield, amount)
 		shield -= absorbed
 		amount -= absorbed
+		if shield <= 0.0:   # щит кончился — лопается (решение пользователя 09.11.2026, только вид)
+			BuildingFx.shield_break(self, data.sprite_scale)
 	current_hp -= amount
 	if flash:
 		_flash_hit()
 		if amount >= FLOAT_MIN_DAMAGE and BattleManager.is_battle_running():
+			var ratio := amount / maxf(max_hp, 1.0)
+			var size := 1.0
+			if ratio >= FLOAT_HEAVY_RATIO:
+				size = FLOAT_HEAVY_SIZE
+			elif ratio >= FLOAT_MEDIUM_RATIO:
+				size = FLOAT_MEDIUM_SIZE
 			_float_text("%d" % roundi(amount),
 				FLOAT_HIT_TO_PLAYER if team == GameConstants.TEAM_PLAYER else FLOAT_HIT_TO_ENEMY,
-				BOSS_NUMBER_SIZE if big else 1.0)
+				BOSS_NUMBER_SIZE if big else size)
 	if current_hp <= 0.0:
 		if _try_revive():
 			return
@@ -1661,6 +1887,59 @@ static func unit_shader() -> Shader:
 		_unit_shader.code = UNIT_SHADER
 	return _unit_shader
 
+# Стилизация шейдером (решение пользователя 12.11.2026): светотень ступенями (bands) у бойцов и зданий, у зданий,
+# цитадели и капсулы — ещё палитра расы (pal_ramp). Значения — STYLE_DEFAULT + ключ темы "style"; kind — "unit"
+# (бойцы, продавец) или "building" (здания, цитадель, капсула)
+const STYLE_DEFAULT := {
+	# 16.11.2026 (решение пользователя: «шейдеры слишком видны»): светотень ступенями, палитра расы и направленный свет слабее
+	# (было: unit_band_mix 0.4, building_band_mix 0.3, building_pal_mix 0.35, unit_dir 0.5 / 0.3, building_dir 0.45 / 0.35)
+	"unit_bands": 5.0, "unit_band_mix": 0.2,
+	"building_bands": 5.0, "building_band_mix": 0.16, "building_pal_mix": 0.18, "pal_range": 1.6,
+	"building_sat": 0.9, "building_glow_keep": 1.0,   # краска зданий чуть глуше, свечение — нет (12.11.2026)
+	# Здания отделяются от грунта (решение пользователя 12.11.2026, `Screenshot 2026-11-12 143816.png`: «слишком
+	# сливаются с текстурами»): свет сверху по верхним кромкам силуэта (vol_light, тёплый vol_color) и ярче в целом
+	"building_light": 0.55, "building_light_color": Color(1.0, 0.86, 0.66), "building_gain": 1.12,
+	# Направленный свет (WorldLight, 12.11.2026): кромки к свету светлее, теневая сторона темнее
+	"unit_dir_light": 0.3, "unit_dir_shade": 0.18, "building_dir_light": 0.3, "building_dir_shade": 0.22,
+	"palette": [Color("07090e"), Color("141b26"), Color("2a3442"), Color("4b5566"), Color("7d8696"), Color("c9b48a")],
+}
+static var _ramps: Dictionary = {}   # раса → GradientTexture1D палитры
+static func apply_style(m: ShaderMaterial, kind: String) -> void:
+	var st: Dictionary = STYLE_DEFAULT.merged(FactionTheme.current().get("style", {}), true)
+	m.set_shader_parameter("bands", float(st.get(kind + "_bands", 0.0)))
+	m.set_shader_parameter("band_mix", float(st.get(kind + "_band_mix", 0.0)))
+	m.set_shader_parameter("style_sat", float(st.get(kind + "_sat", 1.0)))
+	m.set_shader_parameter("glow_keep", float(st.get(kind + "_glow_keep", 0.0)))
+	if st.has(kind + "_light"):
+		var lc: Color = st.get(kind + "_light_color", Color.WHITE)
+		m.set_shader_parameter("vol_light", float(st[kind + "_light"]))
+		m.set_shader_parameter("vol_color", Vector3(lc.r, lc.g, lc.b))
+	if st.has(kind + "_gain"):
+		var g := float(st[kind + "_gain"])
+		m.set_shader_parameter("env_tint", Vector3(g, g, g))
+	var tl: Vector2 = WorldLight.param("to_light")
+	var lc2: Color = WorldLight.param("color")
+	m.set_shader_parameter("to_light", tl)
+	m.set_shader_parameter("dir_light", float(st.get(kind + "_dir_light", 0.0)))
+	m.set_shader_parameter("dir_shade", float(st.get(kind + "_dir_shade", 0.0)))
+	m.set_shader_parameter("dir_color", Vector3(lc2.r, lc2.g, lc2.b))
+	var pal_mix: float = st.get(kind + "_pal_mix", 0.0)
+	m.set_shader_parameter("pal_mix", pal_mix)
+	if pal_mix <= 0.0:
+		return
+	var race: String = RunManager.player_faction
+	if not _ramps.has(race):
+		var g := Gradient.new()
+		var cols: Array = st["palette"]
+		g.offsets = PackedFloat32Array(range(cols.size()).map(func(i): return float(i) / (cols.size() - 1)))
+		g.colors = PackedColorArray(cols)
+		var t := GradientTexture1D.new()
+		t.gradient = g
+		t.width = 64
+		_ramps[race] = t
+	m.set_shader_parameter("pal_ramp", _ramps[race])
+	m.set_shader_parameter("pal_range", float(st["pal_range"]))
+
 # Только тёмный контур, как у бойцов (решение пользователя 24.10.2026: здания — с той же обводкой):
 # world_px px мира при масштабе спрайта sprite_scale, цвет color; материал общий из того же кэша
 static func outline_material(sprite_scale: float, world_px: float = OUTLINE_WORLD_PX,
@@ -1676,8 +1955,8 @@ static func outline_material(sprite_scale: float, world_px: float = OUTLINE_WORL
 	return _unit_materials[key]
 
 func _unit_material(flashing: bool) -> ShaderMaterial:
-	var key := "%s|%d|%d|%s|%d|%s|%d" % [_armor_chapter, _rim_px, _outline_px, flashing, _pix, RunManager.player_faction,
-		_status_mask]
+	var key := "%s|%d|%d|%s|%d|%s|%d|%s" % [_armor_chapter, _rim_px, _outline_px, flashing, _pix, RunManager.player_faction,
+		_status_mask, data.armor_protect if _armor_chapter != "" else ""]
 	if not _unit_materials.has(key):
 		if _unit_shader == null:
 			_unit_shader = Shader.new()
@@ -1687,9 +1966,22 @@ func _unit_material(flashing: bool) -> ShaderMaterial:
 		if _armor_chapter != "":
 			var armor: Dictionary = Chapters.get_chapter(_armor_chapter).get("armor", {})
 			m.set_shader_parameter("armor", 1.0)
+			if data.armor_protect.has_area() and sprite.sprite_frames.has_animation("idle"):
+				var canvas: Vector2 = sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
+				var r: Rect2 = data.armor_protect
+				m.set_shader_parameter("protect", Vector4(r.position.x / canvas.x, r.position.y / canvas.y, r.size.x / canvas.x, r.size.y / canvas.y))
 			m.set_shader_parameter("target_hue", armor.get("hue", 0.6))
 			m.set_shader_parameter("sat_mult", armor.get("sat", 1.0))
 			m.set_shader_parameter("val_mult", armor.get("val", 1.0))
+			if armor.has("body"):
+				var body: Dictionary = armor["body"]
+				m.set_shader_parameter("body_mix", 1.0)
+				m.set_shader_parameter("body_hsv", Vector3(body.get("hue", 0.0), body.get("sat", 0.0), body.get("val", 1.0)))
+				m.set_shader_parameter("body_cap", float(body.get("cap", 1.0)))
+			if armor.has("trim"):
+				var trim: Dictionary = armor["trim"]
+				m.set_shader_parameter("trim_mix", 1.0)
+				m.set_shader_parameter("trim_hsv", Vector3(trim.get("hue", 0.12), trim.get("sat", 1.0), trim.get("val", 1.0)))
 		if _rim_px > 0:
 			var col: Color = _rim.get("color", Color.WHITE)
 			m.set_shader_parameter("rim_px", float(_rim_px))
@@ -1699,6 +1991,7 @@ func _unit_material(flashing: bool) -> ShaderMaterial:
 		m.set_shader_parameter("outline_color", Palette.OUTLINE)
 		m.set_shader_parameter("flash", HIT_FLASH_STRENGTH if flashing else 0.0)
 		m.set_shader_parameter("pix", float(_pix))
+		m.set_shader_parameter("sharpen", UNIT_SHARPEN)
 		for i in STATUS_BODY.size():
 			var st: Array = STATUS_BODY[i]
 			if _status_mask & (1 << i):
@@ -1719,6 +2012,7 @@ func _unit_material(flashing: bool) -> ShaderMaterial:
 			m.set_shader_parameter("vol_shade", env.get("shade", 0.0))
 			m.set_shader_parameter("vol_grad", env.get("grad", 0.0))
 			m.set_shader_parameter("vol_color", Vector3(lc.r, lc.g, lc.b))
+		apply_style(m, "unit")
 		_unit_materials[key] = m
 	return _unit_materials[key]
 
@@ -1765,6 +2059,11 @@ func _die() -> void:
 		if scene and scene.has_method("boss_fall"):
 			scene.boss_fall(self)
 	AudioManager.play("death_vehicle" if "vehicle" in data.tags else "death")
+	if team == GameConstants.TEAM_ENEMY and "elite" in data.tags and BattleManager.is_battle_running() \
+			and is_inside_tree():   # элита пала — монеты к счётчику (BattleScene.elite_killed)
+		var scene := get_tree().current_scene
+		if scene and scene.has_method("elite_killed"):
+			scene.elite_killed(global_position)
 	if BattleManager.is_battle_running():   # шрам поля: техника — подпалина, остальные — пятно крови
 		if "vehicle" in data.tags:
 			ScarLayer.scorch(global_position, SCAR_RADIUS * 2.5 * data.sprite_scale)
@@ -1772,7 +2071,7 @@ func _die() -> void:
 			ScarLayer.blood(global_position, SCAR_RADIUS * data.sprite_scale,
 				Vfx.BLOOD_COLORS.get(data.get_blood(), Vfx.BLOOD_COLORS["red"]))
 	if "vehicle" in data.tags:   # техника взрывается: огонь, обломки, чёрный дым
-		Vfx.spawn(_world_parent(), "vehicle_explode", global_position, data.sprite_scale * EFFECT_SCALE)
+		Vfx.spawn(_world_parent(), "vehicle_explode", feet(), data.sprite_scale * EFFECT_SCALE)
 		IsoGridRenderer.flash_light(global_position, Color(Palette.FIRE, 1.0), 90.0 * data.sprite_scale, 0.45)
 		request_hitstop(self)
 	status_effects.clear()
@@ -1838,6 +2137,9 @@ func _tick_status_effects(delta: float) -> void:
 				take_damage(e["power"] * e["stacks"] * StatusEffects.DOT_TICK * data.unit_weight, false)
 				if current_state == State.DEAD:
 					return
+				if effect == StatusEffects.BURNING:   # горящий боец тускло подсвечивает землю (только вид)
+					IsoGridRenderer.ember_light(global_position, Color(Palette.FIRE, 0.4),
+						EMBER_LIGHT_RADIUS * data.sprite_scale, StatusEffects.DOT_TICK * 1.2)
 		if effect == StatusEffects.BURNING:
 			e["spread_timer"] -= delta
 			if e["spread_timer"] <= TIMER_EPSILON:
@@ -1871,7 +2173,7 @@ func _sync_status_vfx() -> void:
 			_status_vfx[effect] = Vfx.attach(self, StatusEffects.VFX[effect], data.sprite_scale * EFFECT_SCALE)
 
 func _float_text(label: String, tint: Color, size: float = 1.0) -> void:
-	FloatingText.spawn(_world_parent(), global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * data.sprite_scale - 6.0),
+	FloatingText.spawn(_world_parent(), global_position + Vector2(0.0, -TARGET_SPRITE_HEIGHT * data.sprite_scale - 6.0 + GROUND_SINK),
 		label, tint, size)
 
 # Куда класть разовые эффекты в мире — туда же, куда снаряды (узел отрядов)
@@ -1996,7 +2298,7 @@ func _on_state_enter(state: State) -> void:
 		State.MOVE, State.CHASE, State.RETREATING:
 			_play_animation("walk")
 			if state == State.RETREATING:   # пыль из-под ног — боец бросился назад
-				Vfx.spawn(_world_parent(), "retreat_dust", global_position, data.sprite_scale * EFFECT_SCALE)
+				Vfx.spawn(_world_parent(), "retreat_dust", feet(), data.sprite_scale * EFFECT_SCALE)
 		State.ATTACK:
 			# Первый удар — со сдвигом бойца (отряд бьёт вразнобой); до него — стойка
 			attack_timer = attack_stagger * ATTACK_STAGGER / maxf(current_attack_speed * get_attack_speed_mult(), 0.01)
@@ -2034,8 +2336,17 @@ func _on_death_finished() -> void:
 	if data.special_kind != "":
 		_fade_boss_corpse()
 		return
-	var timer = get_tree().create_timer(0.3, false)   # на паузе не тикает
-	timer.timeout.connect(queue_free)
+	if _corpses >= MAX_CORPSES:
+		var timer = get_tree().create_timer(0.3, false)   # на паузе не тикает
+		timer.timeout.connect(queue_free)
+		return
+	# Тело лежит и тает (решение пользователя 18.11.2026): после схватки поле читается как побоище; пачка тел ограничена
+	_corpses += 1
+	tree_exiting.connect(func(): _corpses = maxi(_corpses - 1, 0))
+	var tw := create_tween()
+	tw.tween_interval(CORPSE_HOLD)
+	tw.tween_property(sprite, "modulate", CORPSE_TINT, CORPSE_FADE).set_trans(Tween.TRANS_SINE)
+	tw.tween_callback(queue_free)
 
 # Тело примарха (решение пользователя 09.11.2026: «умирают инородно» — через 0.3 с после последнего кадра
 # пропадало рывком): последний кадр лежит BOSS_CORPSE_HOLD, потом темнеет в тон земли и тает за BOSS_CORPSE_FADE

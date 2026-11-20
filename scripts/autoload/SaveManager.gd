@@ -14,7 +14,7 @@ extends Node
 # сразу начинается заново; ход самой схватки не сохраняется.
 const SAVE_PATH: String = "user://run_save.json"
 # v2 — состояние по системам; сохранения v1 не читаются
-const SAVE_VERSION: int = 2
+const SAVE_VERSION: int = 3
 const SYSTEMS: Array[String] = ["RunManager", "EconomyManager", "SynergyManager", "BattleManager", "ShopManager", "MetaProgress"]
 
 # Путь файла; tests/test_save.gd подменяет его на свой, чтобы не трогать сохранение игрока

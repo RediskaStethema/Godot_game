@@ -7,13 +7,16 @@ extends Node
 # и его тик, а цепочка шагов забега и текущий шаг — навигация между сценами.
 # Сбрасывается из BattleManager.reset_run() (new_run()), генерирует RunMapData.
 #
-# Цикл линейный, игрок путь не выбирает: ShopScene → BattleScene → (EventScene) → ShopScene → …
+# Цикл линейный, игрок путь не выбирает: магазин → бой → (EventScene) → магазин → …
+# Магазин — окно поверх поля в BattleScene (решение пользователя 12.11.2026, образец download.png: сквозь магазин
+# видно поле): шаг SHOP открывает BattleScene, «В БОЙ» магазина — enter_battle_in_place() без смены сцены
 # Шаг завершён → advance() сам открывает следующий. round_number растёт только в
 # EconomyManager.give_round_income (один бой = одна волна).
 
-const SHOP_SCENE: String = "res://scenes/shop/ShopScene.tscn"
+const SHOP_SCENE: String = "res://scenes/shop/ShopScene.tscn"   # окно магазина (BattleScene кладёт поверх поля)
 const BATTLE_SCENE: String = "res://scenes/battle/BattleScene.tscn"
 const EVENT_SCENE: String = "res://scenes/event/EventScene.tscn"
+const PICK_SCENE: String = "res://scenes/pick/CardPickScene.tscn"   # выбор карты после волны (16.11.2026)
 const MENU_SCENE: String = "res://scenes/menu/MainMenu.tscn"
 # Переход между сценами (решение пользователя 08.11.2026, только вид): сцена меняется сразу (тесты и сохранения
 # ничего не ждут), поверх — чёрная шторка на слое FADE_LAYER, тает за FADE_TIME (по реальному времени, и на паузе)
@@ -110,9 +113,11 @@ func enter_node(id: int) -> bool:
 	var node = map.get_node_by_id(id)
 	match node.type:
 		RunMapNode.SHOP:
-			_go(SHOP_SCENE)
+			_go(BATTLE_SCENE)   # магазин — окном поверх поля (BattleScene.shop_phase)
 		RunMapNode.EVENT:
 			_go(EVENT_SCENE)
+		RunMapNode.PICK, RunMapNode.START_PICK:
+			_go(BATTLE_SCENE)   # выбор карты — окном поверх поля следующего боя (BattleScene.shop_phase), как магазин
 		RunMapNode.BATTLE, RunMapNode.MINIBOSS, RunMapNode.BOSS:
 			if node.wave != EconomyManager.round_number:
 				push_warning("RunManager: волна шага %d ≠ round_number %d" % [node.wave, EconomyManager.round_number])
@@ -142,6 +147,23 @@ func get_next_id() -> int:
 		return current_node_id
 	var next = get_current_node().next
 	return next[0] if not next.is_empty() else -1
+
+# Магазин закрыт «В БОЙ» (BattleScene): следующий шаг — бой — становится текущим без смены сцены
+# (поле уже стоит под магазином). false — следующий шаг не бой (тогда — advance со сменой сцены)
+func enter_battle_in_place() -> bool:
+	var id := get_next_id()
+	var node: RunMapNode = map.get_node_by_id(id) if map and id >= 0 else null
+	if node == null or not node.is_battle():
+		return false
+	return _set_current(id)
+
+# Бой, к которому готовит открытый магазин (шаг после него); нет — null
+func get_upcoming_battle() -> RunMapNode:
+	if not is_shop_node_active() and not is_pick_node_active():
+		return null
+	var next = get_current_node().next
+	var node: RunMapNode = map.get_node_by_id(next[0]) if not next.is_empty() else null
+	return node if node and node.is_battle() else null
 
 # Переход к следующему шагу забега со сменой сцены (вызывают сцены по итогам шага)
 func advance() -> void:
@@ -233,6 +255,9 @@ func get_battle_type() -> String:
 	var node = get_current_node()
 	if node and node.is_battle() and not current_completed:
 		return node.type
+	var upcoming := get_upcoming_battle()   # магазин поверх поля — поле следующего боя
+	if upcoming:
+		return upcoming.type
 	return RunMapNode.BATTLE
 
 func get_battle_wave() -> int:
@@ -241,6 +266,9 @@ func get_battle_wave() -> int:
 	var node = get_current_node()
 	if node and node.is_battle() and not current_completed:
 		return node.wave
+	var upcoming := get_upcoming_battle()
+	if upcoming:
+		return upcoming.wave
 	return EconomyManager.round_number
 
 # -------------------------------------------------------
@@ -267,6 +295,15 @@ func get_total_waves() -> int:
 func is_shop_node_active() -> bool:
 	var node = get_current_node()
 	return node != null and node.type == RunMapNode.SHOP and not current_completed
+
+func is_pick_node_active() -> bool:
+	var node = get_current_node()
+	return node != null and node.is_pick() and not current_completed
+
+# Стартовый выбор забега: 6 карт рубашкой вверх, берёт 3 вслепую (вместо магазина волны 1, 17.11.2026)
+func is_start_pick_active() -> bool:
+	var node = get_current_node()
+	return node != null and node.type == RunMapNode.START_PICK and not current_completed
 
 # Смена сцены со шторкой: всё, что меняет сцену забега, — через _go
 func _go(path: String) -> void:

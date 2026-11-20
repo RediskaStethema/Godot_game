@@ -162,16 +162,26 @@ static func boss_unit(seed_value: int, enemy: String = "chaos") -> String:
 
 # Подпись финального босса для шапки расстановки (BattleScene)
 const BOSS_TITLES = {
-	"daemon_angron": "Ангрон, демон-примарх Кхорна",
-	"daemon_mortarion": "Мортарион, демон-примарх Нургла",
-	"daemon_magnus": "Магнус Красный, демон-примарх Тзинча",
-	"daemon_fulgrim": "Фулгрим, демон-примарх Слаанеш",
-	"primarch_guilliman": "Робаут Жиллиман, примарх Ультрамаринов",
-	"primarch_sanguinius": "Сангвиний, примарх Кровавых Ангелов",
-	"primarch_dorn": "Рогал Дорн, примарх Имперских Кулаков",
-	"primarch_russ": "Леман Русс, примарх Космических Волков",
-	"primarch_vulkan": "Вулкан, примарх Саламандр",
+	"daemon_angron": "Кориол, демон-сын Кипящего",
+	"daemon_mortarion": "Морвий, демон-сын Дедушки Тысячи",
+	"daemon_magnus": "Фаустин Багряный, демон-сын Вестника",
+	"daemon_fulgrim": "Герионий, демон-сын Короля Второго Акта",
+	"primarch_guilliman": "Вильгельм Лексикарх, отец Лексиконцев",
+	"primarch_sanguinius": "Уголиний Крылатый, отец Уголинцев",
+	"primarch_dorn": "Гётц Железнорукий, отец Редутчиков",
+	"primarch_russ": "Ольхокороль, отец Ольховников",
+	"primarch_vulkan": "Вакулан Кузнец, отец Вакулинцев",
 }
+
+# Бог демона-примарха — его цвет в подписях (решение пользователя 09.11.2026: примарх подписан цветом бога / легиона)
+const BOSS_GODS = {"daemon_angron": "khorne", "daemon_mortarion": "nurgle", "daemon_magnus": "tzeentch",
+	"daemon_fulgrim": "slaanesh"}
+
+# Цвет подписи финального босса: демон — цвет бога, лоялист — цвет легиона; не босс — Color(0, 0, 0, 0)
+static func boss_color(unit_id: String) -> Color:
+	if BOSS_GODS.has(unit_id):
+		return Palette.GOD_TEXT[BOSS_GODS[unit_id]]
+	return Palette.PRIMARCH_COLORS.get(unit_id, Color(0, 0, 0, 0))
 
 # Возвращает [{ "unit": factory_id, "count": бойцов, "mult": множитель hp/урона }].
 # seed_value — seed забега (RunManager.rng.seed): от него случайный состав волны.

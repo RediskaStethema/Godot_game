@@ -11,7 +11,9 @@
 Soldier считает рост); что уходит за край — печатается. Ствол (metadata/muzzle) — у ряда атаки; ряд атаки
 стрелка не трогать (--anims без attack). Исходники — STASH/<папка юнита>/ (повторный прогон берёт их).
 
-  python tools/unit_stabilize.py <папка юнита> --anims idle,run[,attack] [--hover] [--dry]
+  python tools/unit_stabilize.py <папка юнита> --anims idle,run[,attack] [--whole death,...] [--hover] [--dry]
+  --whole — ряды, которые сдвигаются целиком (x — по 1-му кадру, вниз — на наименьший зазор ряда) (смерть: фигура падает, зазор и корпус
+  в ряду меняются законно; 12.11.2026 — перерисовки Дредноута / Почётной стражи / Терминатора висели на 5–19 px)
   --hover — парящий (Land Speeder, Raptor на ранце): зазор под ногами не 0, а постоянный — медиана ряда
   (папки рядов — как на диске: idle / run / attack), затем godot --headless --path . --import
 """
@@ -64,10 +66,12 @@ def first_idle(unit):
 def main(args):
     unit = Path(args[0])
     anims = next(a.split("=", 1)[1] if "=" in a else args[args.index(a) + 1] for a in args if a.startswith("--anims")).split(",")
+    whole = next((a.split("=", 1)[1] if "=" in a else args[args.index(a) + 1] for a in args if a.startswith("--whole")), "")
+    whole = [w for w in whole.split(",") if w]
     dry = "--dry" in args
     hover = "--hover" in args
     stash = STASH / unit.name
-    for an in anims:   # исходники — один раз; повторный прогон — от них
+    for an in anims + whole:   # исходники — один раз; повторный прогон — от них
         src = stash / an
         if not src.exists() and not dry:
             shutil.copytree(unit / an, src, ignore=shutil.ignore_patterns("*.import"))
@@ -77,14 +81,18 @@ def main(args):
     ref_h = height(ref)
     ref_x, _ = measure(ref, ref_h)
     print(f"{unit.name}: эталон корпуса — {ref_file}, x {ref_x:.1f}")
-    for an in anims:
+    for an in anims + whole:
         src = stash / an if (stash / an).exists() else unit / an
         files = sorted(src.glob("*.png"), key=lambda p: int(p.stem))
         frames = [np.array(Image.open(f).convert("RGBA")) for f in files]
         keep = int(np.median([measure(a, ref_h)[1] for a in frames])) if hover else 0
+        row = None
+        if an in whole:
+            cx, _ = measure(frames[0], ref_h)   # вниз — на наименьший зазор ряда: ни один кадр не уходит под край
+            row = (round(ref_x - cx), min(measure(a, ref_h)[1] for a in frames) - keep)
         for f, a in zip(files, frames):
             cx, gap = measure(a, ref_h)
-            dx, dy = round(ref_x - cx), gap - keep
+            dx, dy = row if row else (round(ref_x - cx), gap - keep)
             out = shift(a, dx, dy)
             lost = int((a[..., 3] > ALPHA).sum() - (out[..., 3] > ALPHA).sum())
             print(f"  {an}/{f.name}: x {dx:+d}, вниз {dy:+d}" + (f" — за краем {lost} px" if lost > 0 else ""))

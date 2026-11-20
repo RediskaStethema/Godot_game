@@ -36,18 +36,18 @@ func setup(wave_text: String, message_label: Label, start_button: Button) -> voi
 	_on_requisition_changed(EconomyManager.requisition)
 	_on_citadel_changed(BattleManager.citadel_hp)
 
+const TIMELINE_WIDTH: float = 330.0
+
 func _build_header(wave_text: String, message_label: Label, start_button: Button) -> void:
-	var hud = UITheme.make_panel("HudBar")   # полоса шапки — hud_bar повтором
-	hud.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	hud.offset_bottom = UITheme.HUD_HEIGHT
-	add_child(hud)
+	var hud := ShopFrame.hud_bar(self, false)   # без рамки и фона (решение пользователя 17.11.2026): орден, сложность, монеты, лента волн
 	var row = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 16)
 	hud.add_child(row)
 	var badge := UITheme.make_chapter_badge()   # бог / орден забега — первым слева
 	if badge:
 		row.add_child(badge)
-	row.add_child(UITheme.icon_row("hud", "wave", UITheme.make_label(wave_text, "HeaderLabel")))
+	# Счётчика «Волна N/15» нет — номер волны на ленте; значок и название сложности (+ тип боя, ТЕСТ)
+	row.add_child(UITheme.icon_row("difficulty", str(RunManager.difficulty), UITheme.make_label(wave_text, "HeaderLabel")))
 	_requisition = UITheme.make_label("", "ValueLabel")
 	row.add_child(UITheme.icon_row("hud", "requisition", _requisition))
 	_citadel = UITheme.make_label("", "ValueLabel")
@@ -58,6 +58,7 @@ func _build_header(wave_text: String, message_label: Label, start_button: Button
 	if _shield_icon:
 		citadel_row.add_child(_shield_icon)
 		_shield_icon.visible = false
+	citadel_row.visible = false   # HP цитадели в шапке убрано (решение пользователя 17.11.2026): над цитаделью на поле уже есть полоска
 	row.add_child(citadel_row)
 
 	# Сообщение — плашкой по центру под шапкой (решение пользователя 24.10.2026: после пиксельных шрифтов
@@ -66,6 +67,9 @@ func _build_header(wave_text: String, message_label: Label, start_button: Button
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(spacer)
+	var timeline := RunTimeline.new()   # лента 15 волн, как в магазине (17.11.2026), уже — между счётчиками и кнопками
+	timeline.custom_minimum_size.x = TIMELINE_WIDTH
+	row.add_child(timeline)
 	_message_plate = UITheme.make_panel("HudPanel", true)
 	_message_plate.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_message_plate.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -97,6 +101,7 @@ func _build_header(wave_text: String, message_label: Label, start_button: Button
 	start_button.theme_type_variation = "PrimaryButton"
 	start_button.text = "В БОЙ"
 	start_button.custom_minimum_size = Vector2(180, 0)
+	ButtonVolume.attach(start_button, 5.0)   # объём и отклик, как «В БОЙ» в магазине
 
 # -------------------------------------------------------
 # API
@@ -110,9 +115,64 @@ func set_message(text: String) -> void:
 	if _message.get_minimum_size().x > MESSAGE_MAX_WIDTH:
 		_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_message.custom_minimum_size = Vector2(MESSAGE_MAX_WIDTH, 0)
+	_fit_message_plate()
+	# Перенос считается по ширине метки после раскладки: сразу плашка бралась по высоте переноса «по букве»
+	# и раздувалась (Screenshot 2026-11-11 140856) — подгоняем ещё раз в конце кадра
+	_fit_message_plate.call_deferred()
+	_place_notice()
+
+func _fit_message_plate() -> void:
+	if not is_instance_valid(_message_plate):
+		return
+	if _message.autowrap_mode != TextServer.AUTOWRAP_OFF:
+		_message.size = Vector2(MESSAGE_MAX_WIDTH, 0)
 	_message_plate.reset_size()
 	_message_plate.offset_left = -_message_plate.size.x / 2.0
 	_message_plate.offset_right = _message_plate.size.x / 2.0
+	_place_notice()
+
+# Короткое уведомление (решение пользователя 11.11.2026: «слишком большое окно и слишком долго висит — просто надпись
+# сверху»): текст с обводкой без плашки под плашкой этапа, держится NOTICE_TIME реального времени и тает за NOTICE_FADE;
+# новое — заменяет прежнее
+const NOTICE_TIME: float = 2.2
+const NOTICE_FADE: float = 0.4
+var _notice: Label
+var _notice_tween: Tween
+
+func notify(text: String) -> void:
+	if _notice == null:
+		_notice = UITheme.make_label("", "HeaderLabel")
+		_notice.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_notice.add_theme_color_override("font_outline_color", Palette.OUTLINE)
+		_notice.add_theme_constant_override("outline_size", 6)
+		_notice.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		_notice.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		add_child(_notice)
+	_notice.text = text
+	_notice.visible = text != ""
+	_notice.modulate.a = 1.0
+	_place_notice()
+	if _notice_tween:
+		_notice_tween.kill()
+	if text == "":
+		return
+	_notice_tween = create_tween().set_ignore_time_scale(true)   # скорость боя ×3 и стоп-кадр не сокращают
+	_notice_tween.tween_interval(NOTICE_TIME)
+	_notice_tween.tween_property(_notice, "modulate:a", 0.0, NOTICE_FADE)
+	_notice_tween.tween_callback(_notice.hide)
+
+func notice_text() -> String:
+	return _notice.text if _notice and _notice.visible else ""
+
+func _place_notice() -> void:
+	if _notice == null:
+		return
+	_notice.offset_left = -MESSAGE_MAX_WIDTH / 2.0
+	_notice.offset_right = MESSAGE_MAX_WIDTH / 2.0
+	_notice.offset_top = (message_bottom() if _message_plate.visible else UITheme.HUD_HEIGHT) + 4.0
+	_notice.offset_bottom = _notice.offset_top
 
 # Низ плашки сообщения на экране (нет сообщения — низ шапки): справки на поле — ниже неё
 func message_bottom() -> float:
@@ -123,6 +183,8 @@ func message_bottom() -> float:
 # Итог боя крупно по центру: заголовок (янтарь — победа, красный — нет) и строка дохода
 func show_result(title: String, subtitle: String, victory: bool) -> void:
 	_message_plate.hide()   # «Бой идёт…» под баннером итога — устарело
+	if _notice:
+		_notice.hide()
 	if is_instance_valid(result_banner):
 		result_banner.queue_free()
 	var banner := VBoxContainer.new()
@@ -180,6 +242,7 @@ func show_result(title: String, subtitle: String, victory: bool) -> void:
 		details.name = "Details"
 		details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		col.add_child(details)
+	_result_sparks(victory)
 	banner.modulate.a = 0.0
 	result_banner = banner
 	var tween := banner.create_tween().set_ignore_time_scale(true)
@@ -188,18 +251,52 @@ func show_result(title: String, subtitle: String, victory: bool) -> void:
 	tween.tween_property(banner, "modulate:a", 0.0, RESULT_FADE_OUT)
 	tween.tween_callback(banner.queue_free)
 
+# Искры итога боя (решение пользователя 18.11.2026): победа — золотой фонтан искр вверх от баннера, поражение — медленный
+# красный пепел вниз; один залп, ADD, по реальному времени, гаснет сам
+func _result_sparks(victory: bool) -> void:
+	if not GameSettings.atmosphere:
+		return
+	var p := CPUParticles2D.new()
+	p.name = "ResultSparks"
+	p.emitting = true
+	p.one_shot = true
+	p.explosiveness = 0.85
+	p.amount = 70 if victory else 40
+	p.lifetime = 2.2
+	p.local_coords = false
+	p.direction = Vector2(0, -1) if victory else Vector2(0, 1)
+	p.spread = 70.0 if victory else 120.0
+	p.initial_velocity_min = 80.0 if victory else 15.0
+	p.initial_velocity_max = 220.0 if victory else 50.0
+	p.gravity = Vector2(0, 160) if victory else Vector2(0, 20)
+	p.scale_amount_min = 1.5
+	p.scale_amount_max = 3.0
+	p.color = Palette.GOLD_BRIGHT if victory else Color(0.8, 0.18, 0.12)
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1, 1, 1, 1))
+	grad.set_color(1, Color(1, 1, 1, 0))
+	p.color_ramp = grad
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	p.material = mat
+	p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	p.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(p)
+	p.position = size * Vector2(0.5, 0.45)
+	get_tree().create_timer(3.0, true, false, true).timeout.connect(p.queue_free)
+
 # Строки синергий армии (после calculate_synergies): справка цитадели (SquadInspector)
 static func synergy_lines() -> Array[String]:
 	var lines: Array[String] = []
 	for s in SynergyManager.active_synergies:
-		lines.append("• %s — %s" % [s["name"], s["desc"]])
+		lines.append("• %s — %s" % [Names.of(s["name"]), s["desc"]])
 	var tag := SynergyManager.faction_tag()
 	if lines.is_empty():
 		var first: Dictionary = SynergyManager.SYNERGY_DEFINITIONS[tag][0]
-		lines.append("Нет активных синергий (%d+ %s → %s)" % [first["threshold"], tag.capitalize(), first["desc"]])
+		lines.append("Нет активных синергий (%d+ %s → %s)" % [first["threshold"], SynergyManager.tag_label(tag), first["desc"]])
 	var chapter = Chapters.get_chapter(RunManager.player_chapter)
 	if not chapter.is_empty():
-		lines.append("• %s %s — %s" % ["Метка" if chapter["faction"] == "chaos" else "Орден", chapter["name"], chapter["desc"]])
+		lines.append("• %s %s — %s" % ["Метка" if chapter["faction"] == "chaos" else "Братство", Names.of(chapter["name"]), chapter["desc"]])
 		if chapter.has("malus_desc"):
 			lines.append("  минус: %s" % chapter["malus_desc"])
 	var rows = SynergyManager.count_position_bonuses(
@@ -207,8 +304,8 @@ static func synergy_lines() -> Array[String]:
 	for pos in [SynergyManager.FRONT, SynergyManager.BACK]:
 		var p: Dictionary = SynergyManager.POSITION_BONUSES[pos]
 		lines.append("• %s (%d отр.) — %s" % [p["name"], rows[pos], p["desc"]])
-	lines.append("%s: %d · доход синергии +%d Req" % [tag.capitalize(), SynergyManager.tag_counts.get(tag, 0),
-		SynergyManager.income_bonus])
+	lines.append("%s: %d · доход синергии +%s" % [SynergyManager.tag_label(tag), SynergyManager.tag_counts.get(tag, 0),
+		GameConstants.coins(SynergyManager.income_bonus)])
 	return lines
 
 # Орудия игрока: опрос раз в кадр — только надпись, на бой не влияет
@@ -246,7 +343,25 @@ func _update_speed_button() -> void:
 	UITheme.set_button_icon(_speed_button, "hud", "speed_%d" % roundi(GameSettings.battle_speed))   # шевроны 1–3
 
 func _on_requisition_changed(amount: int) -> void:
-	UITheme.roll_number(_requisition, amount, func(v: int): return "%d Req" % v)   # отматывается
+	if _coin_hold:   # доход боя — счётчик прибавляет по долетевшим монетам (coin_landed)
+		return
+	UITheme.roll_number(_requisition, amount, func(v: int): return str(v))   # монета и число, отматывается
+
+# Доход по итогу боя летит монетами с поля (BattleScene._fly_income_coins): пока летят — счётчик стоит на
+# прежнем числе и прибавляет с каждой монетой; release — встаёт на настоящее
+var _coin_hold := false
+func hold_requisition() -> void:
+	_coin_hold = true
+
+func coin_landed(value: int) -> void:
+	UITheme.roll_number(_requisition, value, func(v: int): return str(v))
+
+func release_requisition() -> void:
+	_coin_hold = false
+	_on_requisition_changed(EconomyManager.requisition)
+
+func requisition_label() -> Label:
+	return _requisition
 
 func _citadel_text(hp: int) -> String:
 	var t := "%d/%d" % [hp, int(BattleManager.CITADEL_MAX_HP)]

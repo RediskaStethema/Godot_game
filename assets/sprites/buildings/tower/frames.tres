@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" load_steps=44 format=3]
+[gd_resource type="SpriteFrames" load_steps=49 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/idle/0.png" id="idle_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/idle/1.png" id="idle_1"]
@@ -9,6 +9,11 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/attack/2.png" id="attack_2"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/attack/3.png" id="attack_3"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/attack/4.png" id="attack_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/attack/5.png" id="attack_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/attack/6.png" id="attack_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/attack/7.png" id="attack_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/attack/8.png" id="attack_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/attack/9.png" id="attack_9"]
 
 
 
@@ -52,13 +57,13 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/tower/attack_3/4.png" id="attack_3_4"]
 
 [resource]
-metadata/level_muzzle = {2: Vector2(170.6, -148.1), 3: Vector2(167.1, -126.8)}
-metadata/level_barrels = {2: [Vector2(176.3, -148.1), Vector2(141.5, -141.2)], 3: [Vector2(171.7, -138.5), Vector2(117.1, -116.1), Vector2(168.2, -105.5), Vector2(110.0, -85.9)]}
+metadata/level_muzzle = {2: Vector2(177.7, -146.6), 3: Vector2(195.3, -171.2)}
+metadata/level_barrels = {2: [Vector2(169.0, -180.0), Vector2(150.0, -148.0)], 3: [Vector2(172.0, -212.0), Vector2(160.0, -176.0), Vector2(146.0, -141.0)]}
 metadata/level_barrel_dir = {1: Vector2(1.0, 0.0), 2: Vector2(0.966, 0.259), 3: Vector2(0.978, 0.208)}
-metadata/level_shift = {2: Vector2(-14, 0), 3: Vector2(-1, 0)}
-metadata/level_scale = {2: 1.287, 3: 1.371}
+metadata/level_shift = {2: Vector2(-1, -10), 3: Vector2(-12, -12)}
+metadata/level_scale = {2: 1.120, 3: 1.107}
 metadata/level_static = []
-metadata/muzzle = Vector2(200.5, -224.9)
+metadata/muzzle = Vector2(195.0, -190.0)
 metadata/shot_frame = 1
 metadata/muzzle_color = Color(1.000, 0.552, 0.060, 1)
 animations = [{
@@ -94,10 +99,25 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("attack_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("attack_9")
 }],
 "loop": false,
 "name": &"attack",
-"speed": 16.0
+"speed": 20.0
 }, {
 "frames": [{
 "duration": 1.0,

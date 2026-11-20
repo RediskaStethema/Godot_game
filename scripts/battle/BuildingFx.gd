@@ -15,11 +15,15 @@ extends Node2D
 #     осыпается половинками
 #   god_sigil(боец, бог) — павший встал бойцом бога у Святилища культа (4.9): под ногами загорается знак бога
 #     (эллипс 2:1), от него до пояса — языки света, знак гаснет; он же — благословение и смена бога отряда (4.11)
-#   teleport(родитель, точки, рост, высадка) — Deep Strike Терминаторов (5.3, 09.11.2026): уход — боец стягивается
-#     в вертикальную полосу варп-света и она гаснет, высадка — полоса раскрывается; молнии, разряд по земле
-#   charm(жертва, отряд) — порабощение Слаанеш (4.11, 09.11.2026): розовая цепь от поработившего отряда к бойцу
+#   charm(жертва, отряд) — порабощение Король Второго Акта (4.11, 09.11.2026): розовая цепь от поработившего отряда к бойцу
 #     натягивается и гаснет, над головой — серп
 #   squad_fall(точка, радиус, свой) — отряд пал целиком (09.11.2026): кольцо цвета стороны по земле расходится, пыль
+#   rift(точка, радиус) — выход отряда Хаоса на «В БОЙ» (09.11.2026): вертикальный разлом варпа раскрывается,
+#     светится и стягивается, искры; бойцы проявляются из него (BattleScene._reveal_enemies)
+#   shield_break(боец) — щит бойца (Iron Halo, Кодекс-бастион) кончился (09.11.2026): голубая сфера вспыхивает
+#     и разлетается осколками
+#   bonus_marks(отряд, виды, задержка) — бонусы перед боем (09.11.2026): над отрядом ряд знаков — синергия,
+#     передний / задний ряд, орден / бог, командир; поднимаются и гаснут
 
 const WAVE_TIME: float = 0.55        # с — волна идёт от здания до соседней клетки
 const ABSORB_TIME: float = 0.5       # с — кромка клетки соседа гаснет
@@ -55,15 +59,23 @@ const SIGIL_TIME: float = 1.1
 const SIGIL_RADIUS: float = 9.0     # px мира — знак под бойцом ростом Soldier.TARGET_SPRITE_HEIGHT
 const SIGIL_STAGGER: float = 0.08   # с — бойцы загораются по очереди
 
-const TELEPORT_TIME: float = 0.55
-const TELEPORT_WIDTH: float = 7.0    # px мира — полуширина полосы у бойца ростом Soldier.TARGET_SPRITE_HEIGHT
-const TELEPORT_BANDS = [[2.2, 0.08], [1.3, 0.16], [0.6, 0.36], [0.22, 0.6]]   # ширина ×, яркость — мягкий край;
-# приглушено (снимок 09.11.2026: белые столбы читались неоном, а неон пакета пользователь отвергал 22.10.2026)
 const CHARM_TIME: float = 0.9
 const CHARM_LINKS: int = 9
 const FALL_TIME: float = 0.9
+const RIFT_TIME: float = 0.85
+const SHIELD_TIME: float = 0.45
+const SHIELD_SHARDS: int = 8
+const BONUS_TIME: float = 1.6
+const BONUS_GAP: float = 13.0        # px мира между знаками бонусов
+# Вид знака бонуса: цвет кромки и ядра
+const BONUS_LOOKS = {
+	"synergy": [Palette.GOLD, Palette.AMBER_LIGHT],
+	"front": [Palette.SHIELD_BLUE, Palette.FROST_PALE],
+	"back": [Palette.HIT_RED, Palette.FIRE],
+	"chapter": [Palette.GOLD_DIM, Palette.GOLD_BRIGHT],
+	"commander": [Palette.GOLD_BRIGHT, Palette.STAR_AMBER],
+}
 
-static var _add: CanvasItemMaterial
 static var _rng := RandomNumberGenerator.new()   # своя случайность: randf — общая с боем (вид не должен сдвигать
 # случайность боя — lifesteal и стена зовутся из боевой логики; ревью 09.11.2026)
 
@@ -79,8 +91,6 @@ var a_pt := Vector2.ZERO       # полоса фронта: концы (свои
 var b_pt := Vector2.ZERO
 var god := ""
 var delay := 0.0
-var height := 31.0             # телепорт: рост бойца
-var arrive := false            # телепорт: высадка (полоса раскрывается) / уход (стягивается)
 var radius := 20.0             # падение отряда: радиус кольца
 var _t := 0.0
 
@@ -106,7 +116,7 @@ static func lifesteal(s: Node2D, sprite_scale: float = 1.0) -> void:
 	var fx := _make("lifesteal", parent, true)
 	fx.z_index = Vfx.Z_INDEX_WORLD
 	fx.follow = s
-	fx.global_position = s.global_position
+	fx.global_position = s.global_position + Vector2(0.0, Soldier.GROUND_SINK)
 	fx.chest = Soldier.TARGET_SPRITE_HEIGHT * 0.55 * sprite_scale
 	fx.duration = LIFESTEAL_TIME
 	for i in _rng.randi_range(2, 3):
@@ -114,6 +124,7 @@ static func lifesteal(s: Node2D, sprite_scale: float = 1.0) -> void:
 			"delay": i * 0.07, "sway": _rng.randf_range(-3.0, 3.0)})
 
 static func wall_break(parent: Node, a: Vector2, b: Vector2, chaos: bool) -> void:
+	WorldGrade.pulse(0.35)   # пролом стены — короткая аберрация
 	if parent == null:
 		return
 	var fx := _make("stones", parent, false)
@@ -181,23 +192,6 @@ static func god_sigil(s: Node2D, god_id: String, order: int = 0) -> void:
 	fx.delay = order * SIGIL_STAGGER
 	fx.duration = SIGIL_TIME + fx.delay
 
-# Один узел на весь отряд (точки — глобальные, у каждой своя задержка stagger): по узлу на бойца с обеих сторон —
-# 24 узла в один тик
-static func teleport(parent: Node, points: Array, h: float, landing: bool, stagger: Array = []) -> void:
-	if parent == null or points.is_empty():
-		return
-	var fx := _make("teleport", parent, true)
-	fx.z_index = Vfx.Z_INDEX_WORLD
-	fx.global_position = points[0]
-	fx.height = h
-	fx.arrive = landing
-	var longest := 0.0
-	for i in points.size():
-		var wait: float = stagger[i] if i < stagger.size() else 0.0
-		longest = maxf(longest, wait)
-		fx.parts.append({"p": points[i] - fx.global_position, "delay": wait, "seed": _rng.randi()})
-	fx.duration = TELEPORT_TIME + longest
-
 static func charm(victim: Node2D, by: Node2D) -> void:
 	if not is_instance_valid(victim) or not is_instance_valid(by) or victim.get_parent() == null \
 			or victim.get_parent().get_parent() == null:
@@ -219,6 +213,42 @@ static func squad_fall(at: Vector2, r: float, own: bool) -> void:
 	fx.duration = FALL_TIME
 	DustLayer.puff(at, r * 0.3, 7, r * 0.6)
 
+static func rift(at: Vector2, r: float, wait: float = 0.0) -> void:
+	if not is_instance_valid(AuraRing.layer):
+		return
+	var fx := _make("rift", AuraRing.layer.get_parent() if AuraRing.layer.get_parent() else AuraRing.layer, true)
+	fx.z_index = Vfx.Z_INDEX_WORLD
+	fx.global_position = at
+	fx.radius = r
+	fx.delay = wait
+	fx.duration = RIFT_TIME + wait
+	for i in 10:   # искры варпа
+		fx.parts.append({"p": Vector2(_rng.randf_range(-0.4, 0.4) * r, _rng.randf_range(-1.6, -0.2) * r),
+			"v": Vector2(_rng.randf_range(-30.0, 30.0), _rng.randf_range(-50.0, -10.0)), "size": _rng.randf_range(0.8, 1.8)})
+
+static func shield_break(s: Node2D, sprite_scale: float = 1.0) -> void:
+	var parent: Node = s.get_parent().get_parent() if s.get_parent() else null
+	if parent == null:
+		return
+	var fx := _make("shield", parent, true)
+	fx.z_index = Vfx.Z_INDEX_WORLD
+	fx.global_position = s.global_position + Vector2(0.0, Soldier.GROUND_SINK)
+	fx.radius = Soldier.TARGET_SPRITE_HEIGHT * 0.55 * sprite_scale
+	fx.duration = SHIELD_TIME
+	for i in SHIELD_SHARDS:
+		var a := TAU * (i + _rng.randf() * 0.6) / SHIELD_SHARDS
+		fx.parts.append({"dir": Vector2.from_angle(a), "speed": _rng.randf_range(28.0, 46.0), "rot": _rng.randf() * TAU})
+
+static func bonus_marks(squad: Node2D, kinds: Array, wait: float = 0.0) -> void:
+	if kinds.is_empty() or not is_instance_valid(squad) or squad.get_parent() == null:
+		return
+	var fx := _make("bonus", squad.get_parent(), true)
+	fx.z_index = Vfx.Z_INDEX_WORLD
+	fx.global_position = squad.global_position + Vector2(0.0, -Soldier.TARGET_SPRITE_HEIGHT * 2.0)
+	fx.parts = kinds.duplicate()
+	fx.delay = wait
+	fx.duration = BONUS_TIME + wait
+
 static func _stone_colors(chaos: bool) -> Array:
 	return [Palette.CHAOS_WALL_STONE, Palette.CHAOS_WALL_TOP, Palette.CHAOS_WALL_SPIKE] if chaos \
 		else [Palette.WALL_STONE, Palette.WALL_STONE_TOP, Palette.WALL_TRIM]
@@ -227,10 +257,7 @@ static func _make(k: String, parent: Node, additive: bool) -> BuildingFx:
 	var fx := BuildingFx.new()
 	fx.kind = k
 	if additive:
-		if _add == null:
-			_add = CanvasItemMaterial.new()
-			_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-		fx.material = _add
+		fx.material = Vfx.add_material()   # пиксельный ADD
 	parent.add_child(fx)
 	return fx
 
@@ -271,12 +298,16 @@ func _draw() -> void:
 			_draw_level_down()
 		"sigil":
 			_draw_sigil()
-		"teleport":
-			_draw_teleport()
 		"charm":
 			_draw_charm()
 		"fall":
 			_draw_fall()
+		"rift":
+			_draw_rift()
+		"shield":
+			_draw_shield()
+		"bonus":
+			_draw_bonus()
 
 func _draw_wave() -> void:
 	var edge: Color = look["edge"]
@@ -423,54 +454,6 @@ func _draw_sigil() -> void:
 		draw_line(Vector2(x, 0.0), Vector2(x, top), Color(bright, 0.55 * a), 1.4, true)
 		draw_line(Vector2(x, 0.0), Vector2(x, top * 0.6), Color(deep, 0.5 * a), 3.0, true)
 
-func _draw_teleport() -> void:
-	for d in parts:
-		_draw_teleport_beam(d["p"], (_t - d["delay"]) / TELEPORT_TIME, d["seed"])
-	draw_set_transform(Vector2.ZERO)
-
-func _draw_teleport_beam(at: Vector2, t: float, seed_v: int) -> void:
-	if t <= 0.0 or t >= 1.0:
-		return
-	draw_set_transform(at)
-	var k := height / Soldier.TARGET_SPRITE_HEIGHT
-	# высадка: тонкая яркая нить раскрывается в полосу и гаснет; уход — полоса сжимается в нить и гаснет
-	var open := smoothstep(0.0, 0.35, t) if arrive else 1.0 - smoothstep(0.25, 0.8, t)
-	var a := (1.0 - smoothstep(0.55, 1.0, t)) if arrive else (1.0 - smoothstep(0.7, 1.0, t))
-	a *= smoothstep(0.0, 0.08, t)
-	var w := TELEPORT_WIDTH * k * maxf(open, 0.08)
-	var top := -height * (1.25 if arrive else 1.15)
-	for b in TELEPORT_BANDS:
-		var bw: float = w * b[0]
-		var col: Color = Palette.TELEPORT_DEEP if b[0] > 1.0 else (Palette.TELEPORT if b[0] > 0.3 else Palette.TELEPORT_CORE)
-		draw_rect(Rect2(-bw, top, bw * 2.0, -top), Color(col, b[1] * a))
-	# кольцо разряда по земле
-	var ring := (TELEPORT_WIDTH * 2.2 * k) * (0.6 + 0.8 * smoothstep(0.0, 0.6, t))
-	draw_set_transform(at, 0.0, Vector2(1.0, 0.5))
-	draw_arc(Vector2.ZERO, ring, 0.0, TAU, 32, Color(Palette.TELEPORT, 0.7 * a), 1.4, true)
-	draw_arc(Vector2.ZERO, ring * 0.6, 0.0, TAU, 24, Color(Palette.TELEPORT_CORE, 0.5 * a), 1.0, true)
-	draw_set_transform(at)
-	# молнии: ломаные внутри полосы и по земле, рисунок меняется раз в 0.06 с
-	var r := RandomNumberGenerator.new()
-	r.seed = seed_v + int(_t / 0.06)
-	for i in 3:
-		var pts := PackedVector2Array()
-		var y := 0.0
-		var x := r.randf_range(-w, w)
-		pts.append(Vector2(x, 0.0))
-		while y > top:
-			y -= r.randf_range(4.0, 8.0) * k
-			x = clampf(x + r.randf_range(-4.0, 4.0) * k, -w * 1.6, w * 1.6)
-			pts.append(Vector2(x, maxf(y, top)))
-		draw_polyline(pts, Color(Palette.TELEPORT_CORE, 0.8 * a * r.randf_range(0.4, 1.0)), 1.0, true)
-	for i in 3:   # разряд по земле
-		var ang := r.randf_range(0.0, TAU)
-		var p := Vector2.ZERO
-		var pts := PackedVector2Array([p])
-		for j in 3:
-			p += Vector2.from_angle(ang + r.randf_range(-0.6, 0.6)) * ring * 0.4
-			pts.append(Vector2(p.x, p.y * 0.5))
-		draw_polyline(pts, Color(Palette.TELEPORT, 0.7 * a), 1.0, true)
-
 func _draw_charm() -> void:
 	var t := _t / duration
 	var a := smoothstep(0.0, 0.12, t) * (1.0 - smoothstep(0.65, 1.0, t))
@@ -487,7 +470,7 @@ func _draw_charm() -> void:
 		draw_arc(Vector2.ZERO, 2.4, 0.0, TAU, 10, Color(Palette.SLAANESH, 0.9 * a), 1.3, true)
 		draw_arc(Vector2.ZERO, 2.4, PI, TAU, 6, Color(Palette.SLAANESH_PALE, 0.7 * a), 0.8, true)
 	draw_set_transform(Vector2.ZERO)
-	# серп Слаанеш над головой
+	# серп Король Второго Акта над головой
 	var head := Vector2(0.0, -Soldier.TARGET_SPRITE_HEIGHT * 1.25 - 4.0 * t)
 	draw_circle(head, 6.0, Color(Palette.SLAANESH, 0.18 * a), true, -1.0, true)
 	draw_arc(head, 4.0, PI * 0.15, PI * 0.85, 12, Color(Palette.SLAANESH_PALE, a), 1.6, true)
@@ -502,4 +485,92 @@ func _draw_fall() -> void:
 	draw_arc(Vector2.ZERO, r, 0.0, TAU, 40, Color(edge, 0.14 * a), 7.0, true)
 	draw_arc(Vector2.ZERO, r, 0.0, TAU, 40, Color(edge, 0.75 * a), 1.4, true)
 	draw_arc(Vector2.ZERO, r * 0.7, 0.0, TAU, 32, Color(edge, 0.3 * a), 1.0, true)
+	draw_set_transform(Vector2.ZERO)
+
+func _draw_rift() -> void:
+	var t := (_t - delay) / RIFT_TIME
+	if t <= 0.0:
+		return
+	var open := smoothstep(0.0, 0.3, t) * (1.0 - smoothstep(0.6, 1.0, t))   # раскрылся — постоял — стянулся
+	var a := smoothstep(0.0, 0.1, t) * (1.0 - smoothstep(0.75, 1.0, t))
+	var h := radius * 1.6
+	var w := radius * 0.42 * open
+	var top := Vector2(0.0, -h * 1.1)
+	# разлом — вертикальная «линза»: ореол, тело, ядро
+	for layer_def in [[2.4, 0.12, Palette.SLAANESH], [1.4, 0.35, Palette.RED_BRIGHT], [0.55, 0.85, Palette.SLAANESH_PALE]]:
+		var lw: float = w * layer_def[0]
+		var pts := PackedVector2Array()
+		for i in 17:
+			var u := float(i) / 16.0
+			pts.append(Vector2(sin(u * PI) * lw * (1.0 + 0.15 * sin(u * 9.0 + _t * 14.0)), top.y + h * 1.1 * u))
+		for i in range(16, -1, -1):
+			var u := float(i) / 16.0
+			pts.append(Vector2(-sin(u * PI) * lw * (1.0 + 0.15 * cos(u * 7.0 + _t * 12.0)), top.y + h * 1.1 * u))
+		if lw > 0.5:
+			draw_colored_polygon(pts, Color(layer_def[2], layer_def[1] * a))
+	# отсвет по земле
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))
+	draw_circle(Vector2.ZERO, radius * (0.6 + 0.4 * open), Color(Palette.RED_BRIGHT, 0.12 * a), true, -1.0, true)
+	draw_set_transform(Vector2.ZERO)
+	for p in parts:   # искры поднимаются
+		var at: Vector2 = p["p"] * open + p["v"] * (_t - delay)
+		draw_circle(at, p["size"], Color(Palette.SLAANESH_PALE, 0.8 * a), true, -1.0, true)
+
+func _draw_shield() -> void:
+	var t := _t / duration
+	var a := 1.0 - smoothstep(0.3, 1.0, t)
+	var r := radius * (1.0 + 0.35 * t)
+	var center := Vector2(0.0, -radius * 0.9)
+	if t < 0.35:   # вспышка сферы
+		var f := 1.0 - t / 0.35
+		draw_circle(center, r, Color(Palette.SHIELD_BLUE, 0.22 * f), true, -1.0, true)
+		draw_arc(center, r, 0.0, TAU, 28, Color(Palette.FROST_PALE, 0.9 * f), 1.4, true)
+	for p in parts:   # осколки-дуги разлетаются и гаснут
+		var d: Vector2 = p["dir"]
+		var at: Vector2 = center + d * (r + p["speed"] * _t)
+		var ang: float = p["rot"] + _t * 8.0
+		var half := Vector2.from_angle(ang) * 2.4
+		draw_line(at - half, at + half, Color(Palette.SHIELD_BLUE, 0.9 * a), 1.4, true)
+		draw_line(at - half * 0.4, at + half * 0.4, Color(Palette.FROST_PALE, a), 0.8, true)
+
+func _draw_bonus() -> void:
+	var t := (_t - delay) / BONUS_TIME
+	if t <= 0.0:
+		return
+	var a := smoothstep(0.0, 0.12, t) * (1.0 - smoothstep(0.6, 1.0, t))
+	var rise := -8.0 * smoothstep(0.0, 1.0, t)
+	var n := parts.size()
+	for i in n:
+		var kind: String = parts[i]
+		var look: Array = BONUS_LOOKS.get(kind, BONUS_LOOKS["synergy"])
+		var edge: Color = look[0]
+		var core: Color = look[1]
+		var c := Vector2((i - (n - 1) / 2.0) * BONUS_GAP, rise)
+		var pop := 1.0 + 0.35 * (1.0 - smoothstep(0.0, 0.18, t))   # знак вспыхивает крупнее и садится
+		draw_set_transform(c, 0.0, Vector2(pop, pop))
+		draw_circle(Vector2.ZERO, 6.5, Color(Palette.OUTLINE, 0.7 * a), true, -1.0, true)
+		draw_circle(Vector2.ZERO, 6.5, Color(edge, 0.25 * a), true, -1.0, true)
+		draw_arc(Vector2.ZERO, 6.5, 0.0, TAU, 20, Color(edge, a), 1.1, true)
+		var col := Color(core, a)
+		match kind:
+			"synergy":   # два шеврона
+				for k in 2:
+					var y := 1.5 - k * 3.2
+					draw_polyline(PackedVector2Array([Vector2(-3.0, y + 1.5), Vector2(0.0, y - 1.5), Vector2(3.0, y + 1.5)]), col, 1.2, true)
+			"front":   # щит
+				draw_colored_polygon(PackedVector2Array([Vector2(-3.2, -3.2), Vector2(3.2, -3.2), Vector2(3.2, 0.5),
+					Vector2(0.0, 3.8), Vector2(-3.2, 0.5)]), Color(core, 0.85 * a))
+			"back":   # прицел
+				draw_arc(Vector2.ZERO, 3.0, 0.0, TAU, 14, col, 1.0, true)
+				draw_line(Vector2(-4.4, 0.0), Vector2(4.4, 0.0), col, 0.9, true)
+				draw_line(Vector2(0.0, -4.4), Vector2(0.0, 4.4), col, 0.9, true)
+			"chapter":   # ромб-знак
+				draw_colored_polygon(PackedVector2Array([Vector2(0.0, -3.8), Vector2(3.0, 0.0), Vector2(0.0, 3.8),
+					Vector2(-3.0, 0.0)]), Color(core, 0.85 * a))
+			"commander":   # звезда
+				var pts := PackedVector2Array()
+				for k in 10:
+					var rr := 3.8 if k % 2 == 0 else 1.6
+					pts.append(Vector2.from_angle(-PI / 2.0 + TAU * k / 10.0) * rr)
+				draw_colored_polygon(pts, Color(core, 0.9 * a))
 	draw_set_transform(Vector2.ZERO)

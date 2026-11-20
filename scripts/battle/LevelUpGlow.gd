@@ -26,7 +26,6 @@ const COLORS = {
 const HEAL_COLORS = [Palette.HEAL_DEEP, Palette.HEAL]
 const ARRIVE_COLORS = [Palette.SHIELD_BLUE, Palette.GOLD_PALE]   # телепорт Космодесанта — холодный свет
 
-static var _add: CanvasItemMaterial
 
 var level := 2
 var kind := "level"   # "level" — шевроны по уровню, "heal" — крестик лечения
@@ -54,10 +53,8 @@ static func play(soldier: Node2D, new_level: int, stagger: float, glow_kind: Str
 		g._edge = c[0]
 		g._core = c[1]
 		g._seed = soldier.get_instance_id()
-		if _add == null:
-			_add = CanvasItemMaterial.new()
-			_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-		g.material = _add
+		g.material = Vfx.add_material()   # пиксельный ADD
+		g.position.y += Soldier.GROUND_SINK   # у ног втопленного бойца
 		soldier.add_child(g)
 		if is_ground:
 			soldier.move_child(g, 0)   # дети рисуются по порядку: первым — за спрайтом

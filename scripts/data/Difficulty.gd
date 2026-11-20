@@ -20,13 +20,13 @@ const STRONG = ["chaos_havoc", "chaos_raptor", "plague_marine",
 	"assault_marine", "devastator"]   # Космодесант-враг (забег за Хаос)
 
 const LEVELS = [
-	{"name": "Неофит",        "enemies": 0.80, "strong_weight": 0.75, "strong_earlier": 0, "strong_share": 0.34},
-	{"name": "Боевой брат",   "enemies": 1.00, "strong_weight": 1.00, "strong_earlier": 0, "strong_share": 0.34},
-	{"name": "Ветеран",       "enemies": 1.15, "strong_weight": 1.25, "strong_earlier": 0, "strong_share": 0.34},
-	{"name": "Сержант",       "enemies": 1.30, "strong_weight": 1.50, "strong_earlier": 1, "strong_share": 0.40},
-	{"name": "Капитан",       "enemies": 1.45, "strong_weight": 1.75, "strong_earlier": 1, "strong_share": 0.45},
-	{"name": "Магистр ордена", "enemies": 1.60, "strong_weight": 2.00, "strong_earlier": 2, "strong_share": 0.50},
-	{"name": "Экстерминатус", "enemies": 1.80, "strong_weight": 2.50, "strong_earlier": 2, "strong_share": 0.60},
+	{"name": "Новик",        "enemies": 0.80, "strong_weight": 0.75, "strong_earlier": 0, "strong_share": 0.34},
+	{"name": "Брат Криспина",   "enemies": 1.00, "strong_weight": 1.00, "strong_earlier": 0, "strong_share": 0.34},
+	{"name": "Седоусый",       "enemies": 1.15, "strong_weight": 1.25, "strong_earlier": 0, "strong_share": 0.34},
+	{"name": "Куренной",       "enemies": 1.30, "strong_weight": 1.50, "strong_earlier": 1, "strong_share": 0.40},
+	{"name": "Кошевой",       "enemies": 1.45, "strong_weight": 1.75, "strong_earlier": 1, "strong_share": 0.45},
+	{"name": "Монструвакан", "enemies": 1.60, "strong_weight": 2.00, "strong_earlier": 2, "strong_share": 0.50},
+	{"name": "Обесцвечивание", "enemies": 1.80, "strong_weight": 2.50, "strong_earlier": 2, "strong_share": 0.60},
 ]
 
 # Параметры уровня (1..COUNT; вне диапазона — ближайший)

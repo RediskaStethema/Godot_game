@@ -1,6 +1,6 @@
 """GIF-анимации юнита → кадры PNG для Soldier.gd.
 
-    python tools/gif_to_frames.py assets/sprites/space_marine 325,163 3
+    python tools/gif_to_frames.py assets/units/space_marines/<юнит> 325,163 3
 
 Второй и третий аргументы (необязательны) — срез ствола в пикселях attack.gif и кадр вспышки:
 искать их автоматически ненадёжно (блики брони похожи на вспышку), снимаются с картинки.

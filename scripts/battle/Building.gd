@@ -75,9 +75,12 @@ const WALL_SLOW_LINGER: float = 0.5        # сек замедления пос�
 const SLOW_AURA_COLOR = Color(UITheme.SLOW_BLUE, 0.05)
 const SLOW_AURA_LINE = Color(UITheme.SLOW_BLUE, 0.30)
 # Уровень здания — ромбики над ним (1-й уровень без отметки)
-const LEVEL_PIP_SIZE: float = 5.0
-const LEVEL_PIP_GAP: float = 14.0
-const LEVEL_PIP_COLOR = UITheme.AMBER_LIGHT
+# Стилизация 12.11.2026: ромбик — пиксельная бусина: тёмная обводка, янтарь, блик сверху; координаты — целые px
+const LEVEL_PIP_SIZE: float = 4.0
+const LEVEL_PIP_GAP: float = 11.0
+const LEVEL_PIP_COLOR = Palette.GOLD
+const LEVEL_PIP_LIGHT = UITheme.AMBER_LIGHT
+const LEVEL_PIP_EDGE = Palette.OUTLINE
 # Уровень здания видно на модели (решение пользователя 24.10.2026: были только ромбики; листов по уровням нет —
 # ASSETS_NEEDED P2): здание крупнее (LEVEL_SCALES по уровню) и кольцо у основания в цвете расы — на 2-м одно,
 # на 3-м двойное со свечением. Только вид. Есть свои кадры уровня (idle_2 / idle_3) — рост из листа (_level_scale)
@@ -152,6 +155,9 @@ func setup(building_card: CardData, grid_tile: Vector2i) -> void:
 	tile = grid_tile
 	building_type = card.building_type
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# Рисунок узла (тень, кольца уровня, круги аур, ромбики, круг залпа) — пиксельно, как эффекты боя (стилизация
+	# 12.11.2026: цвет и прозрачность ступенями с дизерингом Байера); у спрайта — свой материал
+	material = Vfx.soft_mix_material()   # мелкие ступени: тень и круги аур — большие слабые заливки
 	_load_sprite()
 	refresh_stats()
 
@@ -244,6 +250,7 @@ func _environment_material(env: Dictionary, k: float) -> ShaderMaterial:
 		m.set_shader_parameter("ao_strength", env.get("ao", 0.0))
 		m.set_shader_parameter("ao_from", bv - ENV_AO_HEIGHT)
 		m.set_shader_parameter("ao_to", bv + ENV_AO_BELOW)
+		Soldier.apply_style(m, "building")   # светотень ступенями и палитра расы (стилизация 12.11.2026)
 		_env_materials[key] = m
 	return _env_materials[key]
 
@@ -256,8 +263,8 @@ func _draw_level_ring() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))   # изометрия: круг на земле — эллипс 2:1
 	if card.building_level >= 3:
 		draw_circle(Vector2.ZERO, r, Color(col, LEVEL_RING_GLOW_ALPHA))
-		draw_arc(Vector2.ZERO, r + LEVEL_RING_GAP, 0.0, TAU, 64, Color(col, LEVEL_RING_ALPHA * 0.6), 2.0, true)
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 64, Color(col, LEVEL_RING_ALPHA), 2.5, true)
+		draw_arc(Vector2.ZERO, r + LEVEL_RING_GAP, 0.0, TAU, 64, Color(col, LEVEL_RING_ALPHA * 0.6), 2.0)
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 64, Color(col, LEVEL_RING_ALPHA), 2.0)   # без сглаживания — пиксельно
 	draw_set_transform(Vector2.ZERO)
 
 # -------------------------------------------------------
@@ -298,6 +305,8 @@ func _load_sprite() -> void:
 	sprite.animation_changed.connect(_update_offset)   # у рядов уровня свой сдвиг (level_shift)
 	add_child(sprite)
 	sprite.play(_level_anim("idle"))
+	# отброшенная тень по земле от основания (WorldLight, 12.11.2026); основание — начало координат спрайта
+	WorldLight.attach(sprite, Vector2.ZERO, frames.get_meta("base_point").y)
 
 # Центр ромба основания в кадре (px): самая широкая строка силуэта внизу кадра, выше нижнего пикселя
 # на четверть её ширины. Пустой кадр — центр низа
@@ -320,6 +329,15 @@ static func find_base(img: Image) -> Vector2:
 			best_w = right - left + 1
 			best_cx = (left + right + 1) / 2.0
 	return Vector2(best_cx, bottom - best_w / 4.0)
+
+# Не разворачиваются к цели левее (решение пользователя 13.11.2026: «Heretic Autocannon не должна поворачиваться»):
+# «раса/тип» (раса — card.faction, "" — Космодесант); спрайт всегда как нарисован, снаряд — из ствола по его оси
+# и дугой к цели (Projectile.launch_dir), цели прежние
+const NO_FLIP = ["chaos/tower"]
+
+func _flips_to_aim() -> bool:
+	var race := "chaos" if card.faction == "chaos" else ""
+	return not NO_FLIP.has(("%s/%s" % [race, building_type]) if race != "" else building_type)
 
 # Отражение спрайта (выстрел влево) — основание остаётся в точке здания
 func _set_flip(on: bool) -> void:
@@ -353,15 +371,16 @@ func play_once(base: String) -> bool:
 	var anim := _level_anim(base)
 	if not sprite.sprite_frames.has_animation(anim):
 		return false
-	_set_flip(base == "attack" and aim.x < 0.0)
+	_set_flip(base == "attack" and aim.x < 0.0 and _flips_to_aim())
 	sprite.stop()
 	sprite.play(anim)
-	if _is_static(anim):   # неживой ряд уровня — оживить кодом
-		if base == "attack":
-			_kick = 1.0
-			_kick_wait = _shot_delay()
-		else:
-			_pulse = 1.0
+	# Отдача выстрела — у любого ряда выстрела (решение пользователя 16.11.2026: «пушки без импакта»; корпус в рядах
+	# выстрела — кадр стойки, tools/building_shot_impact.py); толчок пополнения / щита — только неживым рядам уровня
+	if base == "attack":
+		_kick = 1.0
+		_kick_wait = _shot_delay()
+	elif _is_static(anim):
+		_pulse = 1.0
 	return true
 
 func _is_static(anim: StringName) -> bool:
@@ -418,7 +437,7 @@ func _muzzle_to_world(m: Vector2) -> Vector2:
 	var base: Vector2 = sprite.sprite_frames.get_meta("base_point", Vector2(size.x / 2.0, size.y))
 	var p := Vector2(size.x / 2.0 + m.x, size.y + m.y) - base   # muzzle — от центра низа кадра (sheet_to_frames)
 	p += _level_shift(_level_anim("attack"))   # ствол едет вместе с рядом уровня
-	if aim.x < 0.0:   # выстрел влево — спрайт отразится (play_once), основание на месте
+	if aim.x < 0.0 and _flips_to_aim():   # выстрел влево — спрайт отразится (play_once), основание на месте
 		p.x = -p.x
 	return to_global(p * _level_k)
 
@@ -450,12 +469,21 @@ func _process(delta: float) -> void:
 	if sprite:
 		sprite.modulate.a = self_modulate.a
 		hold_idle_outside_battle(sprite)
+		hold_frame_rate(sprite)
 		_apply_motion(delta)
 	if _aura_ring != null and not BattleManager.is_battle_running():
 		if is_instance_valid(_aura_ring):
 			_aura_ring.dismiss()
 		_aura_ring = null
 		queue_redraw()
+
+# Кадры здания не ускоряются вместе с боем (решение пользователя 12.11.2026: «не ускоряй смену кадров зданий во
+# время ускорения боя, кроме кадров стрельбы у пушек»): ряды выстрела (attack, attack_2…) — как бой, остальные
+# (стойка, пополнение, щит) — делятся на BattleManager.battle_speed_now. Цитадель — так же (Citadel._process)
+static func hold_frame_rate(s: AnimatedSprite2D) -> void:
+	var k := 1.0 if String(s.animation).begins_with("attack") else 1.0 / maxf(BattleManager.battle_speed_now, 0.01)
+	if s.speed_scale != k:
+		s.speed_scale = k
 
 # Вне схватки (расстановка, итог) стойка здания — один кадр idle, в бою — анимация (решение пользователя
 # 20.10.2026: покачивание стоек на расстановке мелькало; бойцы анимируются всегда). Уровни — idle_2 / idle_3
@@ -476,10 +504,10 @@ func _draw() -> void:
 	_draw_level_ring()
 	if _aura_ring == null and stats.get("slow_radius", 0.0) > 0.0:   # в бою — кольцо ауры (_show_aura)
 		draw_circle(Vector2.ZERO, stats["slow_radius"], SLOW_AURA_COLOR)
-		draw_arc(Vector2.ZERO, stats["slow_radius"], 0.0, TAU, 48, SLOW_AURA_LINE, 1.5, true)
+		draw_arc(Vector2.ZERO, stats["slow_radius"], 0.0, TAU, 48, SLOW_AURA_LINE, 2.0)
 	if _aura_ring == null and stats.get("poison_radius", 0.0) > 0.0:
 		draw_circle(Vector2.ZERO, stats["poison_radius"], POISON_AURA_COLOR)
-		draw_arc(Vector2.ZERO, stats["poison_radius"], 0.0, TAU, 48, POISON_AURA_LINE, 1.5, true)
+		draw_arc(Vector2.ZERO, stats["poison_radius"], 0.0, TAU, 48, POISON_AURA_LINE, 2.0)
 	if sprite:   # свой спрайт — блоков и нарисованных стволов нет
 		if building_type == "artillery" and _explosion_id > 0:
 			draw_circle(to_local(_explosion_point), stats.get("splash_radius", 0.0), EXPLOSION_COLOR)
@@ -529,9 +557,14 @@ func _draw_level_pips() -> void:
 		top = get_occlusion_rect().position.y - global_position.y - LEVEL_PIP_SIZE * 2.0
 	var x0 = -LEVEL_PIP_GAP * (card.building_level - 1) / 2.0
 	for i in range(card.building_level):
-		var c = Vector2(x0 + i * LEVEL_PIP_GAP, top)
-		draw_colored_polygon(PackedVector2Array([c + Vector2(0, -LEVEL_PIP_SIZE), c + Vector2(LEVEL_PIP_SIZE, 0),
-			c + Vector2(0, LEVEL_PIP_SIZE), c + Vector2(-LEVEL_PIP_SIZE, 0)]), LEVEL_PIP_COLOR)
+		var c := Vector2(x0 + i * LEVEL_PIP_GAP, top).round()
+		_pip(c, LEVEL_PIP_SIZE + 1.5, LEVEL_PIP_EDGE)
+		_pip(c, LEVEL_PIP_SIZE, LEVEL_PIP_COLOR)
+		_pip(c + Vector2(0, -LEVEL_PIP_SIZE * 0.4), LEVEL_PIP_SIZE * 0.45, LEVEL_PIP_LIGHT)
+
+func _pip(c: Vector2, r: float, col: Color) -> void:
+	draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r),
+		c + Vector2(-r, 0)]), col)
 
 # Центр верхней грани блока подклетки (i, j) на ярусе level
 func _block_top(i: float, j: float, level: int) -> Vector2:
@@ -566,7 +599,7 @@ static func get_effect_tiles(type: String, at: Vector2i) -> Array[Vector2i]:
 
 # Подсказка: название и уровень, что делает (с текущими цифрами), можно ли улучшить
 func describe() -> String:
-	return "\n".join(["%s · ур. %d/%d" % [card.title, card.building_level, CardData.MAX_BUILDING_LEVEL],
+	return "\n".join(["%s · ур. %d/%d" % [card.display_title(), card.building_level, CardData.MAX_BUILDING_LEVEL],
 		effect_text(), upgrade_text()])
 
 func upgrade_text() -> String:
@@ -588,7 +621,7 @@ func effect_text() -> String:
 		"barracks":
 			if card.faction == "chaos":   # Святилище культа: не лечит, отряд бога рядом — павшие встают его бойцами
 				lines.append(("После каждой победы возвращают %d павших бойцов отрядам на соседних клетках (подсвечены). "
-					+ "Отряд бога Хаоса рядом — павшие других соседей встают его бойцами (сила — по редкости отряда)") \
+					+ "Отряд Внешнего рядом — павшие других соседей встают его бойцами (сила — по редкости отряда)") \
 					% floori(stats.get("refill", 0.0)))
 			else:
 				lines.append("После каждой победы лечат отряды на соседних клетках (подсвечены) на %d%% HP и возвращают %d павших" \
@@ -612,7 +645,7 @@ func effect_text() -> String:
 			lines.append("Отряды на соседних клетках (подсвечены) +%d%% урона. После боя чинит цитадель на %d HP" % [
 				roundi(stats.get("damage_bonus", 0.0) * 100.0), stats.get("repair", 0.0)])
 		"skull_altar":
-			lines.append("Каждый убитый враг: +%.1f%% урона всей армии, отрядам Кхорна ещё +%.1f%%, до конца боя (до +%d%%)" % [
+			lines.append("Каждый убитый враг: +%.1f%% урона всей армии, отрядам Кипящего ещё +%.1f%%, до конца боя (до +%d%%)" % [
 				stats.get("per_kill", 0.0) * 100.0, stats.get("khorne_per_kill", 0.0) * 100.0,
 				roundi(stats.get("max_bonus", 0.0) * 100.0)])
 		"plague_cauldron":
@@ -627,7 +660,7 @@ func effect_text() -> String:
 		_:
 			lines.append(card.description)
 	if not special_active():
-		lines.append("Не ваш %s — особый эффект не действует" % ("бог" if card.faction == "chaos" else "орден"))
+		lines.append("Не ваш Внешний — особый эффект не действует" if card.faction == "chaos" else "Не ваше братство — особый эффект не действует")
 	return "\n".join(lines)
 
 
@@ -671,7 +704,7 @@ func tick(delta: float) -> void:
 	if target == null:
 		return
 	attack_timer = 1.0 / stats.get("attack_speed", 1.0)
-	var aim_offset = Vector2(0, -Soldier.TARGET_SPRITE_HEIGHT / 2.0)
+	var aim_offset = Vector2(0, -Soldier.TARGET_SPRITE_HEIGHT / 2.0 + Soldier.GROUND_SINK)
 	aim = target.global_position + aim_offset - global_position
 	queue_redraw()
 	var barrels := [to_global(_block_top(0.5, 0.5, TOWER_LEVELS) + aim.normalized() * BARREL_LENGTH)]
@@ -793,7 +826,7 @@ func _tick_slow_aura() -> void:
 		if global_position.distance_to(e.global_position) <= r:
 			e.apply_status(StatusEffects.SLOWED, power, WALL_SLOW_LINGER, false)
 
-# Котёл Нургла: врагам в радиусе — яд без стаков, держится POISON_LINGER после выхода
+# Котёл Дедушки Тысячи: врагам в радиусе — яд без стаков, держится POISON_LINGER после выхода
 func _tick_poison_aura() -> void:
 	var r: float = stats["poison_radius"]
 	for e in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY):
@@ -804,7 +837,7 @@ func _tick_poison_aura() -> void:
 # пересчитывается отношением, когда растёт счёт)
 var _enemies_at_start: int = 0
 var _altar_bonus: float = 0.0
-var _altar_khorne_bonus: float = 0.0   # отрядам Кхорна — сверх прибавки армии (решение пользователя 25.10.2026)
+var _altar_khorne_bonus: float = 0.0   # отрядам Кипящего — сверх прибавки армии (решение пользователя 25.10.2026)
 
 func _tick_skull_altar() -> void:
 	var kills := maxi(_enemies_at_start - SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY).size(), 0)
@@ -826,7 +859,7 @@ func _tick_skull_altar() -> void:
 	for s in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER):
 		s.current_damage *= k
 
-# Особый эффект здания ордена / бога (на соседние отряды, прибавка отрядам Кхорна у Алтаря) — только когда игрок играет
+# Особый эффект здания ордена / бога (на соседние отряды, прибавка отрядам Кипящего у Алтаря) — только когда игрок играет
 # за этого бога / орден (решение пользователя 25.10.2026); общие здания — всегда. Основное действие (аура, выстрел) — всегда
 func special_active() -> bool:
 	var owner := Chapters.building_owner(card.id)

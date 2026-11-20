@@ -125,11 +125,11 @@ func _show_tab(tab: String) -> void:
 	for card in _cards:
 		if _tab_of(card) != tab:
 			continue
-		var b := UITheme.make_button(card.title, "", func(): card_picked.emit(card.id))
+		var b := UITheme.make_button(card.display_title(), "", func(): card_picked.emit(card.id))
 		b.name = "Card_" + card.id
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.clip_text = true
-		b.tooltip_text = "%s · %s\n%s" % [UITheme.RARITY_NAMES.get(card.rarity, card.rarity), card.title, card.description]
+		b.tooltip_text = "%s · %s\n%s" % [UITheme.RARITY_NAMES.get(card.rarity, card.rarity), card.display_title(), card.description]
 		b.add_theme_color_override("font_color", UITheme.rarity_color(card.rarity))
 		_list.add_child(b)
 

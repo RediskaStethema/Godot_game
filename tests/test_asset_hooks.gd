@@ -131,6 +131,25 @@ func _main() -> void:
 	_check("ствол уровня: metadata/level_muzzle — снаряд из своего ствола ряда attack_2 (сдвиг %s ≈ %s)" % [after - before, expect_delta],
 		(after - before).distance_to(expect_delta) < 0.5 and t.sprite.animation == "attack_2"
 		and shot2 != null and shot2 != shot and shot2._origin.distance_to(after) < 0.5)
+	# Heretic Autocannon не разворачивается (решение пользователя 13.11.2026, Building.NO_FLIP): цель слева —
+	# спрайт как нарисован, ствол на своём месте; Bolter Turret — отражается, как раньше
+	var aim_was: Vector2 = t.aim
+	t.aim = Vector2(1, 0)
+	var right_x: float = t.to_local(t._sprite_muzzle()).x   # ствол при выстреле вправо — как нарисован
+	t.aim = Vector2(-1, 0)
+	t.play_once("attack")
+	var sm_flip: bool = t.sprite.flip_h
+	var sm_x: float = t.to_local(t._sprite_muzzle()).x
+	turret.faction = "chaos"
+	t.play_once("attack")
+	var ch_flip: bool = t.sprite.flip_h
+	var ch_x: float = t.to_local(t._sprite_muzzle()).x
+	turret.faction = ""
+	t.aim = aim_was
+	t._set_flip(false)
+	_check("Heretic Autocannon: цель слева — не отражается, ствол как нарисован (%.0f = %.0f); Bolter Turret — отражён (%.0f)" % [
+		ch_x, right_x, sm_x], sm_flip and not ch_flip and absf(ch_x - right_x) < 0.5 and absf(sm_x + right_x) < 0.5
+		and absf(right_x) > 1.0)
 	# Залп (06.11.2026): metadata/level_barrels — снаряд из каждого ствола, урон поровну, сумма прежняя
 	tower_frames.set_meta("level_barrels", {2: [Vector2(-30, -90), Vector2(-30, -70), Vector2(-10, -80)]})
 	var n_before: int = bm.projectiles.size()
@@ -236,6 +255,32 @@ func _main() -> void:
 	P.launch(current_scene, "bolt", Vector2.ZERO, null, Vector2(100, 0)).tick(0.1)   # звук — при вылете из ствола
 	_check("события звука: музыка боя, выстрел снаряда (%s)" % ", ".join(audio.history.slice(0, 4)),
 		audio.current_music() == "battle" and audio.history.any(func(h): return h.begins_with("shot_bolt")))
+	# Пакет звуков пользователя (09.11.2026): у подключённых событий есть файлы в assets/audio, музыка menu / shop /
+	# battle грузится, боя с боссом своего трека нет — запасной боевой
+	audio._streams.clear()   # сброс подмен выше — дальше настоящие файлы
+	var need := ["shot_bolt", "shot_spark", "shot_charged", "melee_hit", "death", "death_vehicle", "hit", "buy", "place",
+		"reroll", "sell", "ui_click", "pause", "no_money", "step", "step_heavy", "boss_step"]
+	var missing: Array = need.filter(func(e): return audio._get_streams(e).is_empty())
+	var music_ok: bool = ["menu", "shop", "battle"].all(func(t): return audio._find_music(t) != null)
+	var boss_fallback: bool = audio._find_music("boss") == null and audio._find_music(audio.MUSIC_FALLBACK["boss"]) != null
+	_check("звуки пакета: у %d событий файлы (нет у: %s), музыка menu / shop / battle, босс — боевая" % [
+		need.size() - missing.size(), str(missing)], missing.is_empty() and music_ok and boss_fallback)
+	# Щелчок у любой кнопки дерева (09.11.2026: кнопки не из UITheme.make_button молчали); со своим звуком — без щелчка
+	var plain := Button.new()
+	var own := Button.new()
+	own.set_meta(audio.NO_CLICK, true)
+	current_scene.add_child(plain)
+	current_scene.add_child(own)
+	audio._last_play.erase("ui_click")
+	audio.history.clear()
+	plain.button_down.emit()
+	var plain_clicks: int = audio.history.count("ui_click")
+	own.button_down.emit()
+	var own_clicks: int = audio.history.count("ui_click") - plain_clicks
+	plain.queue_free()
+	own.queue_free()
+	_check("щелчок: у кнопки Button.new() — есть (%d), у кнопки со своим звуком — нет (%d)" % [plain_clicks, own_clicks],
+		plain_clicks == 1 and own_clicks == 0)
 	bm.stop_battle()
 	await _effects_pack()
 	quit()
@@ -272,11 +317,19 @@ func _effects_pack() -> void:
 	var tactical = CardFactory.create("tactical_squad")
 	s._play_squad_card(tactical, Vector2i(2, 1))
 	s._play_building_card(CardFactory.plasma_generatorium(), Vector2i(2, 2))
-	var arrive_build: bool = _has_level_glow(s._get_player_squad_at(Vector2i(2, 1)), "arrive") 		and _has_tile_glow(s.renderer, "build")
+	# отряд Космодесанта — в десантной капсуле (DropPod, 12.11.2026): пока она падает — отряда не видно,
+	# «В БОЙ» раньше конца — капсула снята, отряд проявляется
+	var dropped = s._get_player_squad_at(Vector2i(2, 1))
+	var pods: Array = units.get_children().filter(func(c): return c.get_script() != null 		and c.get_script().resource_path.ends_with("DropPod.gd"))
+	var pod_ok: bool = pods.size() == 1 and dropped.modulate.a == 0.0
+	for pod in s._drop_pods:
+		pod.finish()
+	pod_ok = pod_ok and s._spawn_tweens.any(func(t): return t.is_valid())
+	var arrive_build: bool = pod_ok and _has_tile_glow(s.renderer, "build")
 	s._merge_squad(tactical, s._get_player_squad_at(Vector2i(1, 1)))
 	s._play_upgrade_card(CardFactory.create("battle_fury"), Vector2i(1, 1))
 	s._play_event_card(CardFactory.create("orbital_strike"), Vector2i(0, 1))
-	_check("расстановка: отряд — свет телепорта на бойцах, здание — волна по клетке, уровень — свет с шевронами, " +
+	_check("расстановка: отряд — десантная капсула (снимается по «В БОЙ»), здание — волна по клетке, уровень — свет с шевронами, " +
 		"улучшение — знак карты, орбитальный удар — метка на клетке", arrive_build
 		and _has_level_glow(s._get_player_squad_at(Vector2i(1, 1))) and _has_fx(units, "upgrade_battle_fury")
 		and _has_tile_glow(s.renderer, "strike"))

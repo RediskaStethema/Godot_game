@@ -2,9 +2,11 @@ class_name RunMapData
 extends Resource
 
 # Забег — линейная цепочка шагов, игрок путь не выбирает:
-#   магазин → волна 1 → магазин → волна 2 → … → магазин → волна TOTAL_WAVES;
-#   после волн EVENT_AFTER_WAVES — событие перед следующим магазином
-# Каждая волна начинается с магазина. Номер волны боевого шага всегда совпадает
+#   старт: 6 карт рубашкой вверх, игрок берёт 3 вслепую (START_PICK, решение пользователя 17.11.2026 — магазина
+#   перед волной 1 больше нет) → волна 1 → выбор карты → волна 2 → … ; после волн EVENT_AFTER_WAVES — событие и магазин
+#   (решение пользователя 16.11.2026: магазин только перед 1-й волной и после 4 / 8 / 12 / 14, между
+#   остальными волнами — выбор карты PICK: 4 рубашкой вверх → 2 вскрыты → 1 в руку)
+# Каждая волна начинается с магазина или выбора карты. Номер волны боевого шага всегда совпадает
 # с EconomyManager.round_number (растёт только в give_round_income, 1 раз за бой).
 # Тип боя — по номеру волны: каждая MINIBOSS_EVERY-я — мини-босс,
 # последняя — главный босс. Расширение королевства — BattleManager.EXPANSION_EVERY.
@@ -34,7 +36,14 @@ static func get_battle_type_for_wave(wave: int, waves: int = TOTAL_WAVES) -> Str
 static func generate(_rng: RandomNumberGenerator = null, waves: int = TOTAL_WAVES) -> RunMapData:
 	var map = RunMapData.new()
 	for wave in range(1, waves + 1):
-		_add_node(map, RunMapNode.SHOP, 0)
+		# Перед 1-й волной — стартовый выбор 3 из 6 вслепую (17.11.2026); магазин — после событий (волны
+		# EVENT_AFTER_WAVES); после остальных волн — выбор карты (решение пользователя 16.11.2026)
+		if wave == 1:
+			_add_node(map, RunMapNode.START_PICK, 0)
+		elif (wave - 1) in EVENT_AFTER_WAVES:
+			_add_node(map, RunMapNode.SHOP, 0)
+		else:
+			_add_node(map, RunMapNode.PICK, 0)
 		_add_node(map, get_battle_type_for_wave(wave, waves), wave)
 		if wave in EVENT_AFTER_WAVES and wave < waves:
 			_add_node(map, RunMapNode.EVENT, 0)

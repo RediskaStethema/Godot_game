@@ -30,6 +30,7 @@ var _meteor_dir := Vector2.ZERO
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	material = Vfx.mix_material()   # мерцание и хвост метеора — ступенями с дизерингом (стилизация 12.11.2026)
 	_rng.seed = SEED
 	resized.connect(_build)
 	_build()

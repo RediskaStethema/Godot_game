@@ -5,7 +5,7 @@ extends PanelContainer
 @onready var card_desc: Label = $VBoxContainer/UnitStats
 @onready var buy_button: Button = $VBoxContainer/BuyButton
 
-const CARD_SIZE = Vector2(220, 330)
+const CARD_SIZE = Vector2(200, 330)   # 11.11.2026: было 220 — справа продавец (ShopVendor); лицо 180 + поля 10
 # Портрет по силуэту бойца на грунте расы в рамке редкости (UITheme.make_portrait_frame): окно почти в
 # пропорции рамки по ширине карты без полей (чуть ниже — место описанию)
 const PORTRAIT_HEIGHT = 156.0
@@ -44,6 +44,7 @@ func setup(data: CardData, index: int, is_free: bool = false) -> void:
 	_fill_body(data)
 	buy_button.custom_minimum_size = Vector2(0, 42)
 	buy_button.pressed.connect(_on_buy_pressed)
+	buy_button.set_meta(AudioManager.NO_CLICK, true)   # свой звук — buy / no_money (ShopScene)
 	# Неактивная кнопка (не хватает Req, рука полна) — клик всё равно отвечает: ShopScene скажет почему
 	buy_button.gui_input.connect(func(e: InputEvent):
 		if buy_button.disabled and e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
@@ -138,7 +139,7 @@ func _fill_header(data: CardData) -> void:
 		$VBoxContainer.move_child(_face, 0)
 		CardGlare.attach(_face, data.rarity, true)   # наклон, блик; подсветка редкости — всегда (только вид)
 		card_faction.hide()   # редкость и тип — рамка и масть
-		card_title.text = data.title
+		card_title.text = data.display_title()
 		card_title.hide()     # название — на плашке рамки
 		return
 	card_faction.text = "%s · %s" % [
@@ -150,17 +151,14 @@ func _fill_header(data: CardData) -> void:
 	var portrait = _make_portrait(data)
 	$VBoxContainer.add_child(portrait)
 	$VBoxContainer.move_child(portrait, 1)
-	card_title.text = data.title
+	card_title.text = data.display_title()
 	card_title.theme_type_variation = "CardTitleLabel"
 	card_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 # Характеристики + описание + куда класть (CardData — общее для магазина и скамейки)
 func _fill_body(data: CardData) -> void:
-	var lines: Array[String] = []
-	if data.get_stats_line() != "":
-		lines.append(data.get_stats_line())
-	lines.append(data.description)
+	var lines: Array[String] = [data.description]   # характеристики — плашками над текстом (make_stat_chips)
 	if data.get_play_hint() != "":
 		lines.append("(в бою: %s)" % data.get_play_hint())
 	card_desc.text = "\n".join(lines)
@@ -182,7 +180,14 @@ func _fill_body(data: CardData) -> void:
 	inset.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	$VBoxContainer.add_child(inset)
 	$VBoxContainer.move_child(inset, card_desc.get_index())
-	inset.add_child(scroll)
+	var inset_box := VBoxContainer.new()
+	inset_box.add_theme_constant_override("separation", 3)
+	inset_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inset.add_child(inset_box)
+	var chips := UITheme.make_stat_chips(data, DESC_FONT)
+	if chips:
+		inset_box.add_child(chips)
+	inset_box.add_child(scroll)
 	card_desc.reparent(scroll)
 	card_desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
@@ -231,10 +236,15 @@ func _refresh_button() -> void:
 		_face_cost.text = str(cost)
 	if hand_full:
 		buy_button.text = "Рука полна"
+		UITheme.set_coin_icon(buy_button, false)
 		buy_button.disabled = true
+		buy_button.tooltip_text = "Рука полна — продайте карту (наведите на карту в руке)"
 		return
-	buy_button.text = "Взять бесплатно" if cost == 0 else "Купить · %d Req" % cost
+	buy_button.text = "Взять бесплатно" if cost == 0 else "Купить · %d" % cost
+	UITheme.set_coin_icon(buy_button, cost > 0)
 	buy_button.disabled = not EconomyManager.can_afford(cost)
+	# неактивная — почему (решение пользователя 12.11.2026, «отклик интерфейса»)
+	buy_button.tooltip_text = "Не хватает %s" % GameConstants.coins(cost - EconomyManager.requisition) 		if buy_button.disabled else ""
 
 func _on_buy_pressed() -> void:
 	emit_signal("purchase_requested", slot_index)

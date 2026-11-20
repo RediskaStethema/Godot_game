@@ -17,6 +17,10 @@ uniform float sweep = -1.0;          // доля прохода полосы б�
 uniform vec2 mouse = vec2(0.5);      // курсор в долях карты
 uniform float hover = 0.0;
 uniform vec3 light_color = vec3(1.0, 0.86, 0.62);
+// Силуэт карты: альфа рамки + окно арта (в долях лица) — прозрачные поля рамки (у Common) не светятся
+uniform bool use_mask = false;
+uniform sampler2D mask_tex : filter_linear;
+uniform vec4 window = vec4(0.0, 0.0, 1.0, 1.0);   // x, y, конец x, конец y
 void fragment() {
 	vec3 col = vec3(0.0);
 	if (sweep >= 0.0) {
@@ -29,6 +33,10 @@ void fragment() {
 		col += rainbow * 0.09 * hover;
 	}
 	col += light_color * hover * 0.14 * smoothstep(0.65, 0.0, distance(UV, mouse));
+	if (use_mask) {
+		float inside = step(window.x, UV.x) * step(UV.x, window.z) * step(window.y, UV.y) * step(UV.y, window.w);
+		col *= max(texture(mask_tex, UV).a, inside);
+	}
 	COLOR = vec4(col, 1.0);
 }"""
 
@@ -165,6 +173,17 @@ static func attach(face: Control, rarity: String, glow_always: bool = false) -> 
 	g._mat.set_shader_parameter("foil", 1.0 if rarity == "epic" else 0.0)
 	var lc: Color = Palette.STAR_AMBER
 	g._mat.set_shader_parameter("light_color", Vector3(lc.r, lc.g, lc.b))
+	# Блик — только по силуэту рамки (решение пользователя 10.11.2026: у Common подсветка выдавала прямоугольник
+	# ассета — прозрачные поля рамки светились ADD)
+	var frame := face.get_node_or_null("Frame") as TextureRect
+	if frame and frame.texture:
+		var layout: Dictionary = UITheme.CARD_FRAME_LAYOUT.get(rarity, UITheme.CARD_FRAME_LAYOUT["common"])
+		var win: Rect2 = layout["window"]
+		g._mat.set_shader_parameter("use_mask", true)
+		g._mat.set_shader_parameter("mask_tex", frame.texture)
+		g._mat.set_shader_parameter("window", Vector4(win.position.x / UITheme.CARD_ART_SIZE.x,
+			win.position.y / UITheme.CARD_ART_SIZE.y, win.end.x / UITheme.CARD_ART_SIZE.x,
+			win.end.y / UITheme.CARD_ART_SIZE.y))
 	g.material = g._mat
 	g._sweeps = rarity == "rare" or rarity == "epic"
 	face.add_child(g)

@@ -174,7 +174,10 @@ func _main() -> void:
 	var on_event = ev_scene.name == "EventScene" and rm.current_node_id == ev_id and not rm.current_completed
 	var button = ev_scene._option_buttons.filter(func(b): return not b.disabled)[0]
 	button.pressed.emit()
-	await _frames(1)
+	await _frames(2)
+	# исход на иллюстрации (09.11.2026): вспышка поверх картинки (золотая — удача, красная — неудача)
+	var art = ev_scene.get("_art")
+	var outcome_shown: bool = art == null or art.get_children().any(func(c): return c is ColorRect)
 	var chosen = rm.current_completed and ev_scene._next_button.visible \
 		and ev_scene._option_buttons.all(func(b): return b.disabled)
 	bm.reset_run()
@@ -182,8 +185,8 @@ func _main() -> void:
 	var persisted = rm.current_node_id == ev_id and rm.current_completed
 	ev_scene._on_next_pressed()
 	await _frames(3)
-	_check("сцена: событие открыто, выбор применён и сохранён, «Далее» → магазин",
-		on_event and chosen and persisted and current_scene.name == "ShopScene" and rm.current_node_id == ev_id + 1)
+	_check("сцена: событие открыто, выбор применён и сохранён, исход вспышкой на картинке, «Далее» → магазин",
+		on_event and chosen and outcome_shown and persisted and current_scene.get("shop") != null and rm.current_node_id == ev_id + 1)
 
 	sv.delete_save()
 	quit()

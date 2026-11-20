@@ -1,177 +1,143 @@
 extends Control
 
-# Живая сцена главного меню справа (UI_NEEDED.txt раздел 6, пакет художника 06.11.2026):
-# слои одного холста CANVAS (assets/ui/menu/anim/) складываются пиксель в пиксель —
-# космос, звёзды, планета, облака, корабли, башня, окна, знамя, десантник.
-# Циклы кадров — по FPS своего слоя, корабли и облака код медленно ведёт сам.
-# Ширина узла — по высоте (пропорция холста), прижат к правому краю родителя.
-# Пакета нет — неподвижная menu_scene.png, как раньше (MainMenu._add_scene_art).
+# Живая сцена главного меню на весь экран (решение пользователя 16.11.2026: «переделай меню так, как на эталоне»,
+# эталон — exec-cd0d7c5f-8bdb-404a-b35c-e09977c372ad.png, ассеты — NewAssets/07_ui/assets/ui/menu/anim → tools/menu_v2_assets.py):
+# слои на холсте CANVAS 1774×887 (координаты эталона), холст масштабируется «обложкой» по окну и прижат к правому краю —
+# при окне уже 2:1 слева обрезается пустое небо под колонкой меню. Снизу вверх: звёздное небо, грозовые облака,
+# дальний мост-крепость, флагман, три корабля с огнями, башня с парапетом и знамёнами (знамёна нарисованы на ней), пепел. Положение и масштаб слоёв подобраны по эталону (assets/source_sheets/menu_v2: locate.py, mock.py,
+# layout.json). Прежняя сцена (планета, башня на портретном холсте 712×1172, десантник, окна и знамя кадрами) — в бэкапе
+# assets/source_sheets/_backup_before_redesign_2026-11-15/ui/menu_anim/ (MenuSceneArt.gd.bak).
+# Живое: облака и корабли плывут и покачиваются медленно и плавно (решение пользователя 16.11.2026: «более плавным» — период
+# 45–90 с, огни дышат непрерывно, а не сменой кадров; общей палитры с дизерингом на меню больше нет — она «ползла» по
+# движущимся слоям), пепел над башней. Рыцаря на парапете нет (решение пользователя 16.11.2026). Пока курсор на кнопке
+# меню (MainMenu → set_menu_hover) каждое второе окно кораблей — флагмана и малых — разгорается ярче (слои
+# `*_glow_half`, tools/menu_ships_glow.py), курсор ушёл — плавно гаснет.
 
 const DIR = "res://assets/ui/menu/anim/"
-const CANVAS = Vector2(712, 1172)
+const CANVAS = Vector2(1774, 887)
 
-# Циклы кадров: имя слоя → [кадров, к/с]
-const LOOPS = {
-	"stars": [4, 1.5],
-	"windows": [4, 3.0],
-	"banner": [12, 8.0],
-	"marine": [8, 6.0],
-}
-# Корабли: место на холсте (по превью художника), дрейф по x (px, период с), покачивание (px, период с)
+# Слои без движения кадров: файл, положение и масштаб на холсте эталона
+const SKY = {"file": "menu_night_sky_stars", "pos": Vector2(0, 0), "scale": 1.0}
+const CLOUDS = {"file": "menu_storm_clouds", "pos": Vector2(0, 0), "scale": 1.0}
+const BRIDGE = {"file": "distant_fortress_bridge", "pos": Vector2(857, 460), "scale": 0.37}
+const CAPITAL = {"file": "menu_capital_ship", "pos": Vector2(480, 70), "scale": 0.5}
+const CASTLE = {"file": "menu_castle_battlement", "pos": Vector2(556, -22), "scale": 0.9}
+const CLOUD_DRIFT = Vector2(18, 90)     # облака: размах px холста, период с
+const CAPITAL_DRIFT = Vector2(11, 62)   # флагман: дрейф по x (px, период с)
+const CAPITAL_BOB = Vector2(4.0, 9.0)   # покачивание по y (px, период с)
+const BRIDGE_DRIFT = Vector2(7, 75)
+# Корабли пакета (ship_N.png и огни ship_N_glow_00..03): положение, масштаб, дрейф по x, покачивание по y
 const SHIPS = [
-	{"id": 1, "pos": Vector2(11, 66), "drift": Vector2(10, 34), "bob": Vector2(3, 6.0)},
-	{"id": 2, "pos": Vector2(61, 281), "drift": Vector2(8, 27), "bob": Vector2(2.5, 5.0)},
-	{"id": 3, "pos": Vector2(272, 422), "drift": Vector2(6, 21), "bob": Vector2(2, 4.2)},
+	{"id": 1, "pos": Vector2(1150, 80), "scale": 0.65, "drift": Vector2(13, 48), "bob": Vector2(3, 8.0)},
+	{"id": 2, "pos": Vector2(1390, 215), "scale": 0.42, "drift": Vector2(10, 39), "bob": Vector2(2.5, 7.0)},
+	{"id": 3, "pos": Vector2(1125, 415), "scale": 1.15, "drift": Vector2(8, 33), "bob": Vector2(2, 6.0)},
 ]
-const SHIP_GLOW_FPS: float = 4.0
-const CLOUD_DRIFT = Vector2(5, 48)   # облака по планете: размах px, период с
-# Облака — только на диске планеты (решение пользователя 08.11.2026, Screenshot 2026-11-08 113942: у кромки слой
-# облаков, который дрейфует, съезжал с неподвижного диска — край двоился): прозрачность облаков × силуэт планеты,
-# сжатый внутрь на CLOUD_EDGE_INSET px холста (минимум из 8 выборок вокруг), — у края облака тают, за край не выходят
-const CLOUD_EDGE_INSET: float = 9.0
-const CLOUD_MASK_SHADER = """shader_type canvas_item;
+const SHIP_GLOW_BASE: float = 0.55         # постоянные огни малых кораблей (слой `ship_N_glow`), дышат ±SHIP_GLOW_BREATH
+const SHIP_GLOW_BREATH: float = 0.2
+const SHIP_GLOW_PERIOD: float = 5.3
+const HOVER_GLOW: float = 1.0               # яркость слоёв `*_glow_half` при курсоре на кнопке (ADD поверх огней)
+const HOVER_HOLD: float = 0.35              # сек: свет держится после ухода курсора с кнопки (между кнопками — зазоры)
+const HOVER_RATE: float = 4.0               # доля в секунду: разгорается и гаснет за ~0.25 с, с плавным ходом
+# Корабли за облаками (решение пользователя 16.11.2026, `Screenshot 2026-11-16 192706.png`: «корабли должны быть как бы за
+# облаками»): облака рисуются под кораблями, поэтому шипастое днище флагмана и малый корабль под ним торчали поверх них.
+# Вторым слоем облаков это не лечится — облака поверх облаков темнели и меняли цвет (замечание пользователя). Вместо слоя —
+# вуаль в шейдере самих кораблей, моста и флагмана: цвет пикселя смешивается с цветом облака в той же точке холста
+# (та же формула, что у обычного наложения), сила растёт сверху вниз (доли высоты холста VEIL_FROM → VEIL_TO) — верхние
+# корабли и палуба флагмана на виду, днище и нижние корабли тонут в облаках, а сами облака не затрагиваются
+const VEIL_FROM: float = 0.25
+const VEIL_TO: float = 0.45
+const VEIL_STRENGTH: float = 0.95
+const VEIL_SHADER = """shader_type canvas_item;
 uniform float sat = 1.0;
 uniform float val = 1.0;
 uniform vec3 tint = vec3(1.0);
-uniform sampler2D planet_tex : filter_linear;
-uniform float shift_uv = 0.0;        // сдвиг облаков относительно планеты, доля ширины слоя
-uniform float inset = 9.0;           // px — насколько сжать силуэт планеты
+uniform sampler2D cloud_tex : filter_linear;
+uniform vec2 origin = vec2(0.0);
+uniform float k = 1.0;
+uniform float cloud_x = 0.0;
+uniform vec2 canvas = vec2(1774.0, 887.0);
+uniform float from_y = 0.25;
+uniform float to_y = 0.45;
+uniform float strength = 0.95;
+varying vec2 cpos;
+void vertex() {
+	cpos = origin + VERTEX * k;
+}
 void fragment() {
 	vec4 c = COLOR;
 	float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
 	c.rgb = mix(vec3(l), c.rgb, sat) * val * tint;
-	vec2 p = UV + vec2(shift_uv, 0.0);
-	vec2 d = TEXTURE_PIXEL_SIZE * inset;
-	vec2 e = d * 0.7071;
-	float m = texture(planet_tex, p).a;
-	m = min(m, min(texture(planet_tex, p + vec2(d.x, 0.0)).a, texture(planet_tex, p - vec2(d.x, 0.0)).a));
-	m = min(m, min(texture(planet_tex, p + vec2(0.0, d.y)).a, texture(planet_tex, p - vec2(0.0, d.y)).a));
-	m = min(m, min(texture(planet_tex, p + e).a, texture(planet_tex, p - e).a));
-	m = min(m, min(texture(planet_tex, p + vec2(e.x, -e.y)).a, texture(planet_tex, p + vec2(-e.x, e.y)).a));
-	c.a *= smoothstep(0.2, 0.95, m);
+	vec2 cuv = vec2((cpos.x - cloud_x) / canvas.x, cpos.y / canvas.y);
+	vec4 cl = texture(cloud_tex, cuv);
+	float m = cl.a * smoothstep(from_y, to_y, cuv.y) * strength;
+	c.rgb = mix(c.rgb, cl.rgb, m);
 	COLOR = c;
 }"""
-const PLANET_EXT: float = 320.0      # px холста — запас слева у *_wide (tools/menu_planet_extend.py EXT)
-# Свет сцены (решение пользователя 06.11.2026: «добавь освещение и стилизацию»): отсвет планеты
-const PLANET_LIGHT = Palette.SHIELD_BLUE
-const PLANET_LIGHT_ALPHA: float = 0.08   # 08.11.2026: планета глуше — и отсвет слабее (было 0.16)
-# Планета и облака темнее и глуше (решение пользователя 08.11.2026, образец exampel.png: тёмно-синий диск с
-# бледными облаками, не яркая голубая): насыщенность, яркость, холодный оттенок — шейдером на слоях
-const PLANET_GRADE = {"sat": 0.55, "val": 0.47, "tint": Color(0.82, 0.9, 1.0)}
-const CLOUDS_GRADE = {"sat": 0.45, "val": 0.66, "tint": Color(0.86, 0.93, 1.0)}
-# Остальная сцена тоже тусклее (решение пользователя 08.11.2026: «флаг слишком яркий, всё слишком яркое» —
-# замер по образцу: знамя 0.46 → 0.34 яркости, башня — нейтральный камень, огни кораблей едва тлеют)
-const TOWER_GRADE = {"sat": 0.45, "val": 0.84, "tint": Color(1.0, 0.98, 0.96)}
-# Знамя (решение пользователя 08.11.2026: «очень выбивается из общего стиля, слишком яркое»): глуше и темнее, светлое
-# (белая аквила, золото кромки) приглушено сильнее — knee, к кости, а не к белому; тон холоднее, как у башни
-const BANNER_GRADE = {"sat": 0.62, "val": 0.62, "tint": Color(0.95, 0.92, 0.92), "knee": 0.45}
-# Колышется только от клика по нему (решение пользователя 08.11.2026): в покое кадр 0, клик по полотну —
-# BANNER_WAVES проходов цикла и снова кадр 0
-const BANNER_WAVES: int = 2
-const BANNER_FPS: float = 9.0
-const SHIP_GRADE = {"sat": 0.5, "val": 0.85, "tint": Color(0.95, 0.97, 1.0)}
-const SHIP_GLOW_DIM: float = 0.35    # огни кораблей (ADD) — доля яркости
-const WINDOWS_DIM: float = 0.62      # свет в окнах башни
-# космос сцены почти чёрный (0, 3, 7) — поднят до фона меню (Palette.MENU_SPACE), шва нет
-const SPACE_GRADE = {"sat": 1.0, "val": 1.0, "tint": Color.WHITE, "lift": Color(0.043, 0.06, 0.088)}
+const SHIP_GRADE = {"sat": 0.75, "val": 0.9, "tint": Color(1.0, 0.93, 0.92)}
+
+const ASH_AMOUNT: int = 60
+const ASH_FROM_X: float = 0.62                 # пепел рождается правее этой доли холста — над башней
+const ASH_CANVAS_SCALE: float = 1.6
+
 const GRADE_SHADER = """shader_type canvas_item;
 uniform float sat = 1.0;
 uniform float val = 1.0;
 uniform vec3 tint = vec3(1.0);
-uniform vec3 lift = vec3(0.0);       // прибавка к тёмному (космос сцены — до цвета фона меню)
-uniform float knee = 0.0;            // светлое приглушается сильнее тёмного (белое → кость)
 void fragment() {
 	vec4 c = COLOR;
 	float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
-	c.rgb *= 1.0 - knee * smoothstep(0.35, 0.95, l);
-	c.rgb = max(mix(vec3(l), c.rgb, sat) * val * tint, lift);
+	c.rgb = mix(vec3(l), c.rgb, sat) * val * tint;
 	COLOR = c;
 }"""
-const PLANET_LIGHT_FROM = Vector2(0.0, 0.92)   # доли холста: центр — планета внизу слева
-const PLANET_LIGHT_TO = Vector2(0.62, 0.45)    # радиус — до середины башни
-const ASH_AMOUNT: int = 60
-const ASH_FROM_X: float = 0.4                  # пепел рождается правее этой доли холста — над башней
-const LIGHT_EDGE_MARGIN: float = 40.0          # px холста — свет планеты гаснет до нуля раньше кромки своего прямоугольника
-const ASH_CANVAS_SCALE: float = 2.0            # холст ×2 к экрану — пепел крупнее и быстрее в px холста
-# Десантник и его тень меньше на 20% (решение пользователя 07.11.2026: «слишком большой») — вокруг точки
-# под ногами (низ силуэта marine_00, середина сапог), стоит на тех же плитах
-const MARINE_SCALE: float = 0.5   # 08.11.2026, образец exampel.png: мельче рядом с башней (было 0.8)
-const MARINE_FEET = Vector2(291, 804)
-# Десантник органичнее (решение пользователя 08.11.2026, образец exampel.png: «у него есть тень»): стоит вплотную
-# к парапету (сдвиг ног MARINE_OFFSET px холста), под ногами тёмное пятно, от него на плиты падает тень —
-# силуэт текущего кадра, сплющенный и скошенный вправо (свет планеты слева), повторяет поворот головы
-const MARINE_OFFSET = Vector2(-8, -20)
-# Поворот головы — по курсору (решение пользователя 08.11.2026: «слишком часто поворачивается»): в покое стоит
-# спиной (кадр 0), курсор на кнопке меню — оборачивается до кадра MARINE_PEAK и держит, ушёл — доигрывает
-# поворот обратно (кадры после пика) и снова кадр 0. MainMenu зовёт set_marine_look
-const MARINE_PEAK: int = 3
-const MARINE_TURN_FPS: float = 8.0
-const CAST_SHADOW_ALPHA: float = 0.7
-const CAST_SHADOW_FLATTEN: float = -0.38   # длина тени — доля роста (минус — ложится от ног вперёд, на плиты)
-const CAST_SHADOW_SKEW: float = -0.9       # рад: и вправо (свет слева); подобрано по образцу из 4 вариантов
-const CONTACT_SHADOW_ALPHA: float = 0.6
-const CONTACT_SHADOW_SIZE = Vector2(150, 44)   # px холста до масштаба десантника
 
-var _stage: Control = null           # холст CANVAS, масштабируется под высоту
-var _loops: Dictionary = {}          # имя → {rect, frames}
-var _ships: Array = []               # {node, glow, glow_frames, data, phase}
+var _stage: Control = null           # холст CANVAS, масштабируется под окно
 var _clouds: TextureRect = null
-var _planet: TextureRect = null
+var _veiled: Array = []              # {node, mat}: слои под вуалью облаков (положение — в шейдер каждый кадр)
+var _castle_glow: TextureRect = null   # все окна башни — при курсоре на кнопке меню
+var _hover_hold: float = 0.0
+var _bridge: TextureRect = null
+var _capital: TextureRect = null
+var _ships: Array = []               # {node, glow, glow_frames, data, phase}
+var _capital_glow: TextureRect = null   # каждое второе окно флагмана — при курсоре на кнопке меню
+var _hover: float = 0.0              # 0..1 — насколько разгорелись окна кораблей
+var _hover_target: float = 0.0
 var _atmosphere: CPUParticles2D = null
 var _time: float = 0.0
+var _sky: TextureRect = null
+var _castle: TextureRect = null
+var _par := Vector2.ZERO   # параллакс от мыши (решение пользователя 18.11.2026): -1..1, плавно
+const PAR_SKY := Vector2(4, 2)
+const PAR_CLOUDS := Vector2(9, 4)
+const PAR_BRIDGE := Vector2(13, 6)
+const PAR_CAPITAL := Vector2(18, 8)
+const PAR_SHIPS := Vector2(22, 9)
+const PAR_CASTLE := Vector2(28, 12)
+const PAR_RATE: float = 2.5
 
 static func available() -> bool:
-	return ResourceLoader.exists(DIR + "layer_tower.png")
-
-# Слои планеты шире холста (решение пользователя 06.11.2026: «планета как бы обрезана» — у художника диск срезан
-# левым краем холста): *_wide.png на PLANET_EXT px шире слева, космос с прозрачным краем — layer_space_edge.png.
-# Есть — сцена не обрезается своей рамкой и без полосы растворения (MainMenu), нет — как раньше
-static func has_wide_planet() -> bool:
-	return ResourceLoader.exists(DIR + "layer_planet_wide.png") and ResourceLoader.exists(DIR + "layer_space_edge.png")
-
-func _planet_x() -> float:
-	return -PLANET_EXT if has_wide_planet() else 0.0
+	return ResourceLoader.exists(DIR + CASTLE["file"] + ".png") and ResourceLoader.exists(DIR + CAPITAL["file"] + ".png")
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Планета целиком (tools/menu_planet_extend.py) выходит за левый край сцены — без обрезки по её рамке
-	clip_contents = not has_wide_planet()
+	clip_contents = true
 	_stage = Control.new()
 	_stage.size = CANVAS
 	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_stage)
-	# Снизу вверх, как в README пакета
-	_grade(_add_layer("layer_space_edge" if has_wide_planet() else "layer_space"), SPACE_GRADE)   # левый край прозрачный — фон меню
-	_add_loop("stars")
-	_planet = _add_layer("layer_planet_wide" if has_wide_planet() else "layer_planet", _planet_x())
-	_grade(_planet, PLANET_GRADE)
-	_clouds = _add_layer("layer_clouds_wide" if has_wide_planet() else "layer_clouds", _planet_x())
-	_grade(_clouds, CLOUDS_GRADE)
-	if _clouds and _planet and _clouds.texture.get_size() == _planet.texture.get_size():
-		var sh := Shader.new()
-		sh.code = CLOUD_MASK_SHADER
-		var m: ShaderMaterial = _clouds.material
-		var keep := {"sat": m.get_shader_parameter("sat"), "val": m.get_shader_parameter("val"),
-			"tint": m.get_shader_parameter("tint")}
-		m.shader = sh
-		for k in keep:
-			m.set_shader_parameter(k, keep[k])
-		m.set_shader_parameter("planet_tex", _planet.texture)
-		m.set_shader_parameter("inset", CLOUD_EDGE_INSET)
+	_sky = _add_layer(SKY)
+	_clouds = _add_layer(CLOUDS)
+	_bridge = _add_layer(BRIDGE)
+	_veil(_bridge, {})
+	_capital = _add_layer(CAPITAL)
+	if _capital:
+		_veil(_capital, {})
+		_capital_glow = _add_glow(_capital, "menu_capital_ship_glow_half")
 	for ship in SHIPS:
 		_add_ship(ship)
-	_grade(_add_layer("layer_tower"), TOWER_GRADE)
-	_add_planet_light()
-	_add_loop("windows")
-	if _loops.has("windows"):
-		_loops["windows"]["rect"].modulate = Color(WINDOWS_DIM, WINDOWS_DIM, WINDOWS_DIM)
-	_add_loop("banner")
-	if _loops.has("banner"):
-		_grade(_loops["banner"]["rect"], BANNER_GRADE)
-	_add_loop("marine")
-	if _loops.has("marine"):
-		_add_marine_shadows()   # пятно у ног и падающая тень — под десантником
-		_scale_marine(_loops["marine"]["rect"])
+	var castle := _add_layer(CASTLE)
+	_castle = castle
+	if castle:
+		_castle_glow = _add_glow(castle, "menu_castle_battlement_glow")
 	_atmosphere = _add_ash()
 	_atmosphere.visible = GameSettings.atmosphere
 	GameSettings.changed.connect(_on_settings_changed)
@@ -181,45 +147,11 @@ func _ready() -> void:
 func _on_settings_changed() -> void:
 	_atmosphere.visible = GameSettings.atmosphere
 
-# Отсвет планеты: холодный свет снизу слева гаснет к башне (ADD) — ложится на башню и площадку
-func _add_planet_light() -> void:
-	var g = Gradient.new()
-	g.set_color(0, Color(PLANET_LIGHT, PLANET_LIGHT_ALPHA))
-	g.set_color(1, Color(PLANET_LIGHT, 0.0))
-	var tex = GradientTexture2D.new()
-	tex.gradient = g
-	tex.fill = GradientTexture2D.FILL_RADIAL
-	# Планета целиком выходит за левый край холста — свет тоже: прямоугольник шире слева на весь радиус пятна
-	# (+ LIGHT_EDGE_MARGIN; 06.11.2026, Screenshot 2026-11-06 175554.png: запаса PLANET_EXT не хватало — у левой
-	# кромки прямоугольника свет ещё не погас, на большом окне была видна вертикальная граница) и во столько же раз
-	# выше (радиус в UV — один на обе оси: так пятно на экране то же), центр — та же точка холста
-	var radius_x := (PLANET_LIGHT_TO - PLANET_LIGHT_FROM).length() * CANVAS.x
-	var ext := maxf(-_planet_x(), radius_x - PLANET_LIGHT_FROM.x * CANVAS.x + LIGHT_EDGE_MARGIN) if has_wide_planet() else 0.0
-	var k := (CANVAS.x + ext) / CANVAS.x
-	var rect_size := CANVAS * k
-	var center := PLANET_LIGHT_FROM * CANVAS + Vector2(ext, 0.0)
-	tex.fill_from = center / rect_size
-	tex.fill_to = tex.fill_from + (PLANET_LIGHT_TO - PLANET_LIGHT_FROM) / k
-	var r = TextureRect.new()
-	r.name = "PlanetLight"
-	r.texture = tex
-	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	r.stretch_mode = TextureRect.STRETCH_SCALE
-	r.position = Vector2(-ext, 0.0)
-	r.size = rect_size
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var mat = CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	r.material = mat
-	_stage.add_child(r)
-
-# Пепел в воздухе над площадкой — как поле Космодесанта (Atmosphere "ash"), в масштабе холста
+# Пепел в воздухе над башней — как поле Космодесанта (Atmosphere "ash"), в масштабе холста
 func _add_ash() -> CPUParticles2D:
 	var k: Dictionary = Atmosphere.KINDS["ash"]
 	var p = CPUParticles2D.new()
 	p.name = "Ash"
-	# Рождается только над башней (ASH_FROM_X — доля холста): летит вправо-вниз и не доходит до левого края
-	# сцены — иначе по краю было бы видно, где пепел кончается
 	var from_x := CANVAS.x * ASH_FROM_X
 	p.position = Vector2((from_x + CANVAS.x) / 2.0, CANVAS.y / 2.0)
 	p.amount = ASH_AMOUNT
@@ -241,47 +173,77 @@ func _add_ash() -> CPUParticles2D:
 	ramp.add_point(0.2, c)
 	ramp.add_point(0.75, c)
 	p.color_ramp = ramp
+	p.material = Vfx.mix_material()   # пепел — прозрачность ступенями, как частицы поля
 	_stage.add_child(p)
 	return p
 
+# Запас холста за краем окна (решение пользователя 18.11.2026: у замка внизу была видна обрезанность — слои сдвигает параллакс
+# и дрейф, а нижний край башни не доходил до низа холста): холст крупнее обложки на OVERSCAN, края уходят за окно
+const OVERSCAN: float = 0.06
 func _layout() -> void:
-	# Своя ширина — по высоте (как прежняя картинка EXPAND_FIT_WIDTH_PROPORTIONAL)
-	var w = size.y * CANVAS.x / CANVAS.y
-	if absf(offset_left + w) > 0.5:
-		offset_left = -w
-		return   # придёт новый resized
 	var s = maxf(size.x / CANVAS.x, size.y / CANVAS.y)
-	_stage.scale = Vector2(s, s)
-	_stage.position = Vector2(size.x - CANVAS.x * s, (size.y - CANVAS.y * s) * 0.5)
+	var s2: float = s * (1.0 + OVERSCAN)
+	_stage.scale = Vector2(s2, s2)
+	_stage.position = Vector2(size.x - CANVAS.x * s2 + CANVAS.x * (s2 - s) * 0.5, (size.y - CANVAS.y * s2) * 0.5)
 
 func _process(delta: float) -> void:
 	_time += delta
-	for key in _loops:
-		if key == "marine":
-			_tick_marine(delta)
-			continue
-		if key == "banner":
-			_tick_banner(delta)
-			continue
-		var loop = _loops[key]
-		var frames: Array = loop["frames"]
-		loop["rect"].texture = frames[int(_time * LOOPS[key][1]) % frames.size()]
-	if _cast_shadow:
-		_cast_shadow.texture = _loops["marine"]["rect"].texture   # тень повторяет кадр
+	var m := Vector2.ZERO
+	if size.x > 1.0 and size.y > 1.0:
+		m = (get_local_mouse_position() / size * 2.0 - Vector2.ONE).clamp(Vector2(-1, -1), Vector2(1, 1))
+	_par = _par.lerp(m, clampf(delta * PAR_RATE, 0.0, 1.0))
+	_update_veils()
+	_hover = move_toward(_hover, _hover_target, delta * HOVER_RATE)
+	var k := _hover * _hover * (3.0 - 2.0 * _hover)   # плавный ход разгорания
 	for ship in _ships:
 		var d = ship["data"]
 		var t = _time + ship["phase"]
-		ship["node"].position = d["pos"] + Vector2(
+		ship["node"].position = d["pos"] - _par * PAR_SHIPS + Vector2(
 			sin(TAU * t / d["drift"].y) * d["drift"].x,
 			sin(TAU * t / d["bob"].y) * d["bob"].x)
-		var glow: Array = ship["glow_frames"]
-		if not glow.is_empty():
-			ship["glow"].texture = glow[int(t * SHIP_GLOW_FPS) % glow.size()]
+		if ship["glow"]:
+			var b: float = SHIP_GLOW_BASE * (1.0 + SHIP_GLOW_BREATH * sin(TAU * t / SHIP_GLOW_PERIOD) * sin(TAU * t / (SHIP_GLOW_PERIOD * 2.7)))
+			ship["glow"].self_modulate = Color(b, b, b)
+		_set_glow(ship["half"], k)
+	_set_glow(_capital_glow, k)
+	_set_glow(_castle_glow, k)
+	_hover_hold -= delta
+	if _hover_hold <= 0.0:
+		_hover_target = 0.0   # курсор ушёл с колонки кнопок дольше HOVER_HOLD — гаснет (между кнопками — не мигает)
 	if _clouds:
-		var dx := sin(TAU * _time / CLOUD_DRIFT.y) * CLOUD_DRIFT.x
-		_clouds.position.x = _planet_x() + dx
-		if _clouds.material is ShaderMaterial:   # маска по планете — с учётом сдвига облаков
-			(_clouds.material as ShaderMaterial).set_shader_parameter("shift_uv", dx / _clouds.texture.get_width())
+		_clouds.position = CLOUDS["pos"] - _par * PAR_CLOUDS + Vector2(sin(TAU * _time / CLOUD_DRIFT.y) * CLOUD_DRIFT.x, 0.0)
+	if _bridge:
+		_bridge.position = BRIDGE["pos"] - _par * PAR_BRIDGE + Vector2(sin(TAU * _time / BRIDGE_DRIFT.y) * BRIDGE_DRIFT.x, 0.0)
+	if _capital:
+		_capital.position = CAPITAL["pos"] - _par * PAR_CAPITAL + Vector2(
+			sin(TAU * _time / CAPITAL_DRIFT.y) * CAPITAL_DRIFT.x,
+			sin(TAU * _time / CAPITAL_BOB.y) * CAPITAL_BOB.x) + _ship_fly(CAPITAL["pos"].x + 600.0, 0.8)
+	if _sky:
+		_sky.position = SKY["pos"] - _par * PAR_SKY
+	if _castle:
+		_castle.position = CASTLE["pos"] - _par * PAR_CASTLE
+
+# Вуаль облаков: положение слоя и сдвиг облаков — в шейдер (узлы плывут, облака тоже)
+func _update_veils() -> void:
+	var cx := _clouds.position.x if _clouds else 0.0
+	for v in _veiled:
+		var n: TextureRect = v["node"]
+		var m: ShaderMaterial = v["mat"]
+		m.set_shader_parameter("origin", n.position)
+		m.set_shader_parameter("k", n.scale.x)
+		m.set_shader_parameter("cloud_x", cx)
+
+func _set_glow(r: TextureRect, k: float) -> void:
+	if r == null:
+		return
+	r.visible = k > 0.002
+	r.self_modulate = Color(k * HOVER_GLOW, k * HOVER_GLOW, k * HOVER_GLOW)
+
+# Курсор на кнопке меню — каждое второе окно кораблей горит ярче (MainMenu._process)
+func set_menu_hover(on: bool) -> void:
+	if on:
+		_hover_target = 1.0
+		_hover_hold = HOVER_HOLD   # зазоры между кнопками колонки свет не гасят (мигало при проводе курсора по меню)
 
 func _rect(tex: Texture2D) -> TextureRect:
 	var r = TextureRect.new()
@@ -292,145 +254,36 @@ func _rect(tex: Texture2D) -> TextureRect:
 		r.size = tex.get_size()
 	return r
 
-func _add_layer(layer: String, x: float = 0.0) -> TextureRect:
-	if not ResourceLoader.exists(DIR + layer + ".png"):
+# Слой пакета на холсте: файл, положение и масштаб из словаря (TextureRect.scale — от левого верхнего угла)
+func _add_layer(layer: Dictionary) -> TextureRect:
+	var path: String = DIR + layer["file"] + ".png"
+	if not ResourceLoader.exists(path):
 		return null
-	var r = _rect(load(DIR + layer + ".png"))
-	r.position.x = x
+	var r := _rect(load(path))
+	r.position = layer["pos"]
+	r.scale = Vector2(layer["scale"], layer["scale"])
 	_stage.add_child(r)
 	return r
 
-func _grade(r: TextureRect, g: Dictionary) -> void:
-	if r == null:
+# Слой под вуалью облаков + (для кораблей) цветокор g {sat, val, tint}
+func _veil(r: TextureRect, g: Dictionary) -> void:
+	if r == null or _clouds == null:
 		return
 	var sh := Shader.new()
-	sh.code = GRADE_SHADER
+	sh.code = VEIL_SHADER
 	var m := ShaderMaterial.new()
 	m.shader = sh
-	var t: Color = g["tint"]
-	m.set_shader_parameter("sat", g["sat"])
-	m.set_shader_parameter("val", g["val"])
+	var t: Color = g.get("tint", Color.WHITE)
+	m.set_shader_parameter("sat", g.get("sat", 1.0))
+	m.set_shader_parameter("val", g.get("val", 1.0))
 	m.set_shader_parameter("tint", Vector3(t.r, t.g, t.b))
-	var lift: Color = g.get("lift", Color.BLACK)
-	m.set_shader_parameter("lift", Vector3(lift.r, lift.g, lift.b))
-	m.set_shader_parameter("knee", g.get("knee", 0.0))
+	m.set_shader_parameter("cloud_tex", _clouds.texture)
+	m.set_shader_parameter("canvas", CANVAS)
+	m.set_shader_parameter("from_y", VEIL_FROM)
+	m.set_shader_parameter("to_y", VEIL_TO)
+	m.set_shader_parameter("strength", VEIL_STRENGTH)
 	r.material = m
-
-var _cast_shadow: Sprite2D = null
-var _banner_t: float = -1.0   # сек с клика по знамени (< 0 — висит, кадр 0)
-var _banner_mask: Image = null  # кадр 0 знамени — попадание клика по непрозрачному
-var _marine_look: bool = false
-var _marine_pos: float = 0.0   # кадр поворота (дробный): 0 — спиной, MARINE_PEAK — смотрит через плечо
-
-# Клик по полотну знамени — колыхнётся (мышь сцена не ловит — смотрим ввод сами, кнопкам меню он не мешает)
-func _input(event: InputEvent) -> void:
-	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
-		return
-	if not _loops.has("banner") or not is_visible_in_tree():
-		return
-	if _banner_mask == null:
-		_banner_mask = (_loops["banner"]["frames"][0] as Texture2D).get_image()
-		if _banner_mask.is_compressed():
-			_banner_mask.decompress()
-	var p: Vector2 = _stage.get_local_mouse_position()   # в px холста (учтены масштаб сцены и окна)
-	var x := int(p.x)
-	var y := int(p.y)
-	if x >= 0 and y >= 0 and x < _banner_mask.get_width() and y < _banner_mask.get_height() 			and _banner_mask.get_pixel(x, y).a > 0.5:
-		wave_banner()
-
-func wave_banner() -> void:
-	if _banner_t < 0.0:
-		_banner_t = 0.0
-
-func _tick_banner(delta: float) -> void:
-	var frames: Array = _loops["banner"]["frames"]
-	var f := 0
-	if _banner_t >= 0.0:
-		_banner_t += delta
-		f = int(_banner_t * BANNER_FPS)
-		if f >= frames.size() * BANNER_WAVES:
-			_banner_t = -1.0
-			f = 0
-	_loops["banner"]["rect"].texture = frames[f % frames.size()]
-
-# Взлёт в забег (MenuLaunch; решение пользователя 08.11.2026: «пролетаем мимо десантника и замка, а не улетаем
-# вверх»): камера летит вперёд мимо крепости — сцена растёт вокруг десантника (до LAUNCH_ZOOM) и с разгоном уходит
-# вправо за край экрана (десантник смещается на LAUNCH_SHIFT доли экрана), за LAUNCH_SHARE длительности взлёта
-const LAUNCH_ZOOM: float = 3.8
-const LAUNCH_SHIFT = Vector2(1.9, 0.25)
-const LAUNCH_SHARE: float = 0.62
-var _launch_from_pos: Vector2
-var _launch_from_scale: Vector2
-func launch(duration: float) -> void:
-	_launch_from_pos = _stage.position
-	_launch_from_scale = _stage.scale
-	var tw := create_tween()
-	tw.tween_method(_fly_by, 0.0, 1.0, duration * LAUNCH_SHARE)
-
-func _fly_by(t: float) -> void:
-	var e := t * t                                       # разгон: сначала медленно, к концу — мимо со свистом
-	var anchor := MARINE_FEET + MARINE_OFFSET            # точка холста — десантник
-	var from_screen := _launch_from_pos + anchor * _launch_from_scale.x
-	var s := _launch_from_scale * (1.0 + (LAUNCH_ZOOM - 1.0) * e)
-	var to_screen := from_screen + size * LAUNCH_SHIFT * e
-	_stage.scale = s
-	_stage.position = to_screen - anchor * s.x
-	_stage.modulate.a = 1.0 - smoothstep(0.7, 1.0, t)   # к прыжку — чистый космос
-
-func set_marine_look(on: bool) -> void:
-	_marine_look = on
-
-func _tick_marine(delta: float) -> void:
-	var frames: Array = _loops["marine"]["frames"]
-	var n := frames.size()
-	var step := delta * MARINE_TURN_FPS
-	if _marine_look:
-		if _marine_pos <= MARINE_PEAK:
-			_marine_pos = minf(_marine_pos + step, MARINE_PEAK)
-		else:   # отворачивался — обратно к пику теми же кадрами
-			_marine_pos = maxf(_marine_pos - step, MARINE_PEAK)
-	elif _marine_pos > 0.0:
-		_marine_pos += step
-		if _marine_pos >= n:
-			_marine_pos = 0.0
-	_loops["marine"]["rect"].texture = frames[int(_marine_pos) % n]
-
-# Тени десантника кодом (прежний слой marine_shadow.png не сдвигается вместе с ним): тёмное пятно у ног и
-# падающая тень — силуэт кадра чёрным, сплющен и скошен (Sprite2D — у Control нет скоса); кадр — в _process
-func _add_marine_shadows() -> void:
-	var feet := MARINE_FEET + MARINE_OFFSET
-	var g := Gradient.new()
-	g.set_color(0, Color(0, 0, 0, CONTACT_SHADOW_ALPHA))
-	g.set_color(1, Color(0, 0, 0, 0))
-	var tex := GradientTexture2D.new()
-	tex.gradient = g
-	tex.fill = GradientTexture2D.FILL_RADIAL
-	tex.fill_from = Vector2(0.5, 0.5)
-	tex.fill_to = Vector2(0.5, 0.0)
-	var contact := TextureRect.new()
-	contact.texture = tex
-	contact.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sz := CONTACT_SHADOW_SIZE * MARINE_SCALE
-	contact.size = sz
-	contact.position = feet - sz * 0.5 + Vector2(sz.x * 0.12, 0.0)   # чуть вправо — к тени
-	_stage.add_child(contact)
-	_cast_shadow = Sprite2D.new()
-	_cast_shadow.centered = false
-	_cast_shadow.offset = -MARINE_FEET
-	_cast_shadow.position = feet
-	_cast_shadow.scale = Vector2(MARINE_SCALE, MARINE_SCALE * CAST_SHADOW_FLATTEN)   # сплющенный силуэт от ног
-	_cast_shadow.skew = CAST_SHADOW_SKEW
-	_cast_shadow.modulate = Color(0, 0, 0, CAST_SHADOW_ALPHA)
-	_cast_shadow.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	_cast_shadow.texture = _loops["marine"]["frames"][0]
-	_stage.add_child(_cast_shadow)
-
-func _scale_marine(r: TextureRect) -> void:
-	if r == null:
-		return
-	r.pivot_offset = MARINE_FEET
-	r.scale = Vector2(MARINE_SCALE, MARINE_SCALE)
-	r.position += MARINE_OFFSET
+	_veiled.append({"node": r, "mat": m})
 
 func _frames(prefix: String, count: int) -> Array:
 	var out: Array = []
@@ -440,13 +293,18 @@ func _frames(prefix: String, count: int) -> Array:
 			out.append(load(path))
 	return out
 
-func _add_loop(key: String) -> void:
-	var frames = _frames(key, LOOPS[key][0])
-	if frames.is_empty():
-		return
-	var r = _rect(frames[0])
-	_stage.add_child(r)
-	_loops[key] = {"rect": r, "frames": frames}
+# Слой света поверх спрайта (на его холсте, ADD — гладкое сложение: прозрачность без ступеней дизеринга)
+func _add_glow(parent: TextureRect, file: String) -> TextureRect:
+	var path: String = DIR + file + ".png"
+	if not ResourceLoader.exists(path):
+		return null
+	var r := _rect(load(path))
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	r.material = mat
+	r.visible = false
+	parent.add_child(r)
+	return r
 
 func _add_ship(data: Dictionary) -> void:
 	var path = DIR + "ship_%d.png" % data["id"]
@@ -454,15 +312,137 @@ func _add_ship(data: Dictionary) -> void:
 		return
 	var node = _rect(load(path))
 	node.position = data["pos"]
+	node.scale = Vector2(data["scale"], data["scale"])
 	_stage.add_child(node)
-	_grade(node, SHIP_GRADE)
-	# Огни — свет поверх корабля на его холсте
-	var glow_frames = _frames("ship_%d_glow" % data["id"], 4)
-	var glow = _rect(glow_frames[0] if not glow_frames.is_empty() else null)
-	var mat = CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	glow.material = mat
-	glow.self_modulate = Color(SHIP_GLOW_DIM, SHIP_GLOW_DIM, SHIP_GLOW_DIM)
-	node.add_child(glow)
-	_ships.append({"node": node, "glow": glow, "glow_frames": glow_frames,
-		"data": data, "phase": float(data["id"]) * 3.7})
+	_veil(node, SHIP_GRADE)
+	# Огни — свет поверх корабля на его холсте: постоянные (дышат) и «половина окон» для курсора на кнопке меню
+	var glow := _add_glow(node, "ship_%d_glow" % data["id"])
+	if glow:
+		glow.visible = true
+	var half := _add_glow(node, "ship_%d_glow_half" % data["id"])
+	_ships.append({"node": node, "glow": glow, "half": half, "data": data, "phase": float(data["id"]) * 3.7})
+
+# Взлёт в забег (MenuLaunch; решение пользователя 08.11.2026: «пролетаем мимо десантника и замка, а не улетаем
+# вверх»): камера летит вперёд мимо крепости — сцена растёт вокруг парапета (до LAUNCH_ZOOM) и с разгоном уходит
+# вправо за край экрана (точка взлёта смещается на LAUNCH_SHIFT доли экрана), за LAUNCH_SHARE длительности взлёта
+const LAUNCH_AT = Vector2(1380, 720)   # точка холста, вокруг которой растёт сцена при взлёте (была — рыцарь)
+const LAUNCH_ZOOM: float = 3.8
+const LAUNCH_SHIFT = Vector2(1.9, 0.25)
+const LAUNCH_SHARE: float = 0.62
+var _launch_from_pos: Vector2
+var _launch_from_scale: Vector2
+var _cloud_halves: Array = []   # [левая, правая] — облака при взлёте раздвигаются (решение пользователя 18.11.2026)
+func launch(duration: float) -> void:
+	_launch_from_pos = _stage.position
+	_launch_from_scale = _stage.scale
+	_split_clouds()
+	_add_launch_stars()
+	var tw := create_tween()
+	tw.tween_method(_fly_by, 0.0, 1.0, duration * LAUNCH_SHARE)
+
+# Облака при взлёте разлетаются целыми облаками (решение пользователя 19.11.2026: «улетает полноценное облако, а не
+# отрезанный кусок»): лист облаков заранее нарезан на облака (tools/menu_clouds_split.py → clouds_parts/), у соседей по
+# сплошной массе швы мягкие и заходят друг на друга; левые уходят влево, правые вправо — тем дальше и быстрее, чем
+# дальше от середины, чтобы расходились не рядами, а вразнобой
+const CLOUD_PARTS_DIR = "res://assets/ui/menu/anim/clouds_parts/"
+const CLOUD_FLY: float = 0.75       # доля ширины холста — улёт облака у середины листа
+const CLOUD_FLY_EDGE: float = 0.9   # плюс за каждую долю расстояния от середины
+
+func _split_clouds() -> void:
+	if _clouds == null:
+		return
+	var f := FileAccess.open(CLOUD_PARTS_DIR + "clouds_parts.json", FileAccess.READ)
+	if f == null:
+		return
+	var parts = JSON.parse_string(f.get_as_text())
+	if not (parts is Array):
+		return
+	_cloud_halves.clear()
+	for d in parts:
+		var path: String = CLOUD_PARTS_DIR + String(d["file"])
+		if not ResourceLoader.exists(path):
+			continue
+		var r := _rect(load(path))
+		var home: Vector2 = _clouds.position + Vector2(d["x"], d["y"]) * _clouds.scale.x
+		r.position = home
+		r.scale = _clouds.scale
+		var rel: float = (float(d["cx"]) - CANVAS.x / 2.0) / (CANVAS.x / 2.0)   # -1..1 от середины листа
+		var dir := -1.0 if rel < 0.0 else 1.0
+		r.set_meta("home", home)
+		r.set_meta("fly", dir * (CLOUD_FLY + CLOUD_FLY_EDGE * absf(rel)) * CANVAS.x * _clouds.scale.x)
+		r.set_meta("lag", 0.12 * (1.0 - absf(rel)))   # у середины листа облака трогаются чуть позже
+		_stage.add_child(r)
+		_stage.move_child(r, _clouds.get_index())
+		_cloud_halves.append(r)
+	_clouds.visible = false
+
+# Звёзды пролёта (решение пользователя 19.11.2026: «не видно звёзд при полёте»): ночное небо растянуто камерой ×3.8 и звёзд
+# почти не остаётся — поверх него, под облаками, густое поле звёзд на холсте и за его левым краем (сцена уходит вправо)
+class LaunchStars extends Node2D:
+	const COUNT: int = 2200
+	const AREA := Rect2(-2400.0, -500.0, 4200.0, 1900.0)
+	var _stars: Array = []   # [точка, размер, фаза, цвет]
+	var amount: float = 0.0
+	var _t: float = 0.0
+
+	func _ready() -> void:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1940
+		var colors := [Palette.STAR_WHITE, Palette.STAR_WHITE, Palette.STAR_BLUE, Palette.STAR_AMBER]
+		for i in COUNT:
+			_stars.append([Vector2(rng.randf_range(AREA.position.x, AREA.end.x), rng.randf_range(AREA.position.y, AREA.end.y)),
+				rng.randf_range(1.6, 3.6) if rng.randf() < 0.9 else rng.randf_range(4.0, 6.0), rng.randf() * TAU,
+				colors[rng.randi() % colors.size()]])
+
+	func _process(delta: float) -> void:
+		_t += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		for s in _stars:
+			var a: float = amount * (0.55 + 0.45 * sin(_t * 1.7 + s[2]))
+			var sz: float = s[1]
+			draw_rect(Rect2(s[0] - Vector2(sz, sz) / 2.0, Vector2(sz, sz)), Color(s[3], a))
+
+var _launch_stars: LaunchStars = null
+func _add_launch_stars() -> void:
+	if _launch_stars != null or _sky == null:
+		return
+	_launch_stars = LaunchStars.new()
+	_launch_stars.name = "LaunchStars"
+	var star_mat := CanvasItemMaterial.new()
+	star_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_launch_stars.material = star_mat
+	_stage.add_child(_launch_stars)
+	_stage.move_child(_launch_stars, _sky.get_index() + 1)
+
+# Корабли при взлёте улетают, как облака (решение пользователя 19.11.2026): уходят вбок от середины холста и чуть вверх;
+# k — доля пролёта, _ship_fly(x, сила) — сдвиг на холсте для корабля с левым краем в x
+var _fly_k: float = 0.0
+const SHIP_FLY: float = 1.1         # доля ширины холста — улёт корабля
+func _ship_fly(x: float, power: float) -> Vector2:
+	if _fly_k <= 0.0:
+		return Vector2.ZERO
+	var dir := -1.0 if x < CANVAS.x * 0.5 else 1.0
+	return Vector2(dir * SHIP_FLY * CANVAS.x * power * _fly_k, -90.0 * power * _fly_k)
+
+func _part_clouds(t: float) -> void:
+	_fly_k = smoothstep(0.1, 0.9, t)
+	_fly_k *= _fly_k
+	if _launch_stars:
+		_launch_stars.amount = smoothstep(0.0, 0.35, t) * 1.5
+	for r: TextureRect in _cloud_halves:
+		var k := smoothstep(0.05 + (r.get_meta("lag") as float), 0.85, t)
+		r.position = (r.get_meta("home") as Vector2) + Vector2(r.get_meta("fly") as float * k, 0.0)
+		r.modulate.a = 1.0 - 0.6 * smoothstep(0.5, 1.0, t)
+
+func _fly_by(t: float) -> void:
+	_part_clouds(t)
+	var e := t * t                                       # разгон: сначала медленно, к концу — мимо со свистом
+	var anchor := LAUNCH_AT                              # точка холста — парапет, мимо которого летим
+	var from_screen := _launch_from_pos + anchor * _launch_from_scale.x
+	var s := _launch_from_scale * (1.0 + (LAUNCH_ZOOM - 1.0) * e)
+	var to_screen := from_screen + size * LAUNCH_SHIFT * e
+	_stage.scale = s
+	_stage.position = to_screen - anchor * s.x
+	_stage.modulate.a = 1.0 - smoothstep(0.7, 1.0, t)   # к прыжку — чистый космос

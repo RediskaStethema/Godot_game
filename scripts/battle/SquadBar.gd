@@ -6,14 +6,14 @@ extends Node2D
 # (павшие — пустая часть), справа — число бойцов, над ней — уровень отряда ромбиками.
 # Только вид: ходит за бойцами каждый кадр, перерисовывается, когда меняются цифры.
 
-const SIZE = Vector2(30, 4)
+const SIZE = Vector2(34, 5)
 const GAP: float = 6.0            # над головой самого высокого бойца
 const COUNT_FONT_SIZE: int = 14         # крупный кегль, уменьшенный COUNT_SCALE — мелкий рассыпается
 # Сторона читается по полоске (решение пользователя 24.10.2026: в сшибке свои и чужие сливались): кромка и
 # число бойцов — цветом стороны (свои янтарь, враги красный); было — чёрная кромка и белое число у всех
 const COUNT_COLOR_PLAYER = Palette.GOLD_PALE
 const COUNT_COLOR_ENEMY = Color(1.0, 0.62, 0.55)
-const COUNT_SCALE: float = 0.5
+const COUNT_SCALE: float = 0.75   # решение пользователя 18.11.2026: число бойцов было мелким
 const PIP_R: float = 2.0
 const PIP_STEP: float = 5.0
 const PIP_GAP: float = 4.0
@@ -53,6 +53,7 @@ func _process(_delta: float) -> void:
 		visible = false
 		return
 	visible = true
+	modulate.a = squad.modulate.a   # top_level прозрачность отряда не наследует: отряд в капсуле / проявляется
 	global_position = Vector2(x_sum / alive, top - Soldier.TARGET_SPRITE_HEIGHT * squad.data.sprite_scale - GAP)
 	# Полный состав — павшие считаются бойцами со средним max HP живых
 	var full := max_sum + maxi(squad.data.squad_size - alive, 0) * (max_sum / alive)

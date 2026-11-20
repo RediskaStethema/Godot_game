@@ -12,7 +12,7 @@ const MAX_PER_FRAME: int = 12
 const LIFE: float = 0.75          # сек жизни клуба
 const GROW: float = 1.8           # во сколько раз клуб расползается к концу
 const RISE: float = 4.0           # px: клуб чуть поднимается
-const INFANTRY_EVERY: int = 3     # пехота пылит каждым 3-м шагом
+const INFANTRY_EVERY: int = 2     # пехота пылит каждым 2-м шагом (17.11.2026: было 3-м — шаг виден на земле)
 const FLATTEN: float = 0.5        # пятно на земле — эллипс 2:1, как клетка изометрии
 
 static var layer: DustLayer = null
@@ -27,6 +27,7 @@ func setup(theme: Dictionary) -> void:
 	color = theme.get("dust", Color(Palette.DUST, 0.3))
 	_rng.seed = 7
 	layer = self
+	material = Vfx.mix_material()   # пыль пиксельная: прозрачность ступенями с дизерингом (shaders/fx_pixel)
 
 func _exit_tree() -> void:
 	if layer == self:

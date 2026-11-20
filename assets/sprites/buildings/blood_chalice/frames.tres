@@ -37,8 +37,8 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/blood_chalice/idle_3/7.png" id="idle_3_7"]
 
 [resource]
-metadata/level_shift = {2: Vector2(2, 8), 3: Vector2(2, 9)}
-metadata/level_scale = {2: 1.000, 3: 1.117}
+metadata/level_shift = {2: Vector2(0, 30), 3: Vector2(0, 30)}
+metadata/level_scale = {2: 1.008, 3: 1.000}
 metadata/level_static = []
 animations = [{
 "frames": [{

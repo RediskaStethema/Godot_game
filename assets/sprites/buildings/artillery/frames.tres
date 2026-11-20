@@ -65,12 +65,12 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/artillery/attack_3/7.png" id="attack_3_7"]
 
 [resource]
-metadata/level_muzzle = {2: Vector2(131.3, -179.3), 3: Vector2(123.1, -174.3)}
-metadata/level_barrels = {1: [Vector2(110.4, -177.4), Vector2(118.5, -147.5)], 2: [Vector2(132.7, -204.3), Vector2(133.8, -159.0)], 3: [Vector2(119.3, -222.9), Vector2(123.5, -189.0), Vector2(127.5, -152.4)]}
-metadata/level_shift = {2: Vector2(-8, 0), 3: Vector2(-2, 0)}
-metadata/level_scale = {2: 0.982, 3: 1.000}
+metadata/level_muzzle = {2: Vector2(124.3, -181.9), 3: Vector2(130.7, -164.1)}
+metadata/level_barrels = {2: [Vector2(122.2, -205.8), Vector2(126.8, -167.2)], 3: [Vector2(126.0, -190.0), Vector2(135.9, -150.4)]}
+metadata/level_shift = {2: Vector2(-14, -23), 3: Vector2(-16, -37)}
+metadata/level_scale = {2: 0.980, 3: 0.999}
 metadata/level_static = []
-metadata/muzzle = Vector2(114.4, -150.0)
+metadata/muzzle = Vector2(103.9, -201.5)
 metadata/shot_frame = 0
 metadata/muzzle_color = Color(1.000, 0.518, 0.041, 1)
 animations = [{

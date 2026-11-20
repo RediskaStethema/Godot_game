@@ -44,11 +44,11 @@ const DEFAULT_FACTION: String = "space_marines"
 # enemy — раса волн врагов в забеге за эту расу (EnemyWaves; решение пользователя 16.10.2026:
 # Хаос воюет с Космодесантом)
 const FACTIONS = [
-	{"id": "space_marines", "name": "Космодесант", "available": true, "enemy": "chaos",
-		"desc": "Ангелы Смерти: стойкие отряды и цитадель-бастион."},
-	{"id": "chaos", "name": "Хаос", "available": true, "enemy": "space_marines",
-		"desc": "Предатели и демонические машины. Воюют с Космодесантом."},
-	{"id": "tyranids", "name": "Тираниды", "available": false,
+	{"id": "space_marines", "name": "Криспинцы", "available": true, "enemy": "chaos",
+		"desc": "Братья, что держатся до последнего: стойкие отряды и цитадель-бастион."},
+	{"id": "chaos", "name": "Кровоподписанты", "available": true, "enemy": "space_marines",
+		"desc": "Подписавшие договор кровью и демонические машины. Воюют с Криспинцами."},
+	{"id": "tyranids", "name": "Рой Текели", "available": false,
 		"desc": "Рой, пожирающий миры."},
 ]
 
@@ -100,14 +100,14 @@ const SM_RIVER = [
 	{"frames": SM_RIVER_1_FLOW, "fps": 8.0, "blend": false, "axis": "v"},
 	{"frames": SM_RIVER_2_FLOW, "fps": 8.0, "blend": false, "axis": "v"},
 ]
-const SM_RUINS = [{"texture": SM_TILES + "ruins_bunker.png", "top": 48}]   # руины с бункером
+const SM_RUINS = [{"texture": SM_TILES + "ruins_bunker.png", "top": 48, "ruin": true}]   # руины с бункером
 const SM_CRATER = [{"texture": SM_TILES + "crater.png", "top": 20, "no_decor": true}]   # большой кратер
 const SM_SMALL_CRATERS = [{"texture": SM_TILES + "terrain_craters.png", "top": 10}]   # осыпь с воронками
 # Воронки в тумане: плита — осыпь с воронками, туман — слой дымки над полем (IsoGridRenderer._draw_mist,
 # ключ "mist"): мягкие пятна шире клетки сливаются в облако над всей туманной местностью, густеет и
 # редеет волной. Решение пользователя 19.10.2026: туман, залитый в плиту (fog_crater_0/1.png), складывался
 # в «шахматку» светлых ромбов. Приглушён (решение пользователя): яркий туман перетягивал внимание с бойцов
-const FOG_MIST = {"color": Color(0.6, 0.67, 0.8, 0.1), "radius": 90.0}
+const FOG_MIST = {"color": Color(0.72, 0.62, 0.74, 0.1), "radius": 90.0}   # 16.11.2026: был холодно-синий (0.6, 0.67, 0.8)
 const SM_FOG_CRATERS = [{"texture": SM_TILES + "terrain_craters.png", "top": 10, "no_decor": true, "mist": FOG_MIST}]
 const SM_FLAG = [{"texture": SM_TILES + "flag.png", "top": 120, "flag": true}]     # обломки и знамя
 # Готика Империума: лист assets/source_sheets/goticImperial.png → tools/props_from_sheet.py
@@ -124,7 +124,9 @@ const ANIM_DECOR_SCALE: float = 1.0     # пиксельные знамёна и
 # средняя яркость 0.17 — чуть светлее грунта 0.145), оттенка в теме у неё нет
 # Свет на поле (IsoGridRenderer, слой свечения с ADD-смешением): ключ "glow" у плиты или объекта темы
 const FIRE_GLOW = Color(1.0, 0.55, 0.2, 0.55)
-const GOTHIC_TINT = Color(0.62, 0.70, 0.85)
+# 16.11.2026 (решение пользователя: поле Космодесанта под цветокор меню — бордо-фиолет облаков, tools/sm_field_menu_grade.py):
+# тон готики был холодно-синим (0.62, 0.70, 0.85) под синий грунт — теперь тёплый бордо-нейтральный, яркость та же (≈ 0.70)
+const GOTHIC_TINT = Color(0.76, 0.66, 0.71)
 # Руины — объект на плите осыпи; "tall" — выше бойца, только вне боевой полосы (IsoGridRenderer._put_feature)
 const SM_GOTHIC_RUINS = [
 	{"texture": SM_TILES + "terrain.png", "top": 10, "tall": true, "flag": true, "prop": {"texture": SM_PROPS + "gothic_00.png", "base": Vector2(123, 186), "scale": GOTHIC_SCALE, "tint": GOTHIC_TINT}},   # shrine
@@ -200,7 +202,7 @@ const CH_PROPS = "res://assets/sprites/props/chaos/"
 const CH_TERRAIN = [{"texture": CH_TILES + "red_terrain.png", "top": 10}]      # красная осыпь
 const CH_DEBRIS_WALL = [{"texture": CH_TILES + "red_wall.png", "top": 67, "axis": "u"}]
 # Реки на поле Хаоса нет (решение пользователя 17.10.2026; плиты red_river_* остались в папке темы)
-const CH_RUINS = [{"texture": CH_TILES + "red_ruins_bunker.png", "top": 48}]
+const CH_RUINS = [{"texture": CH_TILES + "red_ruins_bunker.png", "top": 48, "ruin": true}]
 const CH_CRATER = [{"texture": CH_TILES + "red_crater.png", "top": 20, "no_decor": true}]
 const CH_SMALL_CRATERS = [{"texture": CH_TILES + "red_terrain_craters.png", "top": 10}]
 # Кристаллы (terrain_*), знамёна (flag_*), окопы (trench_*) и извержения (blast_*) убраны — решение пользователя
@@ -211,7 +213,9 @@ const CH_SMALL_CRATERS = [{"texture": CH_TILES + "red_terrain_craters.png", "top
 const CH_PLAIN = {"texture": CH_TILES + "red_terrain.png", "top": 10, "no_decor": true}
 # Туман Хаоса — у групп светящихся кристаллов (CH_OBELISK) и ямы с глазами (решение пользователя 07.11.2026: «туман
 # находится не возле кристаллов» — с 23.10.2026 он висел на одиночных клетках бывших кристаллов, далеко от обелисков)
-const CH_MIST = {"color": Color(0.62, 0.3, 0.27, 0.2), "radius": 90.0}   # дымка в тон поля, гуще тумана Космодесанта
+# 12.11.2026 (скилл game-art «детали — в зоне игрока»): α 0.2 → 0.12 — на темнее грунте дымка у обелисков по краям
+# поля была ярче бойцов (медиана 55 против 30) и тянула взгляд от боя
+const CH_MIST = {"color": Color(0.62, 0.3, 0.27, 0.12), "radius": 90.0}   # дымка в тон поля, гуще тумана Космодесанта
 const CH_CRYSTALS = [{"texture": CH_TILES + "red_terrain.png", "top": 10, "no_decor": true}]
 const CH_FLAG = [{"texture": CH_TILES + "red_terrain.png", "top": 10, "no_decor": true, "flag": true}]
 const CH_OBELISK = [{"fps": 1.2, "no_decor": true, "mist": CH_MIST, "frames": [   # кристаллы разгораются
@@ -294,8 +298,12 @@ const CH_DECOR = [
 	{"texture": CH_PROPS + "chaos_29.png", "base": Vector2(56, 111), "scale": CH_DECOR_SCALE},   # dome
 ]
 # Жаровня — ориентир у цитадели, как костёр Космодесанта (объект листа крепости chaos_27, со светом)
-const CH_BRAZIER = {"texture": CH_PROPS + "chaos_27.png", "base": Vector2(44, 130), "scale": 0.42,
-	"glow": FIRE_GLOW, "glow_radius": 75.0}
+# Жаровня — лента 10 кадров огня (пакет художника 10.11.2026 по ART_TZ_FIELD_2026-11-10.txt, раздел 2; постамент —
+# как у прежнего одного кадра chaos_27.png, неподвижен). Решение пользователя 10.11.2026 («огонёк слишком маленький,
+# свет идёт от столба»): пламя ×2 (tools/brazier_flame.py, холст +24 px вверх — base (44, 154)), свет — цвета пламени,
+# ореол — на высоте огня glow_height (px мира над точкой основания; IsoGridRenderer._draw_glow)
+const CH_BRAZIER = {"texture": CH_PROPS + "brazier_chaos_strip.png", "frames": 10, "fps": 10.0, "base": Vector2(44, 154),
+	"scale": 0.5, "glow": Palette.CHAOS_BRAZIER_GLOW, "glow_radius": 55.0, "glow_height": 56.0}
 # Знамёна UI_assets.png в тоне красного грунта: красно-чёрное с черепом, со скелетом, чёрное с черепом
 const CH_WAR_BANNERS = [
 	{"texture": CH_PROPS + "war_banner_1.png", "base": Vector2(40, 237), "scale": WAR_BANNER_SCALE},
@@ -328,25 +336,51 @@ const THEMES = {
 		# местности по 8–9 клеток (у королевства, внизу посередине, справа), 5 групп руин,
 		# центр боевой полосы чистый
 		"map_seed": 131,
+		# Решение пользователя 11.11.2026 (`Screenshot 2026-11-11 115913.png`: руины и обломки посреди поля боя) —
+		# как у Хаоса: в боевой полосе и CLEAR_STRIP_MARGIN рядах по бокам только грунт, объекты — по бокам локации
+		"clear_strip": true,
 		"edge": SM_DEBRIS_WALL,
 		"river": SM_RIVER,
 		"decorations": SM_GOTHIC_DECOR,
-		"grade": {},   # WorldGrade.DEFAULT — сталь в тенях, янтарь в светах
+		# 16.11.2026 (решение пользователя: поле под цветокор меню): тени и виньетка — бордо-фиолет облаков меню вместо
+		# стали (WorldGrade.DEFAULT: сталь в тенях, янтарь в светах); света — янтарь, как были
+		"grade": {"shadow_tone": Color(0.016, 0.006, 0.016), "vignette_color": Color(0.022, 0.008, 0.02)},
+		# Стена края кодом, как у Хаоса (решение пользователя 12.11.2026, `Screenshot 2026-11-10 130254.png`: плиты "edge"
+		# «выбиваются из общего стиля» — светлее, холоднее, плоские и мелкий повтор): камень в тон стены владений,
+		# латунные навершия, фонари огнём; плиты "edge" остаются запасом (под стеной кодом — грунт)
+		"field_wall": {"stone": Palette.SM_FIELD_WALL, "top": Palette.SM_FIELD_WALL_TOP,
+			"dark": Palette.SM_FIELD_WALL_DARK, "spike": Palette.SM_FIELD_SPIKE, "lantern": Palette.SM_LANTERN,
+			"lantern_glow": Palette.SM_LANTERN_GLOW, "lantern_radius": 50.0},
+		# Объём поля: тень стены на земле от её основания (shade_inset = FieldWall.INSET, как у Хаоса; было 1 клетка —
+		# от внутреннего края кольца плит), грань платформы снизу
+		"platform": {"shade": Palette.FIELD_WALL_SHADE, "side": Palette.SM_PLATFORM_SIDE, "shade_inset": 0.15},
 		# Здания в свет местности (Building.apply_environment, решение пользователя 24.10.2026: были втрое светлее
 		# руин и грунта — «инородно»): оттенок, насыщенность, приглушение светов (огонь не трогается),
 		# затемнение к основанию, мягкая обводка
-		"building_env": {"tint": Color(0.78, 0.80, 0.88), "sat": 0.85, "knee": 0.35, "ao": 0.45,
+		# 17.11.2026 (решение пользователя: «здания космодесанта слишком яркие, выбиваются из гримдарка»; замер в игре —
+		# Апотекарион 105/255 со 4% засвета, Кодекс-бастион 86, турель 79, тотем 76 при цитадели 40 и грунте 36): светлые
+		# пиксели приглушены сильнее (knee 0.35 → 0.6), оттенок чуть темнее (0.9 / 0.82 / 0.87 → 0.88 / 0.8 / 0.85 — цитадель общая с «building_env», ей темнее нельзя: уже на уровне грунта);
+		# прибавка яркости и свет по кромкам — ключ "style" ниже
+		"building_env": {"tint": Color(0.88, 0.8, 0.85), "sat": 0.85, "knee": 0.6, "ao": 0.45,
 			"outline_px": 1.3, "outline_alpha": 0.7},
+		"style": {"building_gain": 1.0, "building_light": 0.45,
+			# палитра зданий / цитадели в тон бордо-фиолетового поля (решение пользователя 18.11.2026, «единый стиль»):
+			# по умолчанию холодная сталь (07090e … 7d8696) тянула здания к синему на бордовом грунте
+			"palette": [Color("08050a"), Color("160b14"), Color("2b1822"), Color("4a3038"), Color("7a5a58"), Color("cdb08a")]},
 		# Бойцы в свет местности (Soldier.UNIT_SHADER, решение пользователя 08.11.2026: «юниты слишком выделяются»):
 		# оттенок, насыщенность, приглушение светов, затемнение к ногам; объём — свет сверху: верхние кромки к
 		# light_color (light), нижние и боковые в тень (shade), корпус светлее к плечам (grad)
-		"unit_env": {"tint": Color(0.88, 0.90, 0.96), "sat": 0.82, "knee": 0.2, "ao": 0.3,
-			"light": 0.45, "shade": 0.35, "grad": 0.25, "light_color": Color(0.75, 0.82, 1.0)},
+		# 17.11.2026 ("юниты летают над текстурами"): ao 0.3 → 0.5 у обеих рас — ступни темнее, сливаются с землёй; тень под ногами — Soldier.SHADOW_RADIUS / SHADOW_DROP
+		# 16.11.2026 (решение пользователя: «ассеты Космодесанта слишком пересвеченные, стилизуй под игру»): прежние значения
+		# возвращены — на пересвет жаловались после пробы «читаемости» (tint 1.04 / sat 1.05 / knee 0 + светлее кадры);
+		# теперь пересвет сбит в кадрах (tools unit_style.py), приглушение светов шейдером — как задумано 08.11.2026
+		"unit_env": {"tint": Color(0.95, 0.90, 0.94), "sat": 0.82, "knee": 0.2, "ao": 0.5,
+			"light": 0.45, "shade": 0.35, "grad": 0.25, "light_color": Color(0.95, 0.82, 0.92)},
 		"atmosphere": "ash",
 		"dust": Color(Palette.DUST_PALE, 0.22),   # пыль из-под ног (DustLayer) — серая каменная крошка
 		# Существ по краям поля (SideCritters: демоны и кровавые твари) у Космодесанта нет — только у Хаоса (решение
 		# пользователя 07.11.2026)
-		"building_tint": Color(0.5, 0.56, 0.68),   # блоки зданий без спрайта — готическая сталь
+		"building_tint": Color(0.62, 0.54, 0.62),   # блоки зданий без спрайта — бордо-камень (16.11.2026; была готическая сталь 0.5 / 0.56 / 0.68)
 		"landmarks": {"campfire": SM_CAMPFIRE, "banners": SM_BANNERS, "random_banners": 2,
 			"war_banners": SM_WAR_BANNERS, "war_banner_count": 3},
 		# Крепость-бастион — кадры пользователя 25.10.2026 (buildings_png/New_citadel_frames: стойка, по 10 кадров
@@ -355,9 +389,19 @@ const THEMES = {
 		# крыше — пушка (снаряд на кадре большой вспышки, из ствола muzzle), попадание — огонь и дым, обрушение —
 		# до груды. scale — стойка на поле прежнего размера. В свет местности — шейдером (Citadel, "building_env").
 		# Ряд: [ряд листа, кадров, кадров/с]
+		# Лист пакета пользователя 10.11.2026 (assets/source_sheets/citadel_sm_v3, по 12 кадров: стойка с флагом,
+		# орудие на крыше, попадание, обрушение) → tools/citadel_frames_fit.py (эталон — стойка) + tools/sm_grade.py
+		# --target 0.215 → tools/citadel_lock.py (решение пользователя 10.11.2026, «прыгает и оторвана от текстур»:
+		# lock — тело стойки из кадра 0, двигается только флаг, ряды — по основанию; tone --black 0.05 --sat 1.15 —
+		# тени как у грунта и готики); scale — площадка прежнего размера; anchor — центр ромба основания, как у зданий
+		# (Building.find_base; было (109, 217) — нижний угол ступеней: крепость стояла углом на центре клетки, тень —
+		# перед ней)
+		# Цитадель «Последний Редут» (перерисовка 20.11.2026, решение пользователя: «перерисуй цитадели и их фреймы»): ступенчатая пирамида из гранита
+		# с медью, две пушки на крыше. Было → стало: anchor (105, 177) → (104, 171), scale 0.92 → 0.868 (основание новой шире на 6% — на поле
+		# то же место и размер), muzzle (156, 63) → (145, 70) — срез правого ствола, shot_frame 4 → 3 (вспышка на стволах)
 		"citadel": {"sheet": SM_PROPS + "citadel/sheet.png", "frame_size": Vector2i(211, 219),
-			"anchor": Vector2(108, 212), "scale": 0.88, "muzzle": Vector2(134, 45), "shot_frame": 3,
-			"rows": {"idle": [0, 1, 8.0], "attack": [1, 10, 12.0], "hit": [2, 10, 14.0], "fall": [3, 10, 8.0]}},
+			"anchor": Vector2(104, 171), "scale": 0.868, "muzzle": Vector2(145, 70), "shot_frame": 3,
+			"rows": {"idle": [0, 12, 8.0], "attack": [1, 12, 12.0], "hit": [2, 12, 14.0], "fall": [3, 12, 8.0]}},
 	},
 	"chaos": {
 		"floor": CH_RUINS + CH_CRATER + CH_SMALL_CRATERS,
@@ -368,6 +412,19 @@ const THEMES = {
 		"flags": {"tiles": CH_FLAG, "count": 2},
 		"map_seed": 131,
 		"edge": CH_DEBRIS_WALL,
+		# Стена края поля кодом (FieldWall, решение пользователя 10.11.2026 — образец «Мимо сетки_ готическая битва
+		# Империума.png»: высокая стена с шипами и фонарями, тень на земле, грань платформы) — вместо плит "edge"
+		"field_wall": {"stone": Palette.CHAOS_FIELD_WALL, "top": Palette.CHAOS_FIELD_WALL_TOP,
+			"dark": Palette.CHAOS_FIELD_WALL_DARK, "spike": Palette.CHAOS_FIELD_SPIKE, "lantern": Palette.CHAOS_LANTERN,
+			"lantern_glow": Palette.CHAOS_LANTERN_GLOW, "lantern_radius": 50.0,
+			# Спрайты художника (пакет 10.11.2026, assets/source_sheets/field_chaos_2026-11-10; рисованы 2× — scale 0.5):
+			# пролёт 180×200, верхний конец основания anchor (20, 110), шаг цепи «от башни до башни» period (108, 54);
+			# столбы 48×180, основание post_base (24, 179), на стыке — к центру башни post_offset (17, 11)
+			"sprites": {"dir": CH_PROPS + "field_wall/", "spans": [0, 1, 2], "scale": 0.75, "anchor": Vector2(20, 110),
+				"period": Vector2(108, 54), "corner": "post_skull.png", "lantern": "post_lantern_strip.png",
+				"lantern_frames": 8, "lantern_fps": 8.0, "post_base": Vector2(24, 179), "post_offset": Vector2(17, 11), "post_scale": 0.55}},
+		# Объём поля: тень стены на земле от её основания и грань платформы (IsoGridRenderer, решение пользователя 10.11.2026)
+		"platform": {"shade": Palette.FIELD_WALL_SHADE, "side": Palette.CHAOS_PLATFORM_SIDE, "shade_inset": 0.15},   # = FieldWall.INSET
 		"decorations": CH_DECOR,
 		"clear_strip": true,   # в боевой полосе — только грунт и воронки (IsoGridRenderer._tiles_allowed_at)
 		"decor_chance": 12,   # % клеток вне боевой полосы с декором (как у Космодесанта; было 6 — «слишком пусто», 07.11.2026)
@@ -378,24 +435,40 @@ const THEMES = {
 		"grade": {"saturation": 0.86, "shadow_tone": Color(0.028, 0.006, 0.01), "highlights": Color(1.06, 0.92, 1.0)},
 		"building_env": {"tint": Color(0.88, 0.80, 0.80), "sat": 0.78, "knee": 0.3, "ao": 0.4,
 			"outline_px": 1.3, "outline_alpha": 0.7},   # здания в свет местности — см. тему Космодесанта
-		"unit_env": {"tint": Color(0.98, 0.92, 0.92), "sat": 0.92, "knee": 0.1, "ao": 0.3,
+		# палитра расы для зданий, цитадели, капсулы (Soldier.apply_style): бордо, ржавчина, кость
+		"style": {"palette": [Color("0a0506"), Color("1e0b0d"), Color("3a1614"), Color("5e2a20"), Color("8a5a40"),
+			Color("cdb08a")]},
+		# общий свет поля (WorldLight): у Хаоса — зарево, тёплый малиновый вместо лунного
+		"light": {"color": Color(1.0, 0.62, 0.52)},
+		"unit_env": {"tint": Color(0.98, 0.92, 0.92), "sat": 0.92, "knee": 0.1, "ao": 0.5,
 			"light": 0.45, "shade": 0.35, "grad": 0.25, "light_color": Color(1.0, 0.72, 0.62)},   # см. тему Космодесанта
 		# Грунт светлее (только слой пола, IsoGridRenderer._floor): здания, бойцы и их контур не сливаются
 		# с почти чёрным бордо (решение пользователя 24.10.2026, из ×1 / ×1.3 / ×1.6)
-		"floor_brightness": 1.3,
+		# 12.11.2026 (решение пользователя, аудит скилла game-art): 1.3 → 1.1 — свои бойцы Хаоса медианой яркости 33
+		# на грунте 29 сливались; здания отделены своим светом сверху (Soldier.STYLE_DEFAULT building_light)
+		"floor_brightness": 1.1,
+		"floor_calm": {"pivot": 0.045},   # спокойный грунт (IsoGridRenderer.FLOOR_CALM): опора ниже — земля темнее
 		"atmosphere": "embers",
 		"dust": Color(Palette.DUST, 0.32),   # пыль из-под ног (DustLayer) — бурый пепел
 		"critters": {"count": 6},   # существа по краям поля (SideCritters)
 		"building_tint": Color(0.58, 0.38, 0.36),  # блоки зданий без спрайта — ржаво-бордовый камень
 		# Жаровня у цитадели — вместо костра Космодесанта (07.11.2026), свет — огонь; знамён-GIF нет
 		"landmarks": {"campfire": CH_BRAZIER, "war_banners": CH_WAR_BANNERS, "war_banner_count": 4},
-		# Крепость с черепом — кадры пользователя 25.10.2026 (buildings_png/New_citadel_frames, как у Космодесанта;
-		# tools/citadel_frames_fit.py: попадание было на 20% мельче выстрела, стойка — крупнее): выстрел — красный
-		# взрыв у ворот (снаряд на кадре 3, из ворот muzzle), попадание, обрушение до руин. scale — стойка на поле
-		# прежнего размера (было 0.58 у прежнего кадра)
+		# Крепость с черепом — пакет пользователя 10.11.2026 (assets/source_sheets/citadel_chaos_v2, вход и орудие —
+		# вправо, к врагу; по 12 кадров): citadel_frames_fit.py (эталон idle) → citadel_lock.py lock / body --live chaos
+		# (тело во всех рядах, кроме обрушения, — из кадра 0 стойки: художник перерисовывал крепость в каждом кадре;
+		# своё — огни варпа, ворота на зарядке, искры и дым попадания; нарисованный полёт черепа снят — его выпускает
+		# игра) → tone --black 0.04 --sat 1.1 --dark-hue 0.99 --dark-pull 0.75 (тени пакета пурпурные — к бордо поля).
+		# Выстрел — череп "skull_shot" из ворот на кадре 3, разрыв "skull_burst"; anchor — центр ромба основания
+		# (Building.find_base), scale — площадка прежнего размера (прежняя крепость — citadel_chaos_old_2026-11-10)
+		# Цитадель «Дворец масок» (перерисовка 20.11.2026): маска в треснувшем кольце над аркой, органные трубы; выстрел — маска открывает рот,
+		# изо рта вылетает огненный череп. Было → стало: anchor (137, 205) → (138, 201), scale 0.635 → 0.613 (то же место и размер основания),
+		# muzzle (175, 184) → (156, 130) — рот маски, shot_frame 3 → 4 (рот открыт, череп выходит; нарисованный полёт черепа снят — снаряд рисует игра)
 		"citadel": {"sheet": CH_PROPS + "fortress.png", "frame_size": Vector2i(272, 266),
-			"anchor": Vector2(139, 214), "scale": 0.674, "muzzle": Vector2(118, 192), "shot_frame": 3,
-			"rows": {"idle": [0, 1, 8.0], "attack": [1, 10, 12.0], "hit": [2, 10, 14.0], "fall": [3, 10, 8.0]}},
+			"anchor": Vector2(138, 201), "scale": 0.613, "muzzle": Vector2(156, 130), "shot_frame": 4,
+			"muzzle_fx": {"vfx": "fireball", "size": 0.9, "color": Color(1.0, 0.45, 0.12), "radius": 170.0},   # огонь изо рта маски (20.11.2026)
+			"projectile": "skull_shot", "impact_vfx": ["skull_burst", "explosion"],
+			"rows": {"idle": [0, 12, 8.0], "attack": [1, 12, 12.0], "hit": [2, 12, 14.0], "fall": [3, 12, 8.0]}},
 	},
 }
 

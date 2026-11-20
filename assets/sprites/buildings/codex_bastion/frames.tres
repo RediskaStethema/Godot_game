@@ -43,8 +43,8 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/codex_bastion/idle_3/11.png" id="idle_3_11"]
 
 [resource]
-metadata/level_shift = {2: Vector2(0, 0), 3: Vector2(0, 0)}
-metadata/level_scale = {2: 1.0, 3: 1.0}
+metadata/level_shift = {2: Vector2(9, -3), 3: Vector2(10, 3)}
+metadata/level_scale = {2: 1.022, 3: 1.110}
 metadata/level_static = []
 animations = [{
 "frames": [{

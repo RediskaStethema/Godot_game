@@ -28,6 +28,22 @@ var catch_up_rerolls_left: int = 0
 # кнопке в шапке). Не сохраняется: после «Продолжить» окно само не всплывает
 var catch_up_just_issued: bool = false
 
+# Выбор карты между волнами (решение пользователя 16.11.2026): PICK_DEALT карт рубашкой вверх → игрок открывает
+# PICK_OPEN из них → из открытых берёт одну (бесплатно), остальные сгорают. Пул — тот же, что у магазина,
+# без повторов по id; набор — от RunManager.rng и сохраняется (выход и «Продолжить» не дают перебросить)
+const PICK_DEALT: int = 4
+const PICK_OPEN: int = 2
+var pick_node_id: int = -1
+var pick_offers: Array = []        # 4 карты рубашкой вверх
+var pick_open: Array[int] = []     # индексы открытых игроком (до PICK_OPEN)
+var pick_taken_index: int = -1     # взятая карта (-1 — ещё не выбрана): набор закрыт
+# Стартовый выбор забега (решение пользователя 17.11.2026, вместо магазина волны 1): PICK_START_DEALT карт рубашкой вверх,
+# игрок берёт вслепую PICK_START_TAKE (клик по рубашке — карта открывается и сразу в руку), остальные сгорают.
+# Взятые индексы — в pick_open (карта открыта) и pick_start_taken (порядок взятия)
+const PICK_START_DEALT: int = 6
+const PICK_START_TAKE: int = 3
+var pick_start_taken: Array[int] = []
+
 signal shop_refreshed(offers: Array)
 signal card_purchased(card_data: CardData)
 
@@ -49,6 +65,70 @@ func open_shop() -> void:
 			catch_up_just_issued = true
 	refresh_shop()
 
+# Набор выбора карты для текущего шага PICK: есть свой (повторный вход, загрузка) — он же
+func open_pick() -> void:
+	if pick_node_id == RunManager.current_node_id and pick_node_id >= 0:
+		return
+	pick_node_id = RunManager.current_node_id
+	pick_open.clear()
+	pick_start_taken.clear()
+	pick_taken_index = -1
+	pick_offers.clear()
+	var dealt: int = PICK_START_DEALT if pick_is_start() else PICK_DEALT
+	var pool: Array = CardFactory.build_pool().filter(func(c): return MetaProgress.is_card_unlocked(c.id))
+	var rng: RandomNumberGenerator = RunManager.rng
+	for i in range(pool.size() - 1, 0, -1):
+		var j = rng.randi_range(0, i)
+		var tmp = pool[i]
+		pool[i] = pool[j]
+		pool[j] = tmp
+	var seen: Dictionary = {}
+	for c in pool:
+		if pick_offers.size() >= dealt:
+			break
+		if not seen.has(c.id):
+			seen[c.id] = true
+			pick_offers.append(c)
+
+# Идёт стартовый выбор забега (3 из 6 вслепую), а не обычный (открыть 2, взять 1)
+func pick_is_start() -> bool:
+	var node = RunManager.get_current_node()
+	return node != null and node.type == RunMapNode.START_PICK
+
+# Стартовый выбор: взять карту рубашки вслепую — открывается и уходит игроку. null — нельзя (набор закрыт / уже взята)
+func pick_start_take(index: int) -> CardData:
+	if pick_done() or index < 0 or index >= pick_offers.size() or pick_start_taken.has(index):
+		return null
+	pick_start_taken.append(index)
+	pick_open.append(index)
+	var card: CardData = pick_offers[index]
+	print("ShopManager: стартовый выбор — '%s' (%d из %d)" % [card.title, pick_start_taken.size(), PICK_START_TAKE])
+	return card
+
+# Открыть карту рубашки: false — уже открыта, лимит открытых или карту уже взяли
+func pick_reveal(index: int) -> bool:
+	if pick_done() or index < 0 or index >= pick_offers.size() or pick_open.has(index) or pick_open.size() >= PICK_OPEN:
+		return false
+	pick_open.append(index)
+	return true
+
+# Взять одну из открытых: набор закрывается. null — нельзя (карта не открыта / уже взяли)
+func pick_take(index: int) -> CardData:
+	if pick_done() or not pick_open.has(index):
+		return null
+	pick_taken_index = index
+	var card: CardData = pick_offers[index]
+	print("ShopManager: выбор карты — '%s'" % card.title)
+	return card
+
+func pick_done() -> bool:
+	if pick_is_start():
+		return pick_start_taken.size() >= PICK_START_TAKE
+	return pick_taken_index >= 0
+
+func pick_ready() -> bool:
+	return pick_open.size() >= PICK_OPEN
+
 # Новый забег: номера шагов снова с нуля — старый набор не должен подхватиться
 func reset() -> void:
 	current_offers.clear()
@@ -58,6 +138,11 @@ func reset() -> void:
 	catch_up_offers.clear()
 	catch_up_rerolls_left = 0
 	catch_up_just_issued = false
+	pick_node_id = -1
+	pick_offers.clear()
+	pick_open.clear()
+	pick_start_taken.clear()
+	pick_taken_index = -1
 
 func refresh_shop() -> void:
 	current_offers.clear()
@@ -85,6 +170,11 @@ func save_state() -> Dictionary:
 		"free_cards_left": free_cards_left,
 		"catch_up_offers": CardFactory.ids_of(catch_up_offers),
 		"catch_up_rerolls_left": catch_up_rerolls_left,
+		"pick_node_id": pick_node_id,
+		"pick_offers": CardFactory.ids_of(pick_offers),
+		"pick_open": pick_open.duplicate(),
+		"pick_taken_index": pick_taken_index,
+		"pick_start_taken": pick_start_taken.duplicate(),
 	}
 
 func load_state(d: Dictionary) -> void:
@@ -94,6 +184,15 @@ func load_state(d: Dictionary) -> void:
 	free_cards_left = int(d["free_cards_left"])
 	catch_up_offers = CardFactory.create_many(d.get("catch_up_offers", []))
 	catch_up_rerolls_left = int(d.get("catch_up_rerolls_left", 0))
+	pick_node_id = int(d.get("pick_node_id", -1))
+	pick_offers = CardFactory.create_many(d.get("pick_offers", []))
+	pick_open.clear()
+	for i in d.get("pick_open", []):
+		pick_open.append(int(i))
+	pick_taken_index = int(d.get("pick_taken_index", -1))
+	pick_start_taken.clear()
+	for i in d.get("pick_start_taken", []):
+		pick_start_taken.append(int(i))
 
 # -------------------------------------------------------
 # ОБНОВЛЕНИЕ НАБОРА
@@ -160,13 +259,13 @@ func get_synergy_note(card: CardData) -> String:
 			continue
 		var before := int(have.get(tag, 0.0) + 0.001)
 		var after := int(have.get(tag, 0.0) + card.unit_count * unit.unit_weight + 0.001)
-		var line := "%s %d → %d" % [tag.capitalize(), before, after]
+		var line := "%s %d → %d" % [SynergyManager.tag_label(tag), before, after]
 		for level in SynergyManager.SYNERGY_DEFINITIONS[tag]:
 			if before < level["threshold"] and after >= level["threshold"]:
-				line += " — откроет «%s»" % level["name"]
+				line += " — откроет «%s»" % Names.of(level["name"])
 				break
 			if after < level["threshold"]:
-				line += " (до «%s» ещё %d)" % [level["name"], level["threshold"] - after]
+				line += " (до «%s» ещё %d)" % [Names.of(level["name"]), level["threshold"] - after]
 				break
 		lines.append(line)
 	return "\n".join(lines)

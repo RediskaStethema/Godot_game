@@ -14,7 +14,6 @@ const SPARKS: int = 3
 const SPARK_SPEED: float = 1.4       # проходов искры по лучу в секунду
 const WAVE: float = 1.2              # px: волна сердцевины
 
-static var _add: CanvasItemMaterial
 
 var healer: Soldier
 var patient: Soldier = null
@@ -24,10 +23,7 @@ var _time: float = 0.0
 static func for_healer(h: Soldier) -> HealBeam:
 	var b := HealBeam.new()
 	b.healer = h
-	if _add == null:
-		_add = CanvasItemMaterial.new()
-		_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	b.material = _add
+	b.material = Vfx.add_material()   # пиксельный ADD
 	b.z_index = 5
 	h.add_child(b)
 	return b
@@ -48,12 +44,12 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _chest(s: Soldier) -> Vector2:
-	return to_local(s.global_position + Vector2(0.0, -Soldier.TARGET_SPRITE_HEIGHT * CHEST * s.data.sprite_scale))
+	return to_local(s.global_position + Vector2(0.0, -Soldier.TARGET_SPRITE_HEIGHT * CHEST * s.data.sprite_scale + Soldier.GROUND_SINK))
 
 func _draw() -> void:
 	if _alpha <= 0.0 or not is_instance_valid(patient) or not is_instance_valid(healer):
 		return
-	var a := _chest(healer)
+	var a := to_local(healer.heal_point())   # нартециум в руке (metadata/heal_origin листа), нет — грудь
 	var b := _chest(patient)
 	var dir := b - a
 	if dir.length() < 2.0:

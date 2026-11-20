@@ -110,6 +110,24 @@ func _main() -> void:
 	hold.call(idle)
 	_check("стойка здания: вне боя — кадр 0 (%s), в бою — играет (%s), после боя — снова кадр 0" % [held, plays],
 		held and plays and not idle.is_playing())
+
+	# Ускорение боя не ускоряет кадры зданий, кроме выстрела (решение пользователя 12.11.2026)
+	var rate = load("res://scripts/battle/Building.gd").hold_frame_rate
+	bm.battle_speed_now = 3.0
+	rate.call(idle)
+	var idle_k: float = idle.speed_scale
+	var f2 := _sheet(true)
+	f2.rename_animation("a", "attack_2")
+	var shot := AnimatedSprite2D.new()
+	shot.sprite_frames = f2
+	root.add_child(shot)
+	shot.play("attack_2")
+	shot.speed_scale = 0.5
+	rate.call(shot)
+	bm.battle_speed_now = 1.0
+	rate.call(idle)
+	_check("ускорение ×3: стойка здания ×%.2f (1/3), выстрел ×%.2f (как бой), без ускорения — ×%.2f" % [idle_k, shot.speed_scale, idle.speed_scale],
+		absf(idle_k - 1.0 / 3.0) < 0.001 and shot.speed_scale == 1.0 and idle.speed_scale == 1.0)
 	quit(1 if _fails > 0 else 0)
 
 func _check(name: String, ok: bool) -> void:

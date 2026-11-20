@@ -133,4 +133,48 @@ func _main() -> void:
 	scene._on_start_pressed(false)
 	_check("Без хода — бой сразу", bm.is_battle_running() and not scene.is_deploying)
 	bm.stop_battle()
+
+	# 7. Большая армия (17.11.2026): линии не глубже DEPLOY_MAX_DEPTH, передняя — не в зоне врага
+	bm.reset_run()
+	var rm = root.get_node("RunManager")
+	rm.new_run(5)
+	for n in rm.map.nodes:
+		if n.type == "battle" and n.wave == 10:
+			rm.current_node_id = n.id
+			rm.current_completed = false
+			break
+	root.get_node("EconomyManager").round_number = 10
+	var big: Array[UnitData] = []
+	var big_pl = {}
+	var ids := ["tactical_marine", "assault_marine", "devastator", "terminator", "scout_marine", "apothecary"]
+	var tiles16: Array[Vector2i] = []   # королевство 4×4 — 16 отрядов, предел игры (IsoGrid.MAX_KINGDOM_TILES)
+	for x in 4:
+		for y in 4:
+			tiles16.append(Vector2i(x, y))
+	bm.kingdom_tiles = tiles16
+	for i in 16:
+		var d = _unit(ids[i % ids.size()], 6)
+		big.append(d)
+		big_pl[d] = Vector2i(i % 4, i / 4)
+	bm.player_units = big
+	bm.player_placements = big_pl
+	current_scene.queue_free()
+	await process_frame
+	scene = load("res://scenes/battle/BattleScene.tscn").instantiate()
+	root.add_child(scene)
+	current_scene = scene
+	await process_frame
+	await process_frame
+	var squads: Array = reg.get_alive_squads_of_team(0)
+	var slots: Dictionary = scene._deploy_slots(squads)
+	_origin = scene.iso_grid.player_origin
+	var max_u := -INF
+	var lines := {}
+	for sq in slots:
+		var su := _u(slots[sq])
+		max_u = maxf(max_u, su)
+		lines[snappedf(su, 0.05)] = true
+	var enemy_start: float = scene.iso_grid.grid_width + scene.iso_grid.gap_tiles
+	_check("Большая армия (%d отрядов): передняя линия u %.2f не заходит в зону врага (с %.1f), линий %d ≤ 3" % [squads.size(), max_u, enemy_start, lines.size()],
+		squads.size() >= 14 and max_u < enemy_start - 1.0 and lines.size() <= 3 and slots.size() == squads.size())
 	quit()

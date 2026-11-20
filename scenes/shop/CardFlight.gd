@@ -60,7 +60,7 @@ func _plain_face(card: CardData) -> Control:
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", UITheme.card_style(card.rarity))
 	p.custom_minimum_size = _from.size
-	var l := UITheme.make_label(card.title, "HeaderLabel")
+	var l := UITheme.make_label(card.display_title(), "HeaderLabel")
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD
 	p.add_child(l)

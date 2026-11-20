@@ -62,11 +62,11 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/warp_spire/attack_3/11.png" id="attack_3_11"]
 
 [resource]
-metadata/level_muzzle = {2: Vector2(1.3, -400.0), 3: Vector2(2.9, -421.0)}
+metadata/level_muzzle = {2: Vector2(12.5, -385.0), 3: Vector2(4.1, -405.0)}
 metadata/muzzle = Vector2(6.3, -352.0)
 metadata/shot_frame = 4
-metadata/level_shift = {2: Vector2(5, 0), 3: Vector2(4, 0)}
-metadata/level_scale = {2: 1.000, 3: 1.002}
+metadata/level_shift = {2: Vector2(-3, 3), 3: Vector2(0, 0)}
+metadata/level_scale = {2: 1.000, 3: 1.000}
 metadata/level_static = []
 animations = [{
 "frames": [{

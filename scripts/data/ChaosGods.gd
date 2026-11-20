@@ -10,7 +10,10 @@ extends RefCounted
 # зависимостей от автолоадов: UnitData и тесты берут его до них. Цифры — на одобрение
 
 const GODS = ["khorne", "nurgle", "tzeentch", "slaanesh"]
-const NAMES = {"khorne": "Кхорн", "nurgle": "Нургл", "tzeentch": "Тзинч", "slaanesh": "Слаанеш"}
+# Названия карт даров Внешних (CardFactory.BLESSING_TEXT) — в подсказке бога (RENAMING_MAP 17.11.2026)
+const BLESSING_TITLES = {"khorne": "Gift of the Seething", "nurgle": "Gift of the Grandfather", "tzeentch": "Gift of the Herald",
+	"slaanesh": "Gift of the King"}
+const NAMES = {"khorne": "Кипящий", "nurgle": "Дедушка Тысячи", "tzeentch": "Вестник", "slaanesh": "Король Второго Акта"}
 const MAX_BLESSINGS: int = 3
 
 # Бог отряда по юниту (UnitData.factory_id) — по лору; особые юниты богов — своему богу. Нет в списке — бога нет
@@ -69,19 +72,42 @@ static func stat_mods(god: String, n: int, tags: Array, weight: float) -> Dictio
 				m[key] = k
 	return m
 
-# Яд в атаках (Нургл), ур/с; 0 — нет
+# Яд в атаках (Дедушка Тысячи), ур/с; 0 — нет
 static func poison_power(god: String, n: int) -> float:
 	return NURGLE_POISON * n if god == "nurgle" else 0.0
 
-# Шанс поработить при попадании (Слаанеш); 0 — нет
+# Шанс поработить при попадании (Король Второго Акта); 0 — нет
 static func charm_chance(god: String, n: int) -> float:
 	return SLAANESH_CHARM[mini(n, SLAANESH_CHARM.size()) - 1] if god == "slaanesh" and n > 0 else 0.0
 
-# Отряд не отступает (Кхорн)
+# Отряд не отступает (Кипящий)
 static func no_retreat(god: String, n: int) -> bool:
 	return god == "khorne" and n > 0
 
 # Текст для справки отряда: что дают благословения сейчас
+# Цвет имени бога в тексте (Palette.GOD_TEXT); нет бога — янтарь
+static func god_color(god: String) -> Color:
+	return Palette.GOD_TEXT.get(god, Palette.AMBER_LIGHT)
+
+# Подсказка к богу отряда в справке: что даёт каждое благословение (карта «Blessing of <бог>», до MAX_BLESSINGS)
+static func blessing_hint(god: String) -> String:
+	var per := ""
+	match god:
+		"khorne":
+			per = "+%d%% урона бойцам ближнего боя, с первого — отряд не отступает" % roundi(KHORNE_MELEE_DAMAGE * 100.0)
+		"nurgle":
+			per = "+%d%% HP и яд %s ур/с в атаках, но урон ×%.2f" % [roundi(NURGLE_HP * 100.0), str(NURGLE_POISON), NURGLE_DAMAGE]
+		"tzeentch":
+			per = "стрелкам +%d%% дальности и +%d урона, но скорострельность ×%.2f" % [roundi(TZEENTCH_RANGE * 100.0),
+				roundi(TZEENTCH_FLAT_DAMAGE), TZEENTCH_ATTACK_SPEED]
+		"slaanesh":
+			per = "шанс поработить врага при попадании (%d / %d / %d%%), но все статы ниже" % [
+				roundi(SLAANESH_CHARM[0] * 100.0), roundi(SLAANESH_CHARM[1] * 100.0), roundi(SLAANESH_CHARM[2] * 100.0)]
+	if per == "":
+		return ""
+	return "Покровитель отряда. Каждый дар (карта «%s», до %d): %s" % [
+		BLESSING_TITLES.get(god, god.capitalize()), MAX_BLESSINGS, per]
+
 static func describe(god: String, n: int, tags: Array) -> String:
 	if god == "":
 		return ""

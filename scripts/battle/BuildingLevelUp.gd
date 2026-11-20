@@ -21,7 +21,6 @@ const MOTES: int = 16
 const PILLAR_BANDS: int = 4       # столб света поперёк: столько вложенных полос — мягкий край
 const WIDTH: float = Building.SPRITE_WIDTH   # ширина света — доля клетки, как спрайт здания
 
-static var _add: CanvasItemMaterial
 
 var level := 2
 var ground := false
@@ -34,9 +33,6 @@ var _seed := 0
 
 static func play(building: Node2D, new_level: int, height: float, faction: String) -> void:
 	var c: Array = LevelUpGlow.COLORS.get(faction, LevelUpGlow.COLORS["space_marines"])
-	if _add == null:
-		_add = CanvasItemMaterial.new()
-		_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	for is_ground in [true, false]:
 		var g := BuildingLevelUp.new()
 		g.level = new_level
@@ -46,7 +42,7 @@ static func play(building: Node2D, new_level: int, height: float, faction: Strin
 		g._edge = c[0]
 		g._core = c[1]
 		g._seed = building.get_instance_id()
-		g.material = _add
+		g.material = Vfx.add_material()   # пиксельный ADD
 		building.add_child(g)
 		if is_ground:
 			building.move_child(g, 0)   # дети рисуются по порядку: первым — за спрайтом

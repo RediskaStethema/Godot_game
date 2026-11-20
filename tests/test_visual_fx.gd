@@ -125,13 +125,21 @@ func _main() -> void:
 	var healer = apo.soldiers[0]
 	s0.current_hp = s0.max_hp * 0.4
 	healer.current_state = healer.State.MOVE
+	healer.sprite.play("idle")   # стоит — играет ряд heal и поворачивается к раненому
 	healer._tick_support(0.1)
 	var beam = healer.heal_beam
 	await _frames(3)
 	var shown: bool = beam != null and beam.patient == s0 and beam._alpha > 0.0
+	# Луч — из нартециума (metadata/heal_origin), со стороны раненого, не из груди (решение пользователя 11.11.2026)
+	var origin: Vector2 = healer.heal_point()
+	var chest: Vector2 = healer.global_position + Vector2(0.0, -31.0 * 0.45 * healer.data.sprite_scale)
+	var to_patient: float = signf(s0.global_position.x - healer.global_position.x)
+	var from_tool: bool = healer.sprite.animation == "heal" and origin.distance_to(chest) > 2.0 \
+		and signf(origin.x - healer.global_position.x) == to_patient
 	healer.stand_down()
 	await _wait(0.35)
-	_check("луч лечения к раненому появился и погас", shown and beam._alpha <= 0.0)
+	_check("луч лечения к раненому появился и погас; из нартециума со стороны раненого (%s)" % from_tool,
+		shown and beam._alpha <= 0.0 and from_tool)
 
 	# 6. блик карты руки
 	_check("карта руки — наклон и блик", _of_class(scene.bench, "CardGlare").size() == 1)
@@ -149,6 +157,13 @@ func _main() -> void:
 
 	# 7. бой: след снаряда, стоп-кадр
 	scene._on_start_pressed(false)
+	# выход врагов (09.11.2026): отряд проявляется (прозрачный в начале), у Хаоса — разлом варпа; знаки бонусов
+	var foes_in: Array = squads_reg.get_alive_squads_of_team(1)
+	var faded: bool = foes_in.all(func(sq): return sq.modulate.a < 1.0)
+	var rifts: int = _of_class(scene, "BuildingFx").filter(func(n): return n.kind == "rift").size()
+	var marks: int = _of_class(scene, "BuildingFx").filter(func(n): return n.kind == "bonus").size()
+	_check("выход врагов: %d отрядов проявляются, разломов %d; знаков бонусов над своими %d" % [foes_in.size(), rifts, marks],
+		faded and rifts == foes_in.size() and marks >= 1)
 	await _frames(2)
 	var shot = load("res://scripts/battle/Projectile.gd").launch(scene.units_container, "bolt", s0.global_position, null, s0.global_position + Vector2(200, 0))
 	shot.visible = true
@@ -166,15 +181,19 @@ func _main() -> void:
 	# 7б. эффекты кодом 09.11.2026 (решение пользователя: что лучше кодом — кодом)
 	var fx_of := func(kind: String) -> int:
 		return _of_class(scene, "BuildingFx").filter(func(n): return n.kind == kind and not n.is_queued_for_deletion()).size()
-	# телепорт Deep Strike: полосы на месте ухода и высадки, облачков poof нет
+	# телепорт Deep Strike — лист художника: у каждого бойца уход (задом наперёд) и высадка (вперёд), стилизован
 	var term = scene._spawn_squad(_squad_with(UnitFactory.create("terminator"), 6), 0, Vector2i(0, 2), 6)
 	term.global_position = Vector2(-1500, 0)
-	var poofs0 := _of_class(scene, "Vfx").size()
+	var vfx_tele = load("res://scripts/battle/Vfx.gd")
+	var tele_frames = vfx_tele._get_frames("teleport")
+	var tele0: Array = _of_class(scene, "Vfx").filter(func(v): return v.sprite_frames == tele_frames)
 	term._tick_deep_strike(10.0)
-	var tele: Array = _of_class(scene, "BuildingFx").filter(func(n): return n.kind == "teleport")
-	var arrive_pts: int = tele.filter(func(n): return n.arrive).map(func(n): return n.parts.size()).reduce(func(a, b): return a + b, 0)
-	_check("телепорт Deep Strike: полосы ухода и высадки (%d узла, %d бойцов), облачков нет" % [tele.size(), arrive_pts],
-		term.deep_struck and tele.size() == 2 and arrive_pts == term.soldiers.size() and _of_class(scene, "Vfx").size() == poofs0)
+	var tele: Array = _of_class(scene, "Vfx").filter(func(v): return v.sprite_frames == tele_frames and not v in tele0)
+	var tele_back: int = tele.filter(func(v): return v._reverse).size()
+	var graded_tele: bool = vfx_tele.graded_path(vfx_tele.EFFECTS["teleport"]["sheet"]).begins_with(vfx_tele.GRADED_DIR)
+	_check("телепорт Deep Strike: лист у %d бойцов, уход задом наперёд %d, высадка %d, стилизован" % [term.soldiers.size(),
+		tele_back, tele.size() - tele_back], term.deep_struck and tele_back == term.soldiers.size()
+		and tele.size() == term.soldiers.size() * 2 and graded_tele)
 	# благословение: знак бога под каждым бойцом отряда
 	var zerk = scene._spawn_squad(_squad_with(UnitFactory.create("khorne_berzerkers"), 4), 0, Vector2i(1, 2), 4)
 	var sig0: int = fx_of.call("sigil")
@@ -237,7 +256,20 @@ func _main() -> void:
 	picker.queue_free()
 	_check("подкрепление: свет по рамке окна", glow_ok)
 
-	# 8. счётчик Req отматывается
+	# щит бойца кончился — лопается; элитный враг пал — монеты летят к счётчику (09.11.2026, монеты — 12.11.2026)
+	var shielded = squads_reg.get_alive_squads_of_team(0)[0].soldiers[0]
+	shielded.shield = 5.0
+	var sb0: int = _of_class(scene, "BuildingFx").filter(func(n): return n.kind == "shield").size()
+	shielded.take_damage(10.0)
+	var sb1: int = _of_class(scene, "BuildingFx").filter(func(n): return n.kind == "shield").size()
+	var coins0: int = _of_class(scene, "CoinFlight").size()
+	scene.elite_killed(Vector2.ZERO)
+	var coins1: int = _of_class(scene, "CoinFlight").size()
+	var bonus: int = root.get_node("EconomyManager").BONUS_ELITE_KILL
+	_check("щит лопнул (%d), элита — монет к счётчику %d (бонус %d)" % [sb1 - sb0, coins1 - coins0, bonus],
+		sb1 == sb0 + 1 and coins1 - coins0 == bonus)
+
+	# 8. счётчик монет отматывается (число без «Req» — решение пользователя 12.11.2026)
 	var hud = scene.hud
 	var label: Label = hud._requisition
 	var econ = root.get_node("EconomyManager")
@@ -245,46 +277,44 @@ func _main() -> void:
 	await _frames(2)
 	var mid := label.text
 	await _wait(0.6)   # UITheme.ROLL_TIME 0.45 (UITheme по имени — до автолоадов не компилируется)
-	_check("счётчик Req бежит («%s») и встаёт на %d («%s»)" % [mid, econ.requisition, label.text],
-		mid != "%d Req" % econ.requisition and label.text == "%d Req" % econ.requisition)
+	_check("счётчик монет бежит («%s») и встаёт на %d («%s»)" % [mid, econ.requisition, label.text],
+		mid != str(econ.requisition) and label.text == str(econ.requisition))
 	bm.stop_battle()
 
-	# 9. меню: десантник оборачивается только пока курсор на кнопке (решение пользователя 08.11.2026)
+	# 9. меню: окна кораблей горят ярче только пока курсор на кнопке (решение пользователя 16.11.2026)
 	change_scene_to_file("res://scenes/menu/MainMenu.tscn")
 	await _frames(5)
-	var arts: Array = current_scene.find_children("*", "", true, false).filter(func(n): return n.has_method("set_marine_look"))
+	var arts: Array = current_scene.find_children("*", "", true, false).filter(func(n): return n.has_method("set_menu_hover"))
 	if arts.is_empty():
-		_check("меню: живая сцена с десантником", false)
+		_check("меню: живая сцена с кораблями", false)
 	else:
 		var art = arts[0]
-		await _wait(1.0)
-		var idle_pos: float = art._marine_pos
-		art.set_marine_look(true)
-		current_scene.set_process(false)   # иначе меню само снимет взгляд — курсора над кнопкой нет
-		await _wait(1.0)
-		var look_pos: float = art._marine_pos
-		art.set_marine_look(false)
-		await _wait(1.2)
-		_check("меню: десантник спиной без курсора (%.1f), обернулся (%.1f), отвернулся обратно (%.1f)" % [
-			idle_pos, look_pos, art._marine_pos],
-			idle_pos == 0.0 and is_equal_approx(look_pos, art.MARINE_PEAK) and art._marine_pos == 0.0)
-		# знамя — висит, от клика колышется и снова висит; ни одна кнопка не подсвечена без курсора
-		var banner: TextureRect = art._loops["banner"]["rect"]
-		var still: bool = art._banner_t < 0.0 and banner.texture == art._loops["banner"]["frames"][0]
-		art.wave_banner()
-		await _wait(0.4)
-		var moving: bool = art._banner_t > 0.0 and banner.texture != art._loops["banner"]["frames"][0]
-		await _wait(float(art._loops["banner"]["frames"].size() * art.BANNER_WAVES) / art.BANNER_FPS)
-		var back: bool = art._banner_t < 0.0 and banner.texture == art._loops["banner"]["frames"][0]
-		_check("меню: знамя висит, от клика колышется и замирает; кнопка в фокусе без курсора — %s" % [
-			root.get_viewport().gui_get_focus_owner()], still and moving and back and root.get_viewport().gui_get_focus_owner() == null)
-		# взлёт в забег (MenuLaunch; headless — сразу) → магазин, флаг посадки; первое поле его снимает
+		await _wait(0.6)
+		var idle_glow: float = art._hover
+		var idle_visible: bool = art._capital_glow != null and art._capital_glow.visible
+		art.set_menu_hover(true)
+		current_scene.set_process(false)   # иначе меню само снимет наведение — курсора над кнопкой нет
+		# MainMenu зовёт set_menu_hover каждый кадр; свет держится HOVER_HOLD после ухода курсора (зазоры между кнопками)
+		for i in 48:
+			art.set_menu_hover(true)
+			await process_frame
+		await _wait(0.1)
+		var look_glow: float = art._hover
+		var look_visible: bool = art._capital_glow != null and art._capital_glow.visible 			and art._capital_glow.self_modulate.r > 0.9
+		var ship_half: bool = not art._ships.is_empty() and art._ships[0]["half"] != null and art._ships[0]["half"].visible
+		art.set_menu_hover(false)
+		await _wait(0.8)
+		_check("меню: окна кораблей в покое не горят ярче (%.1f), с курсором — ярче (%.1f, флагман %s, малый %s), ушёл — снова гаснут (%.1f)" % [
+			idle_glow, look_glow, look_visible, ship_half, art._hover],
+			idle_glow == 0.0 and not idle_visible and look_glow == 1.0 and look_visible and ship_half and art._hover == 0.0)
+		# ни одна кнопка не подсвечена без курсора
+		_check("меню: кнопка в фокусе без курсора — %s" % [root.get_viewport().gui_get_focus_owner()],
+			root.get_viewport().gui_get_focus_owner() == null)
+		# взлёт в забег (MenuLaunch; headless — сразу) → магазин поверх поля (BattleScene); флаг посадки снимает
+		# первое поле — уже под магазином
 		current_scene._start_new_run("space_marines", "ultramarines", 2)
 		await _frames(4)
-		var in_shop: bool = current_scene.scene_file_path.ends_with("ShopScene.tscn") and rm.landing_pending
-		rm.complete_current_node()
-		rm.advance()
-		await _frames(4)
-		_check("взлёт → магазин с флагом посадки, первое поле его снимает (%s, %s)" % [in_shop, rm.landing_pending],
-			in_shop and current_scene.scene_file_path.ends_with("BattleScene.tscn") and not rm.landing_pending)
+		var in_shop: bool = current_scene.scene_file_path.ends_with("BattleScene.tscn") and current_scene.get("shop") != null
+		_check("взлёт → магазин поверх поля, флаг посадки снят первым полем (%s, %s)" % [in_shop, rm.landing_pending],
+			in_shop and not rm.landing_pending)
 	quit()

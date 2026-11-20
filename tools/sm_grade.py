@@ -34,6 +34,11 @@ WHITE_HOT = 0.8        # светлее — раскалённое ядро вс
 NEUTRAL_PULL = 0.7     # доля, на которую их тон тянется к стали
 NEUTRAL_SAT_TO = 0.22  # их насыщенность — к этой (сталь с синевой, как грунт)
 NEUTRAL_SAT_PULL = 0.5
+# Серые с тоном дальше этого от стали (тёплый дым и пыль, ~0.1) — тон и насыщенность не трогаются: путь тона к стали
+# идёт через зелёный — дым обрушения цитадели (10.11.2026) выходил мятным, а зелёный в игре — яд Nurgle.
+# Бесцветные (s < GRAY_SAT: тон не определён) — сразу тоном стали
+NEUTRAL_HUE_FAR = 0.25
+GRAY_SAT = 0.04
 GLOW = (0.85, 0.5)     # огонь: яркость > 0.85, насыщенность > 0.5, тёплый тон (золото шпилей тусклее — не огонь)
 WARM = (0.17, 0.95)    # тёплый — тон ниже первого или выше второго
 GLOW_KEEP = 0.5        # огни гаснут на корень из множителя яркости в этой степени (0 — как есть)
@@ -68,7 +73,9 @@ def grade(img, gain, hue=STEEL_HUE, blue_sat=BLUE_SAT, metal_sat=NEUTRAL_SAT_TO,
     h, s, v = [c.copy() for c in np.moveaxis(hsv_of(img), -1, 0)]
     glow, gold, blue, neutral = masks(h, s, v, white_hot)
     d = ((hue - h + 0.5) % 1.0) - 0.5
-    h = np.where(neutral, (h + d * NEUTRAL_PULL) % 1.0, h)
+    gray = neutral & (s < GRAY_SAT)
+    neutral = neutral & ~gray & (np.abs(d) <= NEUTRAL_HUE_FAR) | gray
+    h = np.where(gray, hue, np.where(neutral, (h + d * NEUTRAL_PULL) % 1.0, h))
     s = np.where(neutral, s + (metal_sat - s) * NEUTRAL_SAT_PULL, s)
     s = np.where(gold, s * gold_sat, s)
     s = np.where(blue, s * blue_sat, s)

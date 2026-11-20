@@ -95,7 +95,7 @@ func _main() -> void:
 	var foreign = CardFactory.build_pool("space_marines")
 	var chaos_khorne = CardFactory.build_pool("chaos")
 	var count = func(pool, id): return pool.filter(func(c): return c.id == id).size()
-	_check("пул: Ultramarines +2 стражи +2 бастиона (%d / %d), без ордена %d, с чужим богом %d; Хаос с Кхорном — берсерки %d" % [
+	_check("пул: Ultramarines +2 стражи +2 бастиона (%d / %d), без ордена %d, с чужим богом %d; Хаос с Кипящим — берсерки %d" % [
 		count.call(um, "honour_guard"), count.call(um, "codex_bastion"), none.size(), foreign.size(),
 		count.call(chaos_khorne, "khorne_berzerkers")],
 		count.call(um, "honour_guard") == 2 and count.call(um, "codex_bastion") == 2 and um.size() == none.size() + 4
@@ -177,8 +177,8 @@ func _main() -> void:
 	var victim = enemies[5]
 	victim.global_position = cauldron.global_position + Vector2(20, 0)
 	cauldron.tick(0.1)
-	# Берсерки — отряд Кхорна: армии +1% за убитого, им ещё +5% (решение пользователя 25.10.2026): ×1.05 × 1.25
-	_check("алтарь: 5 убитых — урон Берсерков %.2f → %.2f (×1.05 армии × 1.25 Кхорну); котёл: враг рядом отравлен (%d)" % [
+	# Берсерки — отряд Кипящего: армии +1% за убитого, им ещё +5% (решение пользователя 25.10.2026): ×1.05 × 1.25
+	_check("алтарь: 5 убитых — урон Берсерков %.2f → %.2f (×1.05 армии × 1.25 Кипящему); котёл: враг рядом отравлен (%d)" % [
 		dmg0, b0.current_damage, victim.get_status_stacks("poisoned")],
 		absf(b0.current_damage - dmg0 * 1.05 * 1.25) < EPS and victim.get_status_stacks("poisoned") == 1)
 	var ring = cauldron.get("_aura_ring")

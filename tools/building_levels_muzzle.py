@@ -33,16 +33,29 @@ MIN_PIXELS = 40
 BARREL_MIN_SHARE = 0.3
 VALLEY = 0.4         # вспышки соседних стволов слились: столбец ≤ VALLEY меньшего из пиков по бокам — граница
 BARREL_MIN_PIXELS = 100
+# Вспышки мельче у пиксельных кадров (пакет Хаоса 13.11.2026: турель 3-го уровня — пятна 112 и 80 px)
+BARREL_MIN_PIXELS_OVERRIDE = {"chaos/tower": 40}
 BARREL_FRONT = 90
+SETTLED = 3          # кадр ряда выстрела через SETTLED после shot_frame — вспышка погасла (эталон без вспышки)
 
 
 def new_flash(shot, idle):
     a = np.array(Image.open(shot).convert("RGBA")).astype(float) / 255
-    i = np.array(Image.open(idle).convert("RGBA")).astype(float) / 255
     r, g, b, al = np.moveaxis(a, -1, 0)
     mx = np.maximum(np.maximum(r, g), b)
     bright = (al > 0.5) & (mx > 0.8) & (r >= b) & (r > 0.75)
-    return bright & (np.abs(a[..., :3] - i[..., :3]).sum(-1) > 0.5)
+    # пакет 13.11.2026: стойка живая — огни корпуса мигают; вспышка — то, что не горит ни в одном кадре стойки уровня
+    # и ни в одном кадре ряда выстрела дальше SETTLED от выстрела (вспышки ещё / уже нет; ряд стойки стоит на холсте
+    # иначе — золото корпуса Imperial Fists отличалось от неё и шло за вспышку)
+    refs = sorted(Path(idle).parent.glob("*.png"), key=lambda p: int(p.stem))
+    row = sorted(Path(shot).parent.glob("*.png"), key=lambda p: int(p.stem))
+    refs += [p for p in row if abs(int(p.stem) - int(Path(shot).stem)) >= SETTLED]   # до выстрела и после
+    for ref in refs:
+        i = np.array(Image.open(ref).convert("RGBA")).astype(float) / 255
+        if i.shape != a.shape:
+            continue
+        bright &= np.abs(a[..., :3] - i[..., :3]).sum(-1) > 0.5
+    return bright
 
 
 def largest_blob(mask, gap=3):
@@ -107,6 +120,7 @@ def split_valley(b):
 def barrels(folder, shot, up):
     """{уровень: [(x, y), …]} — ствол на каждую вспышку кадра выстрела, где их больше одной (мера — как у muzzle)."""
     found = {}
+    min_px = BARREL_MIN_PIXELS_OVERRIDE.get(folder.relative_to(BUILDINGS).as_posix(), BARREL_MIN_PIXELS)
     for level in (1, 2, 3):
         sfx = "" if level == 1 else f"_{level}"
         f = folder / f"attack{sfx}" / f"{shot}.png"
@@ -114,13 +128,13 @@ def barrels(folder, shot, up):
             continue
         bs = blobs(new_flash(f, folder / f"idle{sfx}" / "0.png"))
         if not up:
-            bs = sorted((part for b in bs for part in (split_valley(b) if len(b) >= BARREL_MIN_PIXELS else [b])),
+            bs = sorted((part for b in bs for part in (split_valley(b) if len(b) >= min_px else [b])),
                         key=len, reverse=True)
         if not bs:
             continue
         front = (lambda b: -b[:, 0].min()) if up else (lambda b: b[:, 1].max())
-        lead = max(front(b) for b in bs if len(b) >= BARREL_MIN_PIXELS) if len(bs[0]) >= BARREL_MIN_PIXELS else 0
-        keep = [b for b in bs if len(b) >= max(BARREL_MIN_PIXELS, BARREL_MIN_SHARE * len(bs[0]))
+        lead = max(front(b) for b in bs if len(b) >= min_px) if len(bs[0]) >= min_px else 0
+        keep = [b for b in bs if len(b) >= max(min_px, BARREL_MIN_SHARE * len(bs[0]))
                 and front(b) >= lead - BARREL_FRONT]
         if len(keep) < 2:
             continue
@@ -142,7 +156,7 @@ DIR_SKIP = {"artillery", "chaos/artillery"}   # орудия игрока — р
 # кадре стойки уровня с сеткой. Бастион Imperial Fists — по вспышке (совпало с рисунком)
 DIR_OVERRIDE = {
     "tower": {1: 0.0, 2: 15.0, 3: 12.0},
-    "chaos/tower": {1: -21.0, 2: -13.0, 3: -10.0},
+    "chaos/tower": {1: -16.0, 2: -12.0, 3: -10.0},   # пакет 13.11.2026
 }
 
 

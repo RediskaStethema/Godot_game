@@ -36,6 +36,8 @@
 /CLAUDE_CODE_PROMPT.md
 /.claude/
 /skills/
+/.agents/
+/skills-lock.json
 /docs/task-briefs/
 /docs/TDD.md
 
@@ -66,3 +68,14 @@ __pycache__/
 
 # Справка Claude по картам и способностям (локальная)
 /CARD_ABILITIES.txt
+
+# Исходный звуковой пакет (09.11.2026): в игру — копии по событиям в assets/audio
+/assets/sounds_for_gWHKINGS/
+
+# Копия всего визуала для переработки (tools/collect_visuals.py) — не в репозиторий
+visual_export/
+
+# Снимки и образцы пользователя (решения ссылаются на них по имени) — локально
+/docs/screenshots/*
+!/docs/screenshots/.gdignore
+!/docs/screenshots/image.webp

@@ -52,7 +52,6 @@ const TITLE_OUT: float = 0.6
 const TITLE_SIZE: int = 40
 const SUBTITLE_SIZE: int = 18
 
-static var _add: CanvasItemMaterial
 static var _rng := RandomNumberGenerator.new()
 
 var kind: Kind = Kind.GROUND
@@ -83,10 +82,7 @@ static func _make(k: Kind, add: bool) -> BossFx:
 	var n := BossFx.new()
 	n.kind = k
 	if add:
-		if _add == null:
-			_add = CanvasItemMaterial.new()
-			_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-		n.material = _add
+		n.material = Vfx.add_material()   # пиксельный ADD
 	n.process_priority = 1   # после хода бойцов (как SoldierShadows): за боссом без скачка
 	parent.add_child(n)
 	return n
@@ -201,7 +197,8 @@ static func furrow(from: Vector2, to: Vector2, col: Color) -> BossFx:
 	return n
 
 # Титр поверх поля: имя крупно, подпись, линия цвета босса; въезд, держится, тает — по реальному времени
-static func title(scene: Node, name_text: String, subtitle: String, col: Color) -> CanvasLayer:
+# tint_subtitle — подпись «демон-примарх Кипящего» / «примарх Ультрамаринов» тоже цветом бога / легиона
+static func title(scene: Node, name_text: String, subtitle: String, col: Color, tint_subtitle: bool = false) -> CanvasLayer:
 	if scene == null or not scene.is_inside_tree():
 		return null
 	var layer := CanvasLayer.new()
@@ -216,7 +213,7 @@ static func title(scene: Node, name_text: String, subtitle: String, col: Color) 
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.modulate.a = 0.0
 	layer.add_child(box)
-	for part in [[name_text, TITLE_SIZE, col.lerp(Color.WHITE, 0.35)], [subtitle, SUBTITLE_SIZE, Palette.DUST_PALE]]:
+	for part in [[name_text, TITLE_SIZE, col.lerp(Color.WHITE, 0.35)], [subtitle, SUBTITLE_SIZE, col if tint_subtitle else Palette.DUST_PALE]]:
 		if part[0] == "":
 			continue
 		var l := Label.new()

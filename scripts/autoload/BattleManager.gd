@@ -11,6 +11,9 @@ extends Node
 var player_placements: Dictionary = {}
 # Рука — карты, ещё не выложенные на поле (pending_cards). Переносятся между раундами.
 const MAX_HAND_SIZE: int = 10
+# Минимум карт в руке (решение пользователя 17.11.2026): игрок не может сыграть карту, если в руке останется меньше;
+# как только в руке 2 карты — бой начинается сам. Не действует на расстановке перед финальным боссом (волна 15)
+const MIN_HAND_CARDS: int = 2
 const FIXED_TICK: float = GameConstants.FIXED_TICK
 var pending_cards: Array[CardData] = []
 
@@ -30,6 +33,9 @@ var tiles_bought: int = 0
 const CITADEL_MAX_HP: float = 1000.0
 var citadel_hp: float = CITADEL_MAX_HP
 var citadel: Node2D = null          # цитадель текущего боя (ставит BattleScene)
+# Ускорение боя (GameSettings.battle_speed), сейчас приложенное к Engine.time_scale (BattleScene._apply_battle_speed);
+# 1 — не ускорено. Здания и цитадель делят на него скорость рядов (кроме выстрела) — кадры не ускоряются
+var battle_speed_now: float = 1.0
 var siege_started: bool = false     # армия игрока пала, враги штурмуют цитадель
 # Игрок сдался в текущем бою: подписчик battle_ended заканчивает забег
 var surrendered: bool = false
@@ -188,7 +194,7 @@ func clear_projectiles() -> void:
 # Урон отрядов игрока за бой (UnitData → урон по HP: без щита и перебора сверх HP цели) — итоги боя.
 # По UnitData, а не по узлу: отряд, павший целиком, тоже в итогах. Яд и огонь не считаются
 var damage_by_unit: Dictionary = {}
-# Порабощённые за бой (благословение Слаанеш, Soldier.charm): отряд (UnitData) → сколько — apply_thralls после победы
+# Порабощённые за бой (благословение Короля Второго Акта, Soldier.charm): отряд (UnitData) → сколько — apply_thralls после победы
 var thralls: Dictionary = {}
 
 func add_thrall(data: UnitData) -> void:
@@ -211,6 +217,8 @@ func get_tick_alpha() -> float:
 	return clampf(_accumulator / FIXED_TICK, 0.0, 1.0)
 
 func _check_battle_end() -> void:
+	if phase != BattlePhase.RUNNING:
+		return   # бой уже кончен посреди тика (тестовый штурм проигран, сдача) — второй итог не объявляем
 	var team0_alive = SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER).size() > 0
 	var team1_alive = SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_ENEMY).size() > 0
 
@@ -353,7 +361,7 @@ func sync_army_from_squads(squads: Array) -> void:
 		var kinds: Array[String] = []
 		for soldier in squad.soldiers:
 			if soldier.charmed:
-				continue   # порабощённый (Слаанеш) — не боец отряда: после боя он вернёт павшего (apply_thralls)
+				continue   # порабощённый (Король Второго Акта) — не боец отряда: после боя он вернёт павшего (apply_thralls)
 			hp_list.append(clampf(soldier.current_hp / soldier.max_hp, 0.01, 1.0))
 			kinds.append(soldier.convert_kind)
 		if not kinds.any(func(k): return k != ""):
@@ -381,7 +389,7 @@ func store_survivors(alive_squads: Array, at_start: Array) -> Array[String]:
 		data.respawn_after_wipe()
 		player_units.append(data)
 		player_placements[data] = entry["tile"]
-		revived.append(data.unit_name)
+		revived.append(data.display_name())
 	return revived
 
 # Ход Казарм (после выигранного боя, после store_survivors) — отрядам на соседних клетках (по сторонам):
@@ -389,7 +397,7 @@ func store_survivors(alive_squads: Array, at_start: Array) -> Array[String]:
 # пользователя 21.10.2026). Святилище культа Хаоса (та же карта, раса chaos) не лечит; если среди соседей есть
 # отряд бога Хаоса, павшие ДРУГИХ соседей встают бойцами этого бога (UnitData.saved_kinds, сила — по редкости
 # отряда, UnitFactory.convert_fighter), иначе — свои. Не больше squad_size. Возвращает, сколько бойцов вернулось
-# Порабощённые (благословение Слаанеш) после выигранного боя, после store_survivors: за каждого — павший боец
+# Порабощённые (благословение Короля Второго Акта) после выигранного боя, после store_survivors: за каждого — павший боец
 # отряда возвращается с полным HP; павших не хватило — отряд лечится на ChaosGods.SLAANESH_HEAL (раз за бой)
 # (решение пользователя 25.10.2026). Возвращает, сколько было порабощено
 func apply_thralls() -> int:

@@ -3,7 +3,7 @@ extends Resource
 
 # UnitData.gd — добавь:
 @export var damage_variance: float = 0.2
-@export var sprite_path: String = "res://assets/sprites/space_marine"  # "res://assets/sprites/space_marine"
+@export var sprite_path: String = "res://assets/units/space_marines/tactical"  # assets/units/<раса>/<юнит>: frames.tres + папки анимаций
 
 # --- Идентификация ---
 @export var factory_id: String = ""   # id из UnitFactory.create (= CardData.unit_factory_id)
@@ -94,6 +94,9 @@ extends Resource
 @export var sprite_scale: float = 1.0
 # Броня в цвет ордена игрока (Soldier.ARMOR_SHADER); false — лист уже в цветах своего ордена (особые юниты)
 @export var chapter_armor: bool = true
+# Участок кадра (пиксели холста 1-го кадра idle), который цвет братства не трогает: лицо и борода (17.11.2026, «зелёное лицо
+# у Вергилианцев»), мех волка («зелёные волки»); нулевой размер — нет
+@export var armor_protect: Rect2 = Rect2()
 # Снаряд стрелка — вид из Projectile.EFFECTS ("bolt" / "charged" / "spark"), "" — без снаряда.
 # Урон и эффекты попадания (стан, отбрасывание) — когда снаряд долетит (Projectile._impact).
 @export var projectile: String = ""
@@ -177,12 +180,12 @@ func get_move_speed() -> float:
 func get_attack_range() -> float:
 	return attack_range * _blessing()["range"]
 
-# Порог отступления: благословение Кхорна — не отступает
+# Порог отступления: благословение Кипящего — не отступает
 func get_retreat_threshold() -> float:
 	return 0.0 if ChaosGods.no_retreat(get_god(), blessings) else retreat_hp_threshold
 
 # Благословение бога: только отряд этого бога (у Common бога нет — сначала «Chaos Gods' Blessing»), не больше
-# MAX_BLESSINGS; Тзинч — только стрелкам
+# MAX_BLESSINGS; Вестник — только стрелкам
 func can_bless(card_god: String) -> bool:
 	return card_god != "" and card_god == get_god() and blessings < ChaosGods.MAX_BLESSINGS 		and (card_god != "tzeentch" or "ranged" in tags)
 
@@ -346,3 +349,7 @@ func apply_upgrade(card: CardData) -> void:
 		"banner":   # Chapter Banner — аура, берётся сильнейшая
 			banner_aura_bonus = maxf(banner_aura_bonus, card.upgrade_value)
 	applied_upgrades.append(card.title)
+
+# Название отряда / бойца для игрока на выбранном языке (Names.of); unit_name — английский ключ
+func display_name() -> String:
+	return Names.of(unit_name)

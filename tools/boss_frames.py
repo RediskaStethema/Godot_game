@@ -1,6 +1,6 @@
 """Пакеты финальных боссов художника (assets/source_sheets/bosses_pack/WH40KINGS_Bosses_P1 / P2, 09.11.2026) → кадры + frames.tres для Soldier.
 
-    python tools/boss_frames.py [папка пакета …] [--out assets/sprites/bosses] [id …]
+    python tools/boss_frames.py [папка пакета …] [--out assets/units/bosses] [id …]
 
 Пакет: <id>/<анимация>/NN.png, кадры 384×384, ряды idle 12 / walk 12 / attack 12 / special 16 / death 16 /
 appear 16, удар — кадр 7 атаки, приём — кадр 10 (README пакета). Босс смотрит вправо.
@@ -83,7 +83,7 @@ def grade_group(images, params):
 
 
 PACKS = ["assets/source_sheets/bosses_pack/WH40KINGS_Bosses_P1", "assets/source_sheets/bosses_pack/WH40KINGS_Bosses_P2"]   # с .gdignore
-OUT = "assets/sprites/bosses"
+OUT = "assets/units/bosses"
 
 
 def mask(img):

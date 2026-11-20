@@ -66,6 +66,8 @@ GRADES = {
     "effects/status/poisoned.png": "poison",
     "effects/status/slowed.png": "frost",
     "effects/status/empowered.png": "amber",
+    # Телепорт Deep Strike (EFFECTS_NEEDED 5.3, лист художника; исходник assets/source_sheets/teleport_artist_2026-11-07)
+    "effects/teleport/spritesheet.png": "warp",
 }
 LOW, HIGH = 2.0, 99.5   # перцентили яркости плотных пикселей → начало и конец градиента
 DENSE_ALPHA = 40
@@ -120,7 +122,7 @@ for _rel in ["upgrades/upgrade_warp_ward.png", "upgrades/upgrade_combat_drugs.pn
 # мягкий ореол (PAINT_HALO), затем — градиент палитры, как раньше. Лист выходит в PAINT_UP раз больше исходного:
 # Vfx берёт масштаб из отношения ширины листов (Vfx._get_frames) — размеры и точки в Vfx.EFFECTS прежние
 # Листы, которые идут через paint: префикс пути → размер кадра (09.11.2026 — и листы статусов, кадр 64)
-PAINT_FRAMES = {PIXEL: 32, "effects/status/": 64}
+PAINT_FRAMES = {PIXEL: 32, "effects/status/": 64, "effects/teleport/": (64, 128)}   # (ш, в) — неквадратный кадр
 PAINT_UP = 4
 PAINT_GRAIN = 0.22        # ± доля яркости: зерно мазка
 PAINT_EDGE_DARK = 0.35    # край силуэта темнее на эту долю — объём, а не плоская заливка
@@ -135,19 +137,20 @@ def paint_frame(rel: str) -> int:
     return 0
 
 
-def paint(img: Image.Image, seed: int, frame: int = 32) -> Image.Image:
+def paint(img: Image.Image, seed: int, frame=32) -> Image.Image:
     src = img.convert("RGBA")
-    f, up = frame, PAINT_UP
-    cols, rows = src.width // f, src.height // f
-    out = Image.new("RGBA", (cols * f * up, rows * f * up), (0, 0, 0, 0))
+    fw, fh = frame if isinstance(frame, tuple) else (frame, frame)
+    up = PAINT_UP
+    cols, rows = src.width // fw, src.height // fh
+    out = Image.new("RGBA", (cols * fw * up, rows * fh * up), (0, 0, 0, 0))
     rng = np.random.default_rng(seed)
     for r in range(rows):
         for c in range(cols):
-            cell = src.crop((c * f, r * f, c * f + f, r * f + f))
+            cell = src.crop((c * fw, r * fh, c * fw + fw, r * fh + fh))
             if cell.getbbox() is None:
                 continue
             # поле с запасом под ореол, без утечки в соседний кадр
-            big = cell.convert("RGBa").resize((f * up, f * up), Image.BICUBIC).convert("RGBA")
+            big = cell.convert("RGBa").resize((fw * up, fh * up), Image.BICUBIC).convert("RGBA")
             a = np.array(big).astype(float) / 255.0
             alpha = a[..., 3]
             # край снова чёткий, но скруглённый: альфа через плавный порог
@@ -158,9 +161,9 @@ def paint(img: Image.Image, seed: int, frame: int = 32) -> Image.Image:
                 ImageFilter.GaussianBlur(up * 1.2))).astype(float) / 255.0
             shade = 1.0 - PAINT_EDGE_DARK * (1.0 - inner)
             # зерно мазка: крупное + мелкое
-            n1 = np.array(Image.fromarray((rng.random((f, f)) * 255).astype(np.uint8)).resize(
-                (f * up, f * up), Image.BICUBIC)).astype(float) / 255.0
-            n2 = rng.random((f * up, f * up))
+            n1 = np.array(Image.fromarray((rng.random((fh, fw)) * 255).astype(np.uint8)).resize(
+                (fw * up, fh * up), Image.BICUBIC)).astype(float) / 255.0
+            n2 = rng.random((fh * up, fw * up))
             grain = 1.0 + PAINT_GRAIN * ((n1 - 0.5) * 1.2 + (n2 - 0.5) * 0.6)
             rgb = np.clip(a[..., :3] * (shade * grain)[..., None], 0.0, 1.0)
             # ореол: размытый силуэт под фигурой, цвета соседних пикселей
@@ -171,7 +174,7 @@ def paint(img: Image.Image, seed: int, frame: int = 32) -> Image.Image:
             orgb = np.where(oa[..., None] > 0, (rgb * alpha[..., None] + halo[..., :3] * (ha * (1.0 - alpha))[..., None])
                             / np.maximum(oa, 1e-6)[..., None], 0.0)
             tile = Image.fromarray((np.dstack([orgb, oa]) * 255).round().astype(np.uint8))
-            out.paste(tile, (c * f * up, r * f * up))
+            out.paste(tile, (c * fw * up, r * fh * up))
     return out
 
 

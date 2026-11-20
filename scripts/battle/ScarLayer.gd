@@ -3,7 +3,9 @@ extends Node2D
 
 # Шрамы поля (решение пользователя 09.11.2026: «поле показывает, где шла сеча»): подпалины от разрывов и пятна
 # крови павших лежат на земле до конца боя. Один слой под тенями и отрядами (BattleScene._build_field), только вид.
-#   scorch(точка, r) — подпалина: неровное тёмное пятно 2:1 с бурым краем, пара угольков тлеет и гаснет
+#   scorch(точка, r) — подпалина: неровное тёмное пятно 2:1, к краю плавно уходит в грунт, пара угольков тлеет
+#     (решение пользователя 13.11.2026, `Screenshot 2026-11-13 201602.png`: «кратеры слишком сетчатые и выделяются» —
+#     был бурый край светлее грунта Хаоса и пиксельный материал с 4 ступенями прозрачности: шахматная сетка)
 #   blood(точка, r, цвет) — пятно крови павшего (цвет — Vfx.BLOOD_COLORS по UnitData.get_blood())
 # Отрисовка одной командой (как звенья KingdomWall): все пятна — треугольники с цветом вершин в общих массивах,
 # canvas_item_add_triangle_array; 09.11.2026 рисование пятен по одному (draw_colored_polygon) давало +500 вызовов
@@ -11,11 +13,12 @@ extends Node2D
 # угольки — в своём маленьком узле каждый кадр, пока тлеют. Не больше MAX_SCARS (лишние уходят пачкой TRIM),
 # не больше MAX_PER_FRAME за кадр; своя случайность (не randf — он общий с боем); выключается GameSettings.atmosphere
 
-const MAX_SCARS: int = 160
+const MAX_SCARS: int = 240
 const TRIM: int = 16                 # сверх MAX_SCARS — старые уходят пачкой (пересборка массивов — раз на пачку)
 const MAX_PER_FRAME: int = 6
 const FLATTEN: float = 0.5           # лежит на земле — эллипс 2:1
-const SCORCH_ALPHA: float = 0.55
+const SCORCH_ALPHA: float = 0.42   # ядро; к краю — до 0 (SCORCH_FEATHER)
+const SCORCH_MID: float = 0.55     # доля ядра у границы ядра
 const BLOOD_ALPHA: float = 0.5
 const BLOOD_DARKEN: float = 0.35     # пятно темнее брызг: засохшая кровь на камне
 const EMBER_TIME: float = 2.5        # с — угольки подпалины гаснут
@@ -38,6 +41,9 @@ var _rng := RandomNumberGenerator.new()
 func setup() -> void:
 	_rng.seed = 11
 	layer = self
+	# подпалины и кровь — мягкий пиксельный материал (16 ступеней прозрачности, дизеринг 1 px): с 4 ступенями
+	# слабая заливка на грунте рассыпалась в сетку точек (как свет костров, Vfx.soft_mix_material)
+	material = Vfx.soft_mix_material()
 	_ember_node = Node2D.new()
 	_ember_node.name = "Embers"
 	_ember_node.draw.connect(_draw_embers)
@@ -66,7 +72,7 @@ func _add(at: Vector2, r: float, is_scorch: bool, col: Color) -> void:
 	var scar := {"p": p, "poly": _blob(r), "drops": [],
 		"col": col if is_scorch else col.darkened(BLOOD_DARKEN),
 		"edge": Palette.SCORCH_EDGE if is_scorch else col.darkened(BLOOD_DARKEN + 0.25),
-		"alpha": SCORCH_ALPHA if is_scorch else BLOOD_ALPHA}
+		"alpha": SCORCH_ALPHA if is_scorch else BLOOD_ALPHA, "scorch": is_scorch}
 	if is_scorch:
 		for i in _rng.randi_range(2, 4):
 			if _embers.size() < MAX_EMBERS:
@@ -105,6 +111,13 @@ func _rebuild() -> void:
 func _append_mesh(s: Dictionary) -> void:
 	var p: Vector2 = s["p"]
 	var a: float = s["alpha"]
+	if s.get("scorch", false):
+		# только тень на земле: цвет ядра (темнее любого грунта), прозрачность от центра к краю — в ноль,
+		# без светлого бурого кольца
+		var c: Color = s["col"]
+		_fan(p, s["poly"], 1.0, Color(c, a * SCORCH_MID), Color(c, 0.0))
+		_fan(p, s["poly"], INNER, Color(c, a), Color(c, a * SCORCH_MID))
+		return
 	_fan(p, s["poly"], 1.0, Color(s["edge"], a * 0.7))
 	_fan(p, s["poly"], INNER, Color(s["col"], a))
 	for d in s["drops"]:
@@ -114,13 +127,15 @@ func _append_mesh(s: Dictionary) -> void:
 			ring.append(Vector2(cos(ang), sin(ang) * FLATTEN) * d[1])
 		_fan(p + d[0], ring, 1.0, Color(s["col"], a))
 
-func _fan(center: Vector2, ring: PackedVector2Array, k: float, col: Color) -> void:
+# ring_col — цвет вершин края (нет — как центр): прозрачность плавно спадает к краю веера
+func _fan(center: Vector2, ring: PackedVector2Array, k: float, col: Color, ring_col: Variant = null) -> void:
 	var base := _pts.size()
 	_pts.append(center)
 	_cols.append(col)
+	var rc: Color = col if ring_col == null else ring_col
 	for v in ring:
 		_pts.append(center + v * k)
-		_cols.append(col)
+		_cols.append(rc)
 	var n := ring.size()
 	for i in n:
 		_idx.append(base)

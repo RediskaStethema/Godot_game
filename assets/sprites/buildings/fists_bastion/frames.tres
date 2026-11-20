@@ -56,13 +56,13 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/fists_bastion/attack_3/4.png" id="attack_3_4"]
 
 [resource]
-metadata/level_muzzle = {2: Vector2(121.6, -197.1), 3: Vector2(119.2, -149.7)}
-metadata/level_barrels = {1: [Vector2(167.5, -290.0), Vector2(81.2, -257.3)], 2: [Vector2(125.5, -195.6), Vector2(65.1, -187.7)], 3: [Vector2(123.1, -147.7), Vector2(39.9, -130.2)]}
-metadata/level_barrel_dir = {1: Vector2(0.983, 0.185), 2: Vector2(0.963, 0.27), 3: Vector2(0.943, 0.331)}
-metadata/level_shift = {2: Vector2(-3, 1), 3: Vector2(-11, 0)}
-metadata/level_scale = {2: 1.433, 3: 1.597}
-metadata/level_static = ["attack_2", "attack_3"]
-metadata/muzzle = Vector2(173.0, -291.2)
+metadata/level_muzzle = {2: Vector2(146.1, -292.9), 3: Vector2(152.6, -244.7)}
+metadata/level_barrels = {2: [Vector2(153.3, -293.8), Vector2(86.2, -283.3)], 3: [Vector2(157.9, -246.4), Vector2(120.0, -237.5)]}
+metadata/level_barrel_dir = {1: Vector2(1.0, -0.019), 2: Vector2(0.995, 0.1), 3: Vector2(0.98, -0.2)}
+metadata/level_shift = {2: Vector2(-6, -15), 3: Vector2(-1, -21)}
+metadata/level_scale = {2: 1.008, 3: 1.000}
+metadata/level_static = []
+metadata/muzzle = Vector2(146.4, -305.8)
 metadata/shot_frame = 3
 metadata/muzzle_color = Color(1.000, 0.771, 0.032, 1)
 animations = [{
