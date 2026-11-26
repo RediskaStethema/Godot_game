@@ -83,18 +83,18 @@ func _main() -> void:
 	await process_frame
 	await process_frame
 	var squad = root.get_node("SquadRegistry").get_alive_squads_of_team(0)[0]
-	var played: bool = scene._play_squad_card(tac_card, Vector2i(1, 1))
+	var played: bool = scene.card_play.play_squad(tac_card, Vector2i(1, 1))
 	var ratio: float = squad.soldiers[0].current_hp / squad.soldiers[0].max_hp
 	_check("улучшение: ур. %d, бойцов %d из %d, раненый 0.5 → %.2f (с учётом +20%% HP уровня)" % [d5.squad_level,
 		squad.soldiers.size(), d5.squad_size, ratio],
 		played and d5.squad_level == 1 and d5.squad_size == 11 and squad.soldiers.size() == 11 and ratio > 0.6)
 	d5.squad_level = UnitFactory.MAX_SQUAD_LEVEL
 	squad.soldiers[0].current_hp = squad.soldiers[0].max_hp * 0.2
-	var healed: bool = scene._play_squad_card(tac_card, Vector2i(1, 1))
+	var healed: bool = scene.card_play.play_squad(tac_card, Vector2i(1, 1))
 	var after: float = squad.soldiers[0].current_hp / squad.soldiers[0].max_hp
 	for s in squad.soldiers:
 		s.current_hp = s.max_hp
-	var wasted: bool = scene._play_squad_card(tac_card, Vector2i(1, 1))
+	var wasted: bool = scene.card_play.play_squad(tac_card, Vector2i(1, 1))
 	_check("на максимуме — лечение 0.2 → %.2f; здоров — карта не тратится" % after,
 		healed and absf(after - 0.5) < EPS and not wasted)
 	scene.queue_free()

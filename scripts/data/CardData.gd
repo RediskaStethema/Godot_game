@@ -42,7 +42,7 @@ var building_level: int = 1
 @export var event_stats: Dictionary = {}
 
 # Куда класть карту в бою — подсказка для магазина и скамейки. Новый тип карты:
-# строка здесь + обработчик в BattleScene._card_handlers
+# строка здесь + обработчик в BattleCardPlay (scenes/battle/BattleCardPlay.gd, _handlers)
 const PLAY_HINTS = {
 	"upgrade": "на свой отряд",
 	"building": "на клетку или на такое же",

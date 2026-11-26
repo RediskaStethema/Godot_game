@@ -194,8 +194,14 @@ var _upgrade_step: int = 0           # урок о прокачке: 0 — не 
 # Сценарий идёт: не тестовый режим, не headless (тесты), включён игроком, до конца сценария
 static var force_for_tests: bool = false   # тесты в headless включают сценарий сами
 
+# Забег идёт, а сценарий в нём так и не начинался (сохранение из прошлой версии; обучение включили посреди забега):
+# обучение молчит до нового забега (решение пользователя 26.11.2026 — иначе у такого забега пропадал автостарт боя и
+# орудие не выпадало). Новый забег узнаётся по стартовому выбору, дальше него сценарий всегда уже не на INTRO
+static func dormant() -> bool:
+	return GameSettings.tutorial_stage == Stage.INTRO and not RunManager.is_start_pick_active()
+
 static func scripted_active() -> bool:
-	if RunManager.test_mode or (DisplayServer.get_name() == "headless" and not force_for_tests):
+	if RunManager.test_mode or (DisplayServer.get_name() == "headless" and not force_for_tests) or dormant():
 		return false
 	return GameSettings.tutorial_enabled and GameSettings.tutorial_stage < Stage.DONE
 
@@ -204,7 +210,7 @@ static func scripted_pick_active() -> bool:
 
 # Обучение вообще нужно (сценарий или непоказанные подсказки)
 static func is_active() -> bool:
-	if RunManager.test_mode or DisplayServer.get_name() == "headless" or not GameSettings.tutorial_enabled:
+	if RunManager.test_mode or DisplayServer.get_name() == "headless" or not GameSettings.tutorial_enabled or dormant():
 		return false
 	return GameSettings.tutorial_stage < Stage.DONE or not _unseen().is_empty()
 
@@ -226,7 +232,7 @@ static func _unseen() -> Array:
 
 # Карты, которых игрок получить не должен до своего времени: орудие (Thunderfire / Mortar) — только покупкой в первом магазине
 static func hidden_card_ids() -> Array:
-	if RunManager.test_mode or (DisplayServer.get_name() == "headless" and not force_for_tests) or not GameSettings.tutorial_enabled:
+	if RunManager.test_mode or (DisplayServer.get_name() == "headless" and not force_for_tests) or not GameSettings.tutorial_enabled 			or dormant():
 		return []
 	if GameSettings.tutorial_stage >= Stage.PLACE_CANNON:
 		return []
@@ -362,7 +368,7 @@ static func shop_holds(hand: Array) -> bool:
 
 # Реплика наставников в сцене события (EventScene — отдельная сцена, не BattleScene): один раз за забег обучения
 static func show_event_intro(parent: Node) -> void:
-	if RunManager.test_mode or DisplayServer.get_name() == "headless" or not GameSettings.tutorial_enabled:
+	if RunManager.test_mode or DisplayServer.get_name() == "headless" or not GameSettings.tutorial_enabled or dormant():
 		return
 	if GameSettings.tutorial_seen.has("event_intro") or GameSettings.tutorial_stage >= Stage.DONE:
 		return
@@ -381,7 +387,7 @@ static func find_step(event: String, at_wave: int) -> Variant:
 
 # Реплика для вендора, который уже стоит в сцене (магазин): текст шага или "" — и шаг помечается показанным
 static func take_line(event: String, at_wave: int) -> String:
-	if RunManager.test_mode or DisplayServer.get_name() == "headless" or not GameSettings.tutorial_enabled:
+	if RunManager.test_mode or DisplayServer.get_name() == "headless" or not GameSettings.tutorial_enabled or dormant():
 		return ""
 	if event == "shop" and scripted_shop_stage():   # первый магазин ведёт Tutorial (shop_open), не реплика продавца
 		return ""
@@ -465,7 +471,7 @@ func _make_holder(who: String, faction: String, left: bool, layer: CanvasLayer) 
 # ---------- События ----------
 # Событие игры → сценарий или подсказка. ctx — карта (card_played)
 func notify(event: String, ctx: Variant = null) -> void:
-	if not GameSettings.tutorial_enabled or _dialogue_active:
+	if not GameSettings.tutorial_enabled or _dialogue_active or (event != "pick_start" and dormant()):
 		return
 	if _upgrade_step > 0 and (event == "merge" or event == "building_level"):   # урок о прокачке говорит об этом сам
 		return
@@ -696,7 +702,7 @@ func _tile_of_building(id: String) -> Vector2i:
 # ---------- Ограничения сценария (зовёт BattleScene) ----------
 # Бой не начинается: идёт диалог или игрок должен выполнить шаг сценария
 func holds_start() -> bool:
-	if not GameSettings.tutorial_enabled:
+	if not GameSettings.tutorial_enabled or (dormant() and not _dialogue_active):
 		return false
 	if _dialogue_active or is_talking():   # пока наставники на экране — бой не начинается (решение пользователя 25.11.2026)
 		return true
@@ -708,11 +714,11 @@ func holds_start() -> bool:
 
 # Бой в обучении начинается только кнопкой «В БОЙ» (решение пользователя 25.11.2026), сам — никогда
 func no_auto_start() -> bool:
-	return GameSettings.tutorial_enabled and GameSettings.tutorial_stage < Stage.DONE
+	return GameSettings.tutorial_enabled and GameSettings.tutorial_stage < Stage.DONE and not dormant()
 
 # Правило «в руке остаются 2 карты» не действует, пока наставник ведёт карту на клетку (орудие — предпоследняя карта)
 func exempts_hand_floor() -> bool:
-	return GameSettings.tutorial_enabled and (target_id != "" or GameSettings.tutorial_stage == Stage.PLACE_CANNON)
+	return GameSettings.tutorial_enabled and not dormant() and (target_id != "" or GameSettings.tutorial_stage == Stage.PLACE_CANNON)
 
 # «{cannon}» в репликах — название орудия расы игрока
 func _fmt(lines: Array) -> Array:
@@ -724,7 +730,7 @@ func _fmt(lines: Array) -> Array:
 
 # Карту можно бросить сюда? Пока есть цель — только цель на свою клетку
 func allow_drop(card: CardData, tile: Vector2i) -> bool:
-	if not GameSettings.tutorial_enabled or target_id == "":
+	if not GameSettings.tutorial_enabled or target_id == "" or dormant():
 		return true
 	if card.id == target_id and tile == target_tile:
 		return true
@@ -734,7 +740,7 @@ func allow_drop(card: CardData, tile: Vector2i) -> bool:
 
 # Учебный бой: один слабый отряд врага — игрок выигрывает всегда
 func is_training_battle() -> bool:
-	return GameSettings.tutorial_enabled and wave == 1 and GameSettings.tutorial_stage <= Stage.TRAIN_BATTLE
+	return GameSettings.tutorial_enabled and wave == 1 and GameSettings.tutorial_stage <= Stage.TRAIN_BATTLE and not dormant()
 
 func training_specs(specs: Array) -> Array:
 	if specs.is_empty():

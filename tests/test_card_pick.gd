@@ -136,9 +136,9 @@ func _init() -> void:
 	for i in 10:
 		await process_frame
 	_check("расстановка волны 1 с тремя картами", scene.is_placement_phase and not scene.shop_phase)
-	_check("правило минимальной руки действует (не босс)", scene._hand_floor_applies())
+	_check("правило минимальной руки действует (не босс)", scene.card_play.hand_floor_applies())
 	scene.battle_type = "boss"
-	_check("перед финальным боссом правила нет", not scene._hand_floor_applies())
+	_check("перед финальным боссом правила нет", not scene.card_play.hand_floor_applies())
 	scene.battle_type = "battle"
 	var tile := Vector2i(1, 1)
 	var sp: Vector2 = scene.camera.world_to_screen(scene.iso_grid.tile_to_screen(tile))
@@ -148,14 +148,15 @@ func _init() -> void:
 	bm.pending_cards.append(c1)
 	bm.pending_cards.append(c2)
 	scene.bench.setup(bm.pending_cards)
-	scene._on_card_dropped(c1, sp)
-	_check("в руке 2 карты — сыграть нельзя", bm.pending_cards.size() == 2 and not scene._auto_start_pending)
+	scene.card_play.on_card_dropped(c1, sp)
+	_check("в руке 2 карты — сыграть нельзя", bm.pending_cards.size() == 2 and not scene.card_play._auto_start_pending)
 	var c3 = CardFactory.create("tactical_squad")
 	bm.pending_cards.append(c3)
 	scene.bench.setup(bm.pending_cards)
-	scene._on_card_dropped(c3, sp)
-	_check("сыграли из трёх — осталось 2, бой стартует сам", bm.pending_cards.size() == 2 and scene._auto_start_pending)
-	await create_timer(1.3, true, false, true).timeout
+	scene.card_play.on_card_dropped(c3, sp)
+	_check("сыграли из трёх — осталось 2, бой стартует сам", bm.pending_cards.size() == 2 and scene.card_play._auto_start_pending)
+	# по тем же часам, что и таймер автостарта (время кадров): реальное время обгоняло его после долгого кадра
+	await create_timer(1.3, false).timeout
 	_check("через паузу бой начался", not scene.is_placement_phase)
 
 	print("test_card_pick: %s" % ("OK" if _fails == 0 else "%d провалов" % _fails))

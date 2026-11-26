@@ -207,8 +207,8 @@ func _main() -> void:
 		no_ground_hidden and ground_ok and marked and after_hit and faded)
 	var c1: int = fx_of.call(3)
 	angron._step_shake_at = -100000
-	angron._boss_step()
-	angron._boss_step()   # сразу второй шаг — без тряски и трещин
+	load("res://scripts/battle/BossSpecial.gd").step(angron)
+	load("res://scripts/battle/BossSpecial.gd").step(angron)   # сразу второй шаг — без тряски и трещин
 	_check("шаг босса: трещина и тряска не чаще %d мс" % angron.BOSS_STEP_GAP_MS, fx_of.call(3) == c1 + 1)
 
 	# Ярость: впервые ≤ 50% HP — один раз, приём скоро, перезарядка × ENRAGE_COOLDOWN_MULT, кольцо пульсирует,

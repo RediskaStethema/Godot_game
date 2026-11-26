@@ -201,7 +201,7 @@ const EFFECTS = {
 	"siege_alarm":   {"sheet": FX_DIR + "siege_alarm/spritesheet.png", "size": Vector2i(352, 256), "frames": 7,
 		"fps": 12.0, "add": true, "loop": false, "scale": 1.0, "pivot": Vector2(176, 128), "flat": true},
 	# ромб клетки под картой и купленная клетка — TileGlow (шейдер по клетке, не лист)
-	# окопался (Devastator, Soldier._tick_entrench): бруствер растёт у ног и стоит, пока боец не сдвинется (hold —
+	# окопался (Devastator, UnitAbilities.tick_entrench): бруствер растёт у ног и стоит, пока боец не сдвинется (hold —
 	# последний кадр держится, снимает Vfx.dismiss); перед ногами, поверх голеней
 	"entrench":      {"sheet": FX_DIR + "entrench/spritesheet.png", "size": Vector2i(64, 32), "frames": 6,
 		"fps": 12.0, "loop": false, "hold": true, "scale": 1.4, "pivot": Vector2(34, 22)},

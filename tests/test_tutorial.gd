@@ -347,6 +347,27 @@ func _main() -> void:
 		cannon_dealt = cannon_dealt or sm.pick_offers.any(func(c): return c.id in cannon_ids)
 	_check("учебный стартовый набор: орудия среди шести рубашек нет", not cannon_dealt)
 	sm.pick_offers.clear()
+	# 5и. Забег, начатый без обучения (старое сохранение): стадия INTRO посреди забега — обучение молчит; на стартовом
+	# выборе нового забега — идёт
+	gs.tutorial_stage = T.Stage.INTRO
+	rm.current_node_id = pick_nodes[0].id
+	rm.current_completed = false
+	var old_run_quiet: bool = T.dormant() and not T.scripted_active() and T.hidden_card_ids().is_empty()
+	for n in rm.map.nodes:
+		if n.type == "start_pick":
+			rm.current_node_id = n.id
+	_check("старое сохранение (стадия 0 посреди забега): сценарий молчит, орудие выпадает; новый забег — сценарий идёт",
+		old_run_quiet and not T.dormant() and T.scripted_active() and not T.hidden_card_ids().is_empty())
+	# уже созданный наставник (обучение выключили и включили посреди боя) — тоже молчит
+	gs.tutorial_stage = T.Stage.INTRO
+	rm.current_node_id = pick_nodes[0].id
+	rm.current_completed = false
+	t._dialogue_active = false
+	t.wave = 1
+	t.notify("merge")
+	_check("наставник на поле в таком забеге: бой не держит, автостарт есть, учебного боя и реплик нет",
+		not t.holds_start() and not t.no_auto_start() and not t.exempts_hand_floor() and not t.is_training_battle()
+		and not t._dialogue_active)
 	T.force_for_tests = false
 	gs.tutorial_stage = T.Stage.WAVES
 

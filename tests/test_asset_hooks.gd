@@ -315,20 +315,20 @@ func _effects_pack() -> void:
 	var s = current_scene
 	var units: Node = s.units_container
 	var tactical = CardFactory.create("tactical_squad")
-	s._play_squad_card(tactical, Vector2i(2, 1))
-	s._play_building_card(CardFactory.plasma_generatorium(), Vector2i(2, 2))
+	s.card_play.play_squad(tactical, Vector2i(2, 1))
+	s.card_play.play_building(CardFactory.plasma_generatorium(), Vector2i(2, 2))
 	# отряд Космодесанта — в десантной капсуле (DropPod, 12.11.2026): пока она падает — отряда не видно,
 	# «В БОЙ» раньше конца — капсула снята, отряд проявляется
 	var dropped = s._get_player_squad_at(Vector2i(2, 1))
 	var pods: Array = units.get_children().filter(func(c): return c.get_script() != null 		and c.get_script().resource_path.ends_with("DropPod.gd"))
 	var pod_ok: bool = pods.size() == 1 and dropped.modulate.a == 0.0
-	for pod in s._drop_pods:
+	for pod in s.card_play._drop_pods:
 		pod.finish()
-	pod_ok = pod_ok and s._spawn_tweens.any(func(t): return t.is_valid())
+	pod_ok = pod_ok and s.card_play._spawn_tweens.any(func(t): return t.is_valid())
 	var arrive_build: bool = pod_ok and _has_tile_glow(s.renderer, "build")
-	s._merge_squad(tactical, s._get_player_squad_at(Vector2i(1, 1)))
-	s._play_upgrade_card(CardFactory.create("battle_fury"), Vector2i(1, 1))
-	s._play_event_card(CardFactory.create("orbital_strike"), Vector2i(0, 1))
+	s.card_play.merge_squad(tactical, s._get_player_squad_at(Vector2i(1, 1)))
+	s.card_play.play_upgrade(CardFactory.create("battle_fury"), Vector2i(1, 1))
+	s.card_play.play_event(CardFactory.create("orbital_strike"), Vector2i(0, 1))
 	_check("расстановка: отряд — десантная капсула (снимается по «В БОЙ»), здание — волна по клетке, уровень — свет с шевронами, " +
 		"улучшение — знак карты, орбитальный удар — метка на клетке", arrive_build
 		and _has_level_glow(s._get_player_squad_at(Vector2i(1, 1))) and _has_fx(units, "upgrade_battle_fury")
@@ -344,14 +344,14 @@ func _effects_pack() -> void:
 	# Карта не ляжет — ромб «нельзя»: отряд на максимуме и здоров, здание на максимуме
 	var mine = s._get_player_squad_at(Vector2i(1, 1))
 	while mine.data.can_merge_upgrade():
-		s._merge_squad(tactical, mine)
+		s.card_play.merge_squad(tactical, mine)
 	mine.heal_by_ratio(1.0)
 	for i in 2:
-		s._play_building_card(CardFactory.plasma_generatorium(), Vector2i(0, 2))
+		s.card_play.play_building(CardFactory.plasma_generatorium(), Vector2i(0, 2))
 	var maxed := [s._drop_verdict(tactical, Vector2i(1, 1)), s._drop_verdict(CardFactory.plasma_generatorium(), Vector2i(0, 2))]
 	_check("ромб «нельзя» там, где карта не ляжет: отряд ур.%d здоров, генератор ур.%d (%s)" % [mine.data.squad_level,
 		s._get_player_building_at(Vector2i(0, 2)).card.building_level, maxed],
-		maxed == ["invalid", "invalid"] and not s._merge_squad(tactical, mine))
+		maxed == ["invalid", "invalid"] and not s.card_play.merge_squad(tactical, mine))
 	s._on_start_pressed(false)
 	await _frames(1)   # метка снята queue_free — уходит из дерева в конце кадра
 	var w = bm.kingdom_wall

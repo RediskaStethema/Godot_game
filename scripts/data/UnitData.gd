@@ -63,7 +63,7 @@ extends Resource
 # Стрельба на ходу (Land Speeder): в ATTACK не стоит — кружит вокруг цели, держит дистанцию
 @export var mobile_fire: bool = false
 # Приём финального босса (примархи, решение пользователя 09.11.2026): раз в special_cooldown сек ряд special листа,
-# на кадре metadata/special_frame — действие по виду (Soldier._release_special):
+# на кадре metadata/special_frame — действие по виду (BossSpecial.release):
 #   leap — прыжок на врага (стрелка, если есть) ближе special_range, удар по кругу special_radius при приземлении;
 #   dash — рывок сквозь строй к цели ближе special_range, удар всем на пути шириной special_radius;
 #   cone — удар конусом перед собой (SPECIAL_CONE_HALF) радиуса special_radius;

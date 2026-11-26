@@ -10,37 +10,8 @@ extends ColorRect
 const MAX_TILT: float = 3.0          # градусов
 const TILT_RATE: float = 12.0        # скорость, с которой карта догоняет наклон
 const SWEEP_TIME: float = 0.8        # проход полосы блика
-const SHADER = """shader_type canvas_item;
-render_mode blend_add;
-uniform float foil = 0.0;            // 1 — Epic: переливы
-uniform float sweep = -1.0;          // доля прохода полосы блика (< 0 — нет)
-uniform vec2 mouse = vec2(0.5);      // курсор в долях карты
-uniform float hover = 0.0;
-uniform vec3 light_color = vec3(1.0, 0.86, 0.62);
-// Силуэт карты: альфа рамки + окно арта (в долях лица) — прозрачные поля рамки (у Common) не светятся
-uniform bool use_mask = false;
-uniform sampler2D mask_tex : filter_linear;
-uniform vec4 window = vec4(0.0, 0.0, 1.0, 1.0);   // x, y, конец x, конец y
-void fragment() {
-	vec3 col = vec3(0.0);
-	if (sweep >= 0.0) {
-		float d = UV.x + UV.y * 0.5 - (sweep * 1.9 - 0.2);
-		col += light_color * smoothstep(0.09, 0.0, abs(d)) * 0.32;
-	}
-	if (foil > 0.5) {
-		float h = fract(UV.x * 0.8 + UV.y * 0.6 + mouse.x * 0.5 + TIME * 0.05);
-		vec3 rainbow = 0.5 + 0.5 * cos(6.2831 * (h + vec3(0.0, 0.33, 0.67)));
-		col += rainbow * 0.09 * hover;
-	}
-	col += light_color * hover * 0.14 * smoothstep(0.65, 0.0, distance(UV, mouse));
-	if (use_mask) {
-		float inside = step(window.x, UV.x) * step(UV.x, window.z) * step(window.y, UV.y) * step(UV.y, window.w);
-		col *= max(texture(mask_tex, UV).a, inside);
-	}
-	COLOR = vec4(col, 1.0);
-}"""
+const SHADER: Shader = preload("res://shaders/card_glare.gdshader")
 
-static var _shader: Shader
 
 # Подсветка редкости (решение пользователя 08.11.2026): Rare — сине-стальная, Epic — варп-фиолетовая, гримдарк:
 # не ровный неон, а тлеющая кромка — свет пятнами вдоль края медленно ползёт и мерцает (как угли / свечение
@@ -65,84 +36,7 @@ const GLOW_IDLE: float = 0.75        # сила постоянной подсв�
 const GLOW_HOVER: float = 1.35       # под курсором
 const GLOW_EPIC: float = 1.15        # Epic — чуть сильнее
 const GLOW_COLORS = {"rare": Palette.RARE_GLOW, "epic": Palette.EPIC_GLOW}
-const GLOW_SHADER = """shader_type canvas_item;
-render_mode blend_add;
-uniform vec3 glow_color = vec3(0.35, 0.72, 1.0);
-uniform vec2 rect_size = vec2(100.0);
-uniform float pad = 10.0;
-uniform vec3 ember_color = vec3(1.0, 0.8, 0.5);   // искры-угольки на кромке
-uniform float level = 0.0;          // сила: постоянная + наведение (считает узел)
-// Карта с рамкой: свет от силуэта и по металлу рамки (координаты — px арта карты)
-uniform bool use_shape = false;
-uniform sampler2D dist_tex : filter_linear, repeat_disable;     // расстояние от силуэта наружу / shape_margin
-uniform sampler2D frame_tex : filter_linear_mipmap, repeat_disable;
-uniform vec2 art_size = vec2(360.0, 504.0);
-uniform float shape_margin = 40.0;
-uniform float metal_gain = 0.24;    // сила отсвета на металле рамки (METAL_GAIN)
-uniform vec4 plate = vec4(0.0);     // крупная плашка малой карты (x, y, конец x, конец y) — тоже силуэт
-uniform vec4 calm_a = vec4(0.0);    // пергамент плашек — свет на него не ложится
-uniform vec4 calm_b = vec4(0.0);
-float in_rect(vec2 p, vec4 r) { return step(r.x, p.x) * step(p.x, r.z) * step(r.y, p.y) * step(p.y, r.w); }
-float hash(float n) { return fract(sin(n) * 43758.5453); }
-float noise(float x) {               // плавный шум по одной оси
-	float i = floor(x);
-	float f = fract(x);
-	return mix(hash(i), hash(i + 1.0), f * f * (3.0 - 2.0 * f));
-}
-void fragment() {
-	vec2 p = UV * rect_size - rect_size * 0.5;
-	vec2 hs = rect_size * 0.5 - vec2(pad);
-	float r = 4.0;
-	vec2 q = abs(p) - hs + vec2(r);
-	float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;   // < 0 — внутри карты
-	// координата вдоль периметра (px): пятна света ползут по кромке
-	float per = (atan(p.y, p.x) + 3.14159) * (hs.x + hs.y) * 0.64;
-	float t = TIME * 0.6;
-	float smolder = noise(per * 0.045 + t) * 0.65 + noise(per * 0.13 - t * 1.7) * 0.35;
-	smolder = smoothstep(0.25, 0.9, smolder);                    // тлеет пятнами, местами почти гаснет
-	float flick = 0.8 + 0.2 * noise(TIME * 7.0 + per * 0.02);   // неровное мерцание
-	if (use_shape) {
-		float k = max((rect_size.x - pad * 2.0) / art_size.x, 0.001);   // px экрана на px арта
-		vec2 a = (UV * rect_size - vec2(pad)) / k;
-		float far = texture(dist_tex, (a + vec2(shape_margin)) / (art_size + vec2(shape_margin * 2.0))).r * shape_margin;
-		if (plate.z > plate.x) {
-			vec2 out_of = max(max(plate.xy - a, a - plate.zw), vec2(0.0));
-			far = min(far, length(out_of));
-		}
-		float s = far * k;                                          // px экрана от кромки рамки
-		float breath = 0.82 + 0.18 * smolder;                       // медленное дыхание, без пятен и провалов
-		// ореол: плотный у самой кромки, быстро гаснет; внутри силуэта его нет
-		float halo = exp(-s / 3.2) * smoothstep(0.0, 0.7, s) * (1.0 - smoothstep(shape_margin * 0.55, shape_margin, far));
-		if (pad > 0.0) {
-			halo *= 1.0 - smoothstep(pad * 0.6, pad, s);
-		}
-		// отсвет на самой рамке: чем светлее металл / камень, тем сильнее берёт цвет
-		float metal = 0.0;
-		if (a.x >= 0.0 && a.y >= 0.0 && a.x <= art_size.x && a.y <= art_size.y) {
-			vec4 f = texture(frame_tex, a / art_size);
-			float lum = dot(f.rgb, vec3(0.299, 0.587, 0.114));
-			// самое светлое (ленты пергамента, блики) берёт цвет слабее — не выбеливается
-			metal = f.a * smoothstep(0.08, 0.55, lum) * (1.0 - smoothstep(0.5, 0.75, lum))
-				* (1.0 - max(in_rect(a, calm_a), in_rect(a, calm_b)));
-		}
-		vec3 lit = glow_color * (halo * 0.55 + metal * metal_gain) * breath;
-		float ember = step(0.99, hash(floor(per * 0.25) + floor(TIME * 3.0) * 17.0));
-		lit += ember_color * ember * smoothstep(2.0, 0.6, s) * smoothstep(0.0, 0.6, s) * smolder * 0.35;
-		COLOR = vec4(lit * level, 1.0);
-	} else {
-	// ореол за краем — рваный, как дымка
-	float haze = noise(per * 0.07 + d * 0.3 - TIME * 0.9);
-	float outer = d > 0.0 ? exp(-d / max(pad * 0.35, 1.0)) * (0.25 + 0.45 * haze) : 0.0;
-	float inner = d <= 0.0 ? exp(d / 7.0) * 0.18 : 0.0;
-	float rim = smoothstep(1.8, 0.0, abs(d + 1.0)) * 0.5;
-	vec3 col = glow_color * (outer + inner + rim) * (0.5 + 0.7 * smolder) * flick;
-	// редкие угольки на самой кромке
-	float spark = step(0.985, hash(floor(per * 0.25) + floor(TIME * 3.0) * 17.0)) * rim * smolder;
-	col += ember_color * spark * 0.6;
-	COLOR = vec4(col * level, 1.0);
-	}
-}"""
-static var _glow_shader: Shader
+const GLOW_SHADER: Shader = preload("res://shaders/card_edge_glow.gdshader")
 static var _silhouettes: Dictionary = {}   # редкость → ImageTexture расстояний от силуэта
 var _glow: RarityGlow = null         # подсветка редкости этой карты (Rare / Epic)
 
@@ -272,16 +166,13 @@ static func _silhouette(rarity: String, frame: Texture2D, layout: Dictionary) ->
 # цвет угольков; always / pad — как у подсветки редкости, mult — сила
 static func add_edge_glow(parent: Control, col: Color, ember: Color, always: bool, pad: float = GLOW_PAD,
 		mult: float = 1.0) -> RarityGlow:
-	if _glow_shader == null:
-		_glow_shader = Shader.new()
-		_glow_shader.code = GLOW_SHADER
 	var glow := RarityGlow.new()
 	glow.name = "RarityGlow"
 	glow.always = always
 	glow.mult = mult
 	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var m := ShaderMaterial.new()
-	m.shader = _glow_shader
+	m.shader = GLOW_SHADER
 	m.set_shader_parameter("glow_color", Vector3(col.r, col.g, col.b))
 	m.set_shader_parameter("ember_color", Vector3(ember.r, ember.g, ember.b))
 	m.set_shader_parameter("pad", pad)
@@ -313,11 +204,8 @@ static func attach(face: Control, rarity: String, glow_always: bool = false) -> 
 	var g := CardGlare.new()
 	g.target = face
 	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if _shader == null:
-		_shader = Shader.new()
-		_shader.code = SHADER
 	g._mat = ShaderMaterial.new()
-	g._mat.shader = _shader
+	g._mat.shader = SHADER
 	g._mat.set_shader_parameter("foil", 1.0 if rarity == "epic" else 0.0)
 	var lc: Color = Palette.STAR_AMBER
 	g._mat.set_shader_parameter("light_color", Vector3(lc.r, lc.g, lc.b))

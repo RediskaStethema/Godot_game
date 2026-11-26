@@ -62,7 +62,7 @@ const EVENTS = {
 	"pod_open":     {"volume": -8.0,  "max_per_sec": 3,  "pitch": 0.05},   # двери упали, пар
 	"revive":       {"volume": -8.0,  "max_per_sec": 3,  "pitch": 0.05},
 	"orbital_strike": {"volume": -2.0, "max_per_sec": 2, "pitch": 0.0},
-	"boss_special": {"volume": -2.0,  "max_per_sec": 2,  "pitch": 0.03},   # приём финального босса (Soldier._special_view)
+	"boss_special": {"volume": -2.0,  "max_per_sec": 2,  "pitch": 0.03},   # приём финального босса (BossSpecial._view)
 	"boss_appear":  {"volume": -2.0,  "max_per_sec": 1,  "pitch": 0.0},    # босс выходит на поле (Soldier.play_appear)
 	# Интерфейс
 	"ui_click":     {"volume": -10.0, "max_per_sec": 20, "pitch": 0.0, "ui": true},

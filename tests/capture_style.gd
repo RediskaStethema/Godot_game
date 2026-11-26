@@ -39,7 +39,7 @@ func _shot(name: String) -> void:
 	root.get_viewport().get_texture().get_image().save_png(path)
 	print("SHOT ", path)
 
-# Отряд как из карты (BattleScene._play_squad_card): состав — unit_count карты, все с полным HP
+# Отряд как из карты (BattleCardPlay.play_squad): состав — unit_count карты, все с полным HP
 func _squad(card_id: String) -> UnitData:
 	var card = CardFactory.create(card_id)
 	var d := UnitFactory.create(card.unit_factory_id)

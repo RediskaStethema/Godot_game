@@ -71,8 +71,8 @@ func _main() -> void:
 	panel._set_level(3)   # 3 улучшения: отряд ур.3, здание ур.3 (предел)
 	var squad_card: CardData = scene.bench.bench_cards[0]
 	var turret_card: CardData = scene.bench.bench_cards[1]
-	var ok_s: bool = scene._play_squad_card(squad_card, Vector2i(3, 1))
-	var ok_b: bool = scene._play_building_card(turret_card, Vector2i(0, 0))
+	var ok_s: bool = scene.card_play.play_squad(squad_card, Vector2i(3, 1))
+	var ok_b: bool = scene.card_play.play_building(turret_card, Vector2i(0, 0))
 	await _frames(2)
 	var squad = scene._get_player_squad_at(Vector2i(3, 1))
 	var turret = scene._get_player_building_at(Vector2i(0, 0))
@@ -80,8 +80,8 @@ func _main() -> void:
 		squad.data.squad_level if squad else 0, squad.soldiers.size() if squad else 0, turret.card.building_level if turret else 0],
 		in_hand == 2 and ok_s and ok_b and squad != null and squad.data.squad_level == 3 and turret != null
 		and turret.card.building_level == 3 and turret.sprite != null and turret.sprite.animation == &"idle_3")
-	scene._consume_bench_card(squad_card)
-	scene._consume_bench_card(turret_card)
+	scene.card_play.consume_bench_card(squad_card)
+	scene.card_play.consume_bench_card(turret_card)
 
 	# 4. Волна и тип боя: сцена заново, армия на месте, враги новой волны
 	panel.wave_changed.emit(10)
@@ -120,7 +120,7 @@ func _main() -> void:
 	_check("сохранение в тесте не пишется", not saved and not FileAccess.file_exists(SAVE_PATH))
 
 	# 6. Бой: цитадель не падает; итог — та же расстановка, цитадель целая
-	scene._play_building_card(CardFactory.create("fists_bastion"), Vector2i(1, 0))
+	scene.card_play.play_building(CardFactory.create("fists_bastion"), Vector2i(1, 0))
 	var audio = root.get_node("AudioManager")
 	var placement_music: String = audio.current_music()
 	scene._on_start_pressed(false)
@@ -151,7 +151,7 @@ func _main() -> void:
 	# штурм проигран — бой кончается поражением сразу (09.11.2026: было 1 HP и осада минутами — бой «вставал»)
 	var siege_lost: bool = not bm.is_battle_running() and bm.winner_team == GameConstants.TEAM_ENEMY
 	bm.surrender()   # бой уже кончен — ничего не делает
-	await create_timer(scene.TEST_RESULT_TIME + 0.6).timeout
+	await create_timer(scene.test_tools.TEST_RESULT_TIME + 0.6).timeout
 	scene = await _scene()
 	var squad3 = scene._get_player_squad_at(Vector2i(3, 1))
 	_check("цитадель не падает (%.0f HP), штурм проигран — бой сразу кончен, после боя — расстановка как до боя, цитадель целая, панель на месте" % hp_in_battle,
@@ -177,8 +177,8 @@ func _main() -> void:
 			shop.call("_on_battle_pressed")
 	await _frames(4)
 	_check("магазин из панели: окно открыто, монет ≥ %d (%d), покупка ушла в руку (%d → %d), закрыт — поле и панель на месте, шаг цепочки не сдвинут" % [
-		scene.TEST_SHOP_REQUISITION, req, hand_before, bm.pending_cards.size()],
-		offers_ok and req >= scene.TEST_SHOP_REQUISITION and bought != null and bm.pending_cards.size() == hand_before + 1
+		scene.test_tools.TEST_SHOP_REQUISITION, req, hand_before, bm.pending_cards.size()],
+		offers_ok and req >= scene.test_tools.TEST_SHOP_REQUISITION and bought != null and bm.pending_cards.size() == hand_before + 1
 		and scene.get("shop") == null and not scene.get("shop_phase") and scene.get("test_panel").is_visible_in_tree()
 		and scene.bench.bench_cards.size() == bm.pending_cards.size() and rm.current_node_id == node_before)
 

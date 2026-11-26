@@ -1,14 +1,13 @@
 extends SceneTree
 
 # Компиляция всех шейдеров проекта без окна (навык godot-shaders, Pattern 4): файлы .gdshader и шейдеры строкой
-# в скриптах (бойцы, кровь, снаряды) — load() ленивый, компиляцию вызывает get_shader_uniform_list().
+# в скриптах (кровь, снаряды) — load() ленивый, компиляцию вызывает get_shader_uniform_list().
 #   godot --headless --path . -s tests/compile_shaders.gd > shaders.log 2>&1
 #   grep -nE "SHADER ERROR|Shader compilation failed" shaders.log   — пусто = всё компилируется
 # Классы сцен по имени не упоминаются (скрипт -s компилируется до автолоадов) — строки шейдеров берутся из
 # констант скриптов через load().
 
 const INLINE := [
-	["res://scripts/battle/Soldier.gd", "UNIT_SHADER"],
 	["res://scripts/battle/Vfx.gd", "BLOOD_SHADER"],
 	["res://scripts/battle/Projectile.gd", "TINT_SHADER"],
 	["res://scripts/battle/Projectile.gd", "WARM_SHADER"],

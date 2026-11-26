@@ -144,8 +144,8 @@ func _main() -> void:
 	var battle_node = rm.current_node_id
 	var hand_tactical = bm.pending_cards.filter(func(c): return c.id == "tactical_squad")[0]
 	var hand_fury = bm.pending_cards.filter(func(c): return c.id == "battle_fury")[0]
-	battle._on_card_dropped(hand_tactical, battle._world_to_screen(battle.iso_grid.tile_to_screen(Vector2i(0, 0))))
-	battle._on_card_dropped(hand_fury, battle._world_to_screen(battle.iso_grid.tile_to_screen(Vector2i(1, 1))))
+	battle.card_play.on_card_dropped(hand_tactical, battle._world_to_screen(battle.iso_grid.tile_to_screen(Vector2i(0, 0))))
+	battle.card_play.on_card_dropped(hand_fury, battle._world_to_screen(battle.iso_grid.tile_to_screen(Vector2i(1, 1))))
 	bm.reset_run()
 	sv.load_run()
 	rm.resume()
