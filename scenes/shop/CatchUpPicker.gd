@@ -14,6 +14,8 @@ const WINDOW_CHROME: float = 275.0
 signal picked(index: int)
 signal reroll_requested
 
+const EDGE_GLOW: float = 0.8   # сила свечения рамки (у карт Rare — 1)
+
 var _slots: HBoxContainer
 var _reroll_button: Button
 
@@ -21,6 +23,8 @@ func setup() -> void:
 	build_frame(760.0)
 	add_title("ПОДКРЕПЛЕНИЕ")
 	add_title("Цитадель в опасности — выберите одну карту бесплатно", "DimLabel")
+	# Свет по рамке окна (EFFECTS_NEEDED 9.5, кодом 09.11.2026): тлеющая янтарная кромка, как у карт Rare / Epic
+	CardGlare.add_edge_glow(content.get_parent(), Palette.AMBER_LIGHT, Palette.FIRE, true, 0.0, EDGE_GLOW)
 	_slots = HBoxContainer.new()
 	_slots.alignment = BoxContainer.ALIGNMENT_CENTER
 	_slots.add_theme_constant_override("separation", 18)

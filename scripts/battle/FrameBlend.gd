@@ -18,6 +18,8 @@ const MAX_FPS: float = 13.0
 var _source: AnimatedSprite2D
 var _additive := false
 var _max_fps := INF
+var _shown_next: int = -1          # какой кадр сейчас наложен (текстура и раскладка — только при смене)
+var _shown_anim: StringName = &""
 
 # Подключить к анимированному спрайту (повторный вызов — ничего не делает)
 static func attach(source: AnimatedSprite2D, additive: bool = false, max_fps: float = INF) -> FrameBlend:
@@ -56,13 +58,16 @@ func _process(_delta: float) -> void:
 			return
 		next = 0
 	var t: float = clampf(src.frame_progress, 0.0, 1.0)
-	texture = frames.get_frame_texture(anim, next)
-	centered = src.centered
-	offset = src.offset
-	flip_h = src.flip_h
-	flip_v = src.flip_v
+	if next != _shown_next or anim != _shown_anim or not visible:   # кадр сменился — тогда и текстура, и раскладка
+		_shown_next = next
+		_shown_anim = anim
+		texture = frames.get_frame_texture(anim, next)
+		centered = src.centered
+		offset = src.offset
+		flip_h = src.flip_h
+		flip_v = src.flip_v
+		visible = true
 	self_modulate.a = t
-	visible = true
 	if _additive:
 		src.self_modulate.a = 1.0 - t
 
@@ -72,7 +77,12 @@ func _hide() -> void:
 		_source.self_modulate.a = 1.0
 
 # Автолоад — из дерева: FrameBlend компилируется и из скриптов -s (через Vfx) раньше автолоадов
+# Узел настроек ищется один раз (оптимизация 14.11.2026: поиск по дереву шёл у каждого эффекта каждый кадр)
+static var _settings: Node = null
 static func _enabled() -> bool:
-	var tree := Engine.get_main_loop() as SceneTree
-	var gs = tree.root.get_node_or_null("GameSettings") if tree else null
-	return gs == null or gs.atmosphere
+	if _settings == null:
+		var tree := Engine.get_main_loop() as SceneTree
+		_settings = tree.root.get_node_or_null("GameSettings") if tree else null
+		if _settings == null:
+			return true
+	return _settings.atmosphere

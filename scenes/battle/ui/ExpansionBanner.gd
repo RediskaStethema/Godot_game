@@ -16,7 +16,7 @@ const DIM = UITheme.DIM_OVERLAY
 var button: Button
 var _closing: bool = false
 
-func setup(tile_cost: int, button_text: String = "В МАГАЗИН") -> void:
+func setup(tile_cost: int, button_text: String = "ДАЛЕЕ") -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP   # поле под затемнением не кликается
 	theme = UITheme.get_theme()
@@ -32,9 +32,12 @@ func setup(tile_cost: int, button_text: String = "В МАГАЗИН") -> void:
 	add_child(center)
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	var panel = UITheme.make_panel("HudPanel")
+	# Окно — как все окна игры (стилизация 12.11.2026, скилл game-art «единый стиль»: была плоская плашка HudPanel,
+	# а пауза и выбор расы — в стальной рамке с аквилой): рамка WindowPanel, аквила, разделитель с черепом
+	var panel = UITheme.make_panel("WindowPanel")
 	panel.custom_minimum_size = Vector2(PANEL_WIDTH, 0)
 	center.add_child(panel)
+	ModalOverlay.add_frame_eagle(panel)
 	var col = VBoxContainer.new()
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_theme_constant_override("separation", 10)
@@ -44,19 +47,31 @@ func setup(tile_cost: int, button_text: String = "В МАГАЗИН") -> void:
 		plan.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		col.add_child(plan)
 	for line in [["ПРИШЛО ВРЕМЯ РАСШИРЯТЬСЯ", "TitleLabel"],
-			["На расстановке следующей волны можно купить клетки рядом с королевством — от %d Req." % tile_cost, "ValueLabel"],
-			["Отложите Req в магазине. Новый ряд впереди меняет передний ряд и его бонус", "DimLabel"]]:
+			["На расстановке следующей волны можно купить клетки рядом с королевством — от %s." % GameConstants.coins(tile_cost), "ValueLabel"],
+			["Сберегите монеты на клетки. Новый ряд впереди меняет передний ряд и его бонус", "DimLabel"]]:
 		var l = UITheme.make_label(line[0], line[1])
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		col.add_child(l)
+		if line[1] == "TitleLabel":
+			var divider := ModalOverlay.make_divider()
+			if divider:
+				col.add_child(divider)
 	button = UITheme.make_button(button_text, "PrimaryButton", close)
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	button.custom_minimum_size = Vector2(220, 0)
 	col.add_child(button)
+	ButtonVolume.attach(button, 6.0)
 
 	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, FADE_TIME)
+	# Появление — как у окон ModalOverlay: затемнение проявляется, окно из чуть меньшего с пружинкой
+	panel.scale = Vector2(ModalOverlay.OPEN_FROM_SCALE, ModalOverlay.OPEN_FROM_SCALE)
+	(func():
+		if is_instance_valid(panel):
+			panel.pivot_offset = panel.size / 2.0).call_deferred()
+	var tw := create_tween().set_parallel()
+	tw.tween_property(self, "modulate:a", 1.0, FADE_TIME)
+	tw.tween_property(panel, "scale", Vector2.ONE, FADE_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func close() -> void:
 	if _closing:

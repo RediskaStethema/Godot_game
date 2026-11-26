@@ -189,8 +189,8 @@ func _main() -> void:
 		% [a_scale, a_expect, fast.sprite.speed_scale], absf(a_scale - a_expect) < 0.01 and hit_ok and fast.sprite.speed_scale == 1.0)
 
 	# Снаряд — в цвет вспышки модели (metadata/muzzle_color листа, tools/muzzle_color.py)
-	var tac: SpriteFrames = load("res://assets/sprites/space_marine_tactical/frames.tres")
-	var dev: SpriteFrames = load("res://assets/sprites/space_marine_devastator/frames.tres")
+	var tac: SpriteFrames = load("res://assets/units/space_marines/tactical/frames.tres")
+	var dev: SpriteFrames = load("res://assets/units/space_marines/devastator/frames.tres")
 	var c_orange: Color = tac.get_meta("muzzle_color", Color(0, 0, 0, 0))
 	var c_blue: Color = dev.get_meta("muzzle_color", Color(0, 0, 0, 0))
 	var P = load("res://scripts/battle/Projectile.gd")
@@ -199,7 +199,9 @@ func _main() -> void:
 	var untinted = P.launch(scene, "bolt", Vector2.ZERO, null, Vector2(100, 0))
 	_check("снаряд в цвет вспышки: Tactical %s (оранжевый), Devastator %s (синий), без цвета — как на листе" % [c_orange, c_blue],
 		c_orange.a > 0.0 and c_orange.r > c_orange.g and c_orange.g > c_orange.b and c_blue.b > c_blue.r
-		and shot_tint.is_equal_approx(Vector3(c_orange.r, c_orange.g, c_orange.b)) and untinted.material == null)
+		and shot_tint.is_equal_approx(Vector3(c_orange.r, c_orange.g, c_orange.b))
+		# без цвета — только пиксельный материал эффектов (shaders/fx_pixel, 12.11.2026), без перекраски
+		and (untinted.material == null or untinted.material.get_shader_parameter("tint") == null))
 	bm.clear_projectiles()
 
 	# Вылет короче тика (турель: вспышка через 1/16 с): тик вылета снаряд стоит у ствола и виден с кадра вспышки,
@@ -244,20 +246,20 @@ func _main() -> void:
 	_check("Библиарий: %d кастов за %.0f с (ожидалось ≈ %.1f — раз в 1 / attack_speed)" % [casts, seconds, expected],
 		absf(casts - expected) <= 1.0)
 
-	# 3. Река: плита и её отражение по очереди, плита одна на всю реку (стыки без перемычек);
+	# 3. Река (решение пользователя 09.11.2026): прямое бесшовное русло — одна плита на всю реку без отражения
+	#    (на стыке плиты и отражения были каменные перемычки), кадры ряби шагом, без перетекания;
 	#    на линии по u — отражена по горизонтали
 	var r = scene.renderer
-	var pairs_ok = true
+	var same_ok = true
 	var variants = {}
-	for k in range(-4, 30, 2):
-		var a = r.river_tile_for(Vector2i(7, k), "v")
-		var b = r.river_tile_for(Vector2i(7, k + 1), "v")
-		variants[a[0]["texture"]] = true
-		pairs_ok = pairs_ok and a[0].has("mirror") and b[0]["texture"] == a[0]["mirror"]["texture"] \
-			and not a[1] and not b[1]
+	for k in range(-4, 30):
+		var t = r.river_tile_for(Vector2i(7, k), "v")
+		variants[t[0]["frames"][0]["texture"]] = true
+		same_ok = same_ok and not t[0].has("mirror") and t[0].get("blend", true) == false \
+			and t[0]["frames"].size() >= 8 and not t[1]
 	var u_tile = r.river_tile_for(Vector2i(3, -3), "u")
-	_check("река: плита + её отражение по очереди, одна плита на всю реку (%d), по u — отражена" % variants.size(),
-		pairs_ok and u_tile[1] and variants.size() == 1)
+	_check("река: одна прямая плита на всю реку (%d), без отражения, рябь шагом, по u — отражена" % variants.size(),
+		same_ok and u_tile[1] and variants.size() == 1)
 	# Река одна — вдоль поля боя, вне боевой полосы и не у цитадели
 	var river_cells: Dictionary = r._river_cells()
 	var river_rows = {}
@@ -310,8 +312,15 @@ func _main() -> void:
 			tall_total += 1
 			if r._is_battle_strip(c):
 				tall_in_strip += 1
-	_check("руины: высоких %d, в боевой полосе %d" % [tall_total, tall_in_strip],
-		tall_total > 0 and tall_in_strip == 0)
+	# Плиты с руинами ("ruin", бункер) и объекты — не в чистой полосе боя (решение пользователя 11.11.2026)
+	var ruins_in_clear := 0
+	for step in r._layout["plan"]:
+		var tile = step[3]
+		if tile is Dictionary and (tile.get("ruin", false) or tile.has("prop")) and r._in_clear_zone(step[0]):
+			ruins_in_clear += 1
+	_check("руины: высоких %d, в боевой полосе %d; руин и построек в чистой полосе %d (clear_strip %s)" % [tall_total,
+		tall_in_strip, ruins_in_clear, r.theme.get("clear_strip", false)],
+		tall_total > 0 and tall_in_strip == 0 and ruins_in_clear == 0 and r.theme.get("clear_strip", false))
 
 	# 6. Вокруг цитадели — просто грунт; знамёна — только на стороне игрока; декора нет
 	#    на тумане, больших кратерах и у цитадели

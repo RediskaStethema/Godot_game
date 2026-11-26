@@ -1,9 +1,9 @@
 extends SceneTree
 
 # Боги отрядов Хаоса и благословения (решение пользователя 25.10.2026, ChaosGods, CARD_ABILITIES.txt): бог отряда по
-# лору (у Common нет), карты в пуле Хаоса и их арт, кому можно сыграть (свой бог, до 3, Тзинч — стрелкам), статы
+# лору (у Common нет), карты в пуле Хаоса и их арт, кому можно сыграть (свой бог, до 3, Вестник — стрелкам), статы
 # благословений, смена бога (благословения пропадают), сохранение, яд и порабощение в бою (боец уходит в отряд
-# Слаанеш, бьётся за нас, вражеский отряд из одних порабощённых пал), порабощённые после боя (павшие / лечение),
+# Король Второго Акта, бьётся за нас, вражеский отряд из одних порабощённых пал), порабощённые после боя (павшие / лечение),
 # Котёл — яд в атаках соседей. Классы сцен и бойцов по имени не упоминаются (скрипт компилируется до автолоадов).
 #   godot --headless --path . -s tests/test_chaos_blessings.gd
 const EPS: float = 0.01
@@ -12,6 +12,7 @@ var bm: Node
 var rm: Node
 
 func _initialize() -> void:
+	root.get_node("GameSettings").names_language = "en"   # тесты сверяют английские названия (по умолчанию игроку показываются русские)
 	root.get_node("SaveManager").enabled = false
 	root.get_node("GameSettings").battle_speed = 1.0
 	bm = root.get_node("BattleManager")
@@ -96,9 +97,9 @@ func _main() -> void:
 		cards_ok and chaos_pool.count("blessing_nurgle") == 1 and chaos_pool.count("chaos_gods_blessing") == 2
 		and CardFactory.create("chaos_gods_blessing").cost == 5 and CardFactory.create("blessing_slaanesh").cost == 7)
 
-	# 3. Кому можно: свой бог, не больше 3, Тзинч — только стрелкам, смена бога — не Common
-	var champ := _squad("chaos_champions")   # Кхорн, ближний бой
-	var plague := _squad("plague_marines")   # Нургл
+	# 3. Кому можно: свой бог, не больше 3, Вестник — только стрелкам, смена бога — не Common
+	var champ := _squad("chaos_champions")   # Кипящий, ближний бой
+	var plague := _squad("plague_marines")   # Дедушка Тысячи
 	var cult := _squad("cultists")
 	var bk = CardFactory.create("blessing_khorne")
 	var allowed := champ.can_apply_upgrade(bk) and not plague.can_apply_upgrade(bk) and not cult.can_apply_upgrade(bk)
@@ -117,13 +118,13 @@ func _main() -> void:
 		and cult_b.can_apply_upgrade(CardFactory.create("blessing_slaanesh"))
 		and UnitData.from_save_state(cult_b.save_state()).get_god() == "slaanesh"
 		and not _squad("chaos_marines").can_apply_upgrade(CardFactory.create("blessing_tzeentch")))
-	_check("кому можно: свой бог, после 3 — нет, Тзинч — не ближникам, смена бога — любому отряду Хаоса",
+	_check("кому можно: свой бог, после 3 — нет, Вестник — не ближникам, смена бога — любому отряду Хаоса",
 		allowed and champ.blessings == 3 and not champ.can_apply_upgrade(bk)
 		and not tz_champ.can_apply_upgrade(CardFactory.create("blessing_tzeentch"))
 		and _squad("havocs").can_apply_upgrade(CardFactory.create("blessing_tzeentch"))
 		and champ.can_apply_upgrade(cg) and cult.can_apply_upgrade(cg))
 
-	# 4. Статы благословений (3 Кхорна, 1 Нургла, 2 Тзинча, 1 Слаанеш)
+	# 4. Статы благословений (3 Кипящего, 1 Дедушки Тысячи, 2 Вестника, 1 Король Второго Акта)
 	var base_champ := _squad("chaos_champions")
 	var nurg := _squad("plague_marines")
 	var base_nurg := _squad("plague_marines")
@@ -134,11 +135,11 @@ func _main() -> void:
 		hav.apply_upgrade(CardFactory.create("blessing_tzeentch"))
 	var lord := _squad("chaos_lord")
 	var base_lord := _squad("chaos_lord")
-	var berz_like := _squad("havocs")   # Havocs отступают; переведены к Кхорну и благословлены — нет
+	var berz_like := _squad("havocs")   # Havocs отступают; переведены к Кипящему и благословлены — нет
 	berz_like.change_god("khorne")
 	berz_like.apply_upgrade(CardFactory.create("blessing_khorne"))
 	lord.apply_upgrade(CardFactory.create("blessing_slaanesh"))
-	_check("статы: Кхорн ×1.45 урона, не отступает; Нургл +20%% HP, урон ×0.9, яд %.0f; Тзинч +30%% дальности, +%.1f урона, ×0.81 скорострельности; Слаанеш ×0.95, шанс %.0f%%" % [
+	_check("статы: Кипящий ×1.45 урона, не отступает; Дедушка Тысячи +20%% HP, урон ×0.9, яд %.0f; Вестник +30%% дальности, +%.1f урона, ×0.81 скорострельности; Король Второго Акта ×0.95, шанс %.0f%%" % [
 		ChaosGods.poison_power("nurgle", 1), hav.get_damage() - base_hav.get_damage(),
 		ChaosGods.charm_chance("slaanesh", 1) * 100.0],
 		absf(champ.get_damage() - base_champ.get_damage() * 1.45) < EPS and champ.get_retreat_threshold() == 0.0
@@ -163,7 +164,7 @@ func _main() -> void:
 	champ.respawn_after_wipe()
 	_check("отряд пал целиком — благословения сброшены, бог остался", champ.blessings == 0 and champ.get_god() == "nurgle")
 
-	# 6. Бой: яд Нургла в атаках, порабощение Слаанеш (шанс 1 — гарантия), боец уходит в наш отряд
+	# 6. Бой: яд Дедушки Тысячи в атаках, порабощение Король Второго Акта (шанс 1 — гарантия), боец уходит в наш отряд
 	var lord_b := _squad("chaos_lord")
 	lord_b.apply_upgrade(CardFactory.create("blessing_slaanesh"))
 	var nurg_b := _squad("plague_marines")
@@ -172,7 +173,7 @@ func _main() -> void:
 	var lord_sq = _squad_node(lord_b)
 	var nurg_sq = _squad_node(nurg_b)
 	var p0 = nurg_sq.soldiers[0]
-	_check("в бою: яд в атаках Нургла %.0f ур/с, шанс порабощения Слаанеш %.0f%%" % [p0.bonus_poison_power,
+	_check("в бою: яд в атаках Дедушки Тысячи %.0f ур/с, шанс порабощения Король Второго Акта %.0f%%" % [p0.bonus_poison_power,
 		lord_sq.soldiers[0].charm_chance * 100.0],
 		is_equal_approx(p0.bonus_poison_power, 2.0) and is_equal_approx(lord_sq.soldiers[0].charm_chance, 0.03))
 	var reg = root.get_node("SoldierRegistry")
@@ -221,23 +222,23 @@ func _main() -> void:
 	_check("полный состав: порабощённые лечат отряд на 25%% один раз (%.2f)" % full.saved_hp[0],
 		is_equal_approx(full.saved_hp[0], 0.75) and is_equal_approx(full.saved_hp[1], 0.75))
 
-	# 8. Котёл Нургла: атаки отряда на соседней клетке отравляют — только в забеге за Нургла (решение пользователя
+	# 8. Котёл Дедушки Тысячи: атаки отряда на соседней клетке отравляют — только в забеге за Дедушки Тысячи (решение пользователя
 	# 25.10.2026: особый эффект здания бога — только у своего бога)
 	var neigh := _squad("chaos_marines")
 	var scene = await _battle({neigh: Vector2i(1, 1)}, {CardFactory.special_card("plague_cauldron"): Vector2i(1, 2)}, "nurgle")
 	var n0 = _squad_node(neigh).soldiers[0]
 	var badge = scene.hud.find_child("ChapterBadge", true, false)
-	_check("котёл за Нургла: атаки соседнего отряда отравляют (%.1f ур/с); значок бога в шапке" % n0.bonus_poison_power,
-		is_equal_approx(n0.bonus_poison_power, 2.0) and badge != null and "Nurgle" in badge.tooltip_text)
+	_check("котёл за Дедушки Тысячи: атаки соседнего отряда отравляют (%.1f ур/с); значок бога в шапке" % n0.bonus_poison_power,
+		is_equal_approx(n0.bonus_poison_power, 2.0) and badge != null and "Grandfather of the Thousand" in badge.tooltip_text)
 	var neigh2 := _squad("chaos_marines")
 	await _battle({neigh2: Vector2i(1, 1)}, {CardFactory.special_card("plague_cauldron"): Vector2i(1, 2)}, "khorne")
 	var cauldron = null
 	for b in bm.buildings:
 		if b.building_type == "plague_cauldron":
 			cauldron = b
-	_check("котёл за Кхорна: соседям яда нет (%.1f), аура котла — есть; в подсказке «не ваш бог»" % 		_squad_node(neigh2).soldiers[0].bonus_poison_power,
+	_check("котёл за Кипящего: соседям яда нет (%.1f), аура котла — есть; в подсказке «не ваш бог»" % 		_squad_node(neigh2).soldiers[0].bonus_poison_power,
 		_squad_node(neigh2).soldiers[0].bonus_poison_power == 0.0 and cauldron.stats.get("poison_radius", 0.0) > 0.0
-		and "Не ваш бог" in cauldron.effect_text())
+		and "Не ваш Внешний" in cauldron.effect_text())
 
 	bm.stop_battle()
 	if current_scene:

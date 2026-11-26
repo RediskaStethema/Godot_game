@@ -3,7 +3,7 @@ extends Resource
 
 # UnitData.gd — добавь:
 @export var damage_variance: float = 0.2
-@export var sprite_path: String = "res://assets/sprites/space_marine"  # "res://assets/sprites/space_marine"
+@export var sprite_path: String = "res://assets/units/space_marines/tactical"  # assets/units/<раса>/<юнит>: frames.tres + папки анимаций
 
 # --- Идентификация ---
 @export var factory_id: String = ""   # id из UnitFactory.create (= CardData.unit_factory_id)
@@ -62,6 +62,31 @@ extends Resource
 @export var deep_strike_delay: float = 0.0   # 0 — нет
 # Стрельба на ходу (Land Speeder): в ATTACK не стоит — кружит вокруг цели, держит дистанцию
 @export var mobile_fire: bool = false
+# Приём финального босса (примархи, решение пользователя 09.11.2026): раз в special_cooldown сек ряд special листа,
+# на кадре metadata/special_frame — действие по виду (BossSpecial.release):
+#   leap — прыжок на врага (стрелка, если есть) ближе special_range, удар по кругу special_radius при приземлении;
+#   dash — рывок сквозь строй к цели ближе special_range, удар всем на пути шириной special_radius;
+#   cone — удар конусом перед собой (SPECIAL_CONE_HALF) радиуса special_radius;
+#   nova — удар по кругу special_radius вокруг себя; shield — то же + щит special_shield × max HP себе;
+#   bolt — снаряд special_projectile в цель ближе special_range, взрыв радиуса special_radius.
+# Урон по каждому — удар × special_mult × unit_weight жертвы (как у взрывов: пехоту ×3 не выкашивает втрое быстрее);
+# special_status* — статус задетым, special_stun — оглушение
+@export var special_kind: String = ""        # "" — приёма нет
+@export var special_cooldown: float = 0.0
+@export var special_first: float = 0.0       # до первого приёма с начала боя
+@export var special_range: float = 0.0
+@export var special_radius: float = 0.0
+@export var special_mult: float = 1.0
+@export var special_stun: float = 0.0
+@export var special_status: String = ""
+@export var special_status_power: float = 0.0
+@export var special_status_duration: float = 0.0
+@export var special_shield: float = 0.0
+@export var special_projectile: String = ""
+@export var special_color: Color = Color(1, 0.5, 0.2)   # свет приёма на земле и бойцах (только вид)
+@export var special_name: String = ""        # для справки отряда
+# Не отбрасывается (примархи: гигант в 2.5 роста не отлетает от удара Дредноута)
+@export var knockback_immune: bool = false
 
 # --- Визуал ---
 # Пока у новых юнитов нет своих спрайтов — различаем их тинтом и размером
@@ -69,6 +94,9 @@ extends Resource
 @export var sprite_scale: float = 1.0
 # Броня в цвет ордена игрока (Soldier.ARMOR_SHADER); false — лист уже в цветах своего ордена (особые юниты)
 @export var chapter_armor: bool = true
+# Участок кадра (пиксели холста 1-го кадра idle), который цвет братства не трогает: лицо и борода (17.11.2026, «зелёное лицо
+# у Вергилианцев»), мех волка («зелёные волки»); нулевой размер — нет
+@export var armor_protect: Rect2 = Rect2()
 # Снаряд стрелка — вид из Projectile.EFFECTS ("bolt" / "charged" / "spark"), "" — без снаряда.
 # Урон и эффекты попадания (стан, отбрасывание) — когда снаряд долетит (Projectile._impact).
 @export var projectile: String = ""
@@ -118,6 +146,10 @@ const BANNER_RADIUS: float = 107.0   # 23.10.2026 (решение пользов
 var unit_weight: float = 1.0
 # Возрождён после боя (respawn_after_wipe) — на расстановке следующего боя свет появления; не сохраняется
 var respawned: bool = false
+# Только вид, не сохраняются (как respawned): возродился уровнем ниже — шеврон трескается (BuildingFx.level_down);
+# сколько бойцов бога Хаоса встали после боя в отряде (Святилище культа) — знак бога под ними (BuildingFx.god_sigil)
+var level_lost: bool = false
+var fresh_converted: int = 0
 
 # Бог-покровитель отряда Хаоса (ChaosGods; решение пользователя 25.10.2026): "" — по юниту (по лору), у Common
 # бога нет. Карта «Chaos Gods' Blessing» меняет его, благословения (blessings, до ChaosGods.MAX_BLESSINGS) — только
@@ -148,12 +180,12 @@ func get_move_speed() -> float:
 func get_attack_range() -> float:
 	return attack_range * _blessing()["range"]
 
-# Порог отступления: благословение Кхорна — не отступает
+# Порог отступления: благословение Кипящего — не отступает
 func get_retreat_threshold() -> float:
 	return 0.0 if ChaosGods.no_retreat(get_god(), blessings) else retreat_hp_threshold
 
 # Благословение бога: только отряд этого бога (у Common бога нет — сначала «Chaos Gods' Blessing»), не больше
-# MAX_BLESSINGS; Тзинч — только стрелкам
+# MAX_BLESSINGS; Вестник — только стрелкам
 func can_bless(card_god: String) -> bool:
 	return card_god != "" and card_god == get_god() and blessings < ChaosGods.MAX_BLESSINGS 		and (card_god != "tzeentch" or "ranged" in tags)
 
@@ -200,6 +232,7 @@ func apply_merge_upgrade() -> void:
 # на уровень ниже и без карт-улучшений (с базового уровня — просто возрождается).
 func respawn_after_wipe() -> void:
 	var new_level = maxi(squad_level - 1, 0)
+	level_lost = squad_level > 0
 	hp_multiplier = 1.0
 	damage_multiplier = 1.0
 	attack_speed_multiplier = 1.0
@@ -316,3 +349,7 @@ func apply_upgrade(card: CardData) -> void:
 		"banner":   # Chapter Banner — аура, берётся сильнейшая
 			banner_aura_bonus = maxf(banner_aura_bonus, card.upgrade_value)
 	applied_upgrades.append(card.title)
+
+# Название отряда / бойца для игрока на выбранном языке (Names.of); unit_name — английский ключ
+func display_name() -> String:
+	return Names.of(unit_name)

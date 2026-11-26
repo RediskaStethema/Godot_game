@@ -18,7 +18,7 @@ func setup(faction: String = "space_marines") -> void:
 	var focus: Button = null
 	for id in MetaProgress.available_start_cards():
 		var card := CardFactory.equivalent(id, faction)
-		var b := add_button("%s · %s" % [card.title, card.description], choose.bind(id),
+		var b := add_button("%s · %s" % [card.display_title(), card.description], choose.bind(id),
 			"PrimaryButton" if id == MetaProgress.selected_start_card else "")
 		b.name = "Start_" + id
 		if id == MetaProgress.selected_start_card:

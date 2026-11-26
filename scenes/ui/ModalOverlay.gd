@@ -11,6 +11,7 @@ var content: VBoxContainer
 # Esc (ui_cancel) закрывает окно. Включают окна-вопросы (подтверждение, выбор расы,
 # настройки); меню паузы — нет, Esc там обрабатывает PauseMenu (снимает паузу)
 var close_on_cancel: bool = false
+var _bare: bool = false   # окно без рамки на фоне меню (build_bare): надписи — с обводкой, иначе тонут в мосте и кораблях
 
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -31,6 +32,77 @@ func build_frame(width: float) -> void:
 	content = VBoxContainer.new()
 	content.add_theme_constant_override("separation", 12)
 	panel.add_child(content)
+	_animate_open(panel)
+
+# Без окна — прямо на фоне главного меню (решение пользователя 13.11.2026: выбор расы и ордена «на фоне главного
+# меню, само меню уезжает влево, колесо — на фоне космоса, солдата»): затемнения и рамки нет, за содержимым —
+# мягкая тёмная полоса (Palette.TOKEN_BAND, радиальный градиент), чтобы текст читался на сцене; «◀ НАЗАД» —
+# add_back_button
+func build_bare(width: float) -> void:
+	_bare = true
+	color = Color(0, 0, 0, 0)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	var g := Gradient.new()
+	g.set_color(0, Palette.TOKEN_BAND)
+	g.set_color(1, Color(Palette.TOKEN_BAND, 0.0))
+	g.add_point(0.55, Color(Palette.TOKEN_BAND, Palette.TOKEN_BAND.a * 0.7))
+	var tex := GradientTexture2D.new()
+	tex.gradient = g
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	var band := TextureRect.new()
+	band.name = "Band"
+	band.texture = tex
+	band.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	band.stretch_mode = TextureRect.STRETCH_SCALE
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(band)
+	band.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(center)
+	content = VBoxContainer.new()
+	content.custom_minimum_size = Vector2(width, 0)
+	content.add_theme_constant_override("separation", 12)
+	center.add_child(content)
+	_animate_open(content)
+
+# «◀ НАЗАД» в левом верхнем углу (окно без рамки) — закрывает окно
+const BACK_MARGIN = Vector2(28, 22)
+func add_back_button(on_pressed: Callable = close) -> Button:
+	var b := Button.new()
+	b.name = "BackButton"
+	b.text = "◀  НАЗАД"
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_override("font", UITheme.ui_font())
+	b.add_theme_font_size_override("font_size", UITheme.ui_px(18))
+	b.add_theme_color_override("font_color", Palette.MENU_BUTTON_TEXT)
+	b.add_theme_color_override("font_hover_color", UITheme.GOLD_BRIGHT)
+	b.add_theme_color_override("font_pressed_color", UITheme.GOLD)
+	b.add_theme_color_override("font_outline_color", Palette.TOKEN_OUTLINE)
+	b.add_theme_constant_override("outline_size", 4)
+	b.pressed.connect(on_pressed)
+	add_child(b)
+	b.position = BACK_MARGIN
+	return b
+
+# Окно появляется плавно (решение пользователя 12.11.2026, «отклик интерфейса»): затемнение проявляется, окно —
+# из чуть меньшего размера с лёгкой пружинкой; по реальному времени и на паузе (окно — PROCESS_MODE_ALWAYS)
+const OPEN_TIME: float = 0.16
+const OPEN_FROM_SCALE: float = 0.94
+func _animate_open(panel: Control) -> void:
+	modulate.a = 0.0
+	panel.scale = Vector2(OPEN_FROM_SCALE, OPEN_FROM_SCALE)
+	(func():   # размер окна — после раскладки: центр масштаба по нему
+		if is_instance_valid(panel):
+			panel.pivot_offset = panel.size / 2.0).call_deferred()
+	var tw := create_tween().set_parallel().set_ignore_time_scale(true)
+	tw.tween_property(self, "modulate:a", 1.0, OPEN_TIME)
+	tw.tween_property(panel, "scale", Vector2.ONE, OPEN_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 # Виньетка поверх затемнения: края экрана темнее, окно — в круге света (стилизация 20.10.2026)
 const VIGNETTE_EDGE = Color(0, 0, 0, 0.55)
@@ -60,17 +132,28 @@ static func add_frame_eagle(panel: PanelContainer) -> void:
 	if not ResourceLoader.exists(UITheme.WINDOW_EAGLE):
 		return
 	var eagle: Texture2D = load(UITheme.WINDOW_EAGLE)
+	var size := eagle.get_size() * UITheme.UI_ART_SCALE   # нарисована ×2 к экрану (пакет menu_ui)
 	panel.draw.connect(func():
-		panel.draw_texture(eagle, Vector2(round((panel.size.x - eagle.get_width()) / 2.0), 0.0)))
+		panel.draw_texture_rect(eagle, Rect2(Vector2(round((panel.size.x - size.x) / 2.0), 0.0), size), false))
 
 func add_title(text: String, variation: String = "TitleLabel") -> Label:
 	var l = UITheme.make_label(text, variation)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if _bare:
+		outline_label(l, variation == "DimLabel")
 	content.add_child(l)
 	if variation == "TitleLabel":
 		_add_divider()
 	return l
+
+# Тёмная обводка надписи на фоне сцены (решение пользователя 24.11.2026: «шрифты и надписи в UI/UX» — подзаголовки выбора
+# расы / братства / бога почти не читались на мосте); dim — приглушённый цвет светлее на ступень
+static func outline_label(l: Label, dim: bool = false) -> void:
+	l.add_theme_color_override("font_outline_color", Color(0.03, 0.02, 0.03, 0.95))
+	l.add_theme_constant_override("outline_size", 4)
+	if dim:
+		l.add_theme_color_override("font_color", Palette.TEXT_DIM.lightened(0.5))
 
 # Разделитель с черепом (лист UI_assets.png) под заголовком окна — как в главном меню
 const DIVIDER_HEIGHT: float = 22.0
@@ -107,6 +190,7 @@ func add_button(text: String, on_pressed: Callable, variation: String = "") -> B
 	var b = UITheme.make_button(text, variation, on_pressed)
 	b.custom_minimum_size = Vector2(0, 46)
 	content.add_child(b)
+	ButtonVolume.attach(b, 6.0)   # объём и отклик (наведение, нажатие) — как у всех кнопок окон
 	# Фокус — на первую кнопку окна: иначе он остаётся на кнопке под затемнением
 	# (Enter / пробел нажали бы её — второе окно, выход из игры)
 	if not _focus_taken:
@@ -116,16 +200,36 @@ func add_button(text: String, on_pressed: Callable, variation: String = "") -> B
 
 var _focus_taken: bool = false
 
-# Фокус в следующем кадре — если окно к тому времени не закрыли вместе со сценой
+# Фокус в следующем кадре — если окно к тому времени не закрыли вместе со сценой. Скрытый (hide_focus, Godot 4.6):
+# Enter / стрелки работают, но рамка фокуса не горит, пока игрок не начал навигацию клавиатурой (решение
+# пользователя 07.11.2026, Screenshot 2026-11-07 114006.png: первый орден / бог подсвечивался сразу — подсвечен
+# должен быть только тот, что выбирает игрок)
 static func focus_later(c: Control) -> void:
 	(func():
 		if is_instance_valid(c) and c.is_inside_tree():
-			c.grab_focus()).call_deferred()
+			c.grab_focus(true)).call_deferred()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if close_on_cancel and event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		close()
 
+# Закрытие — плавное, как и открытие (17.11.2026, «интерфейс»): окно гаснет за CLOSE_TIME, на это время клики
+# глотает прозрачная плёнка сверху (вторая кнопка окна не нажмётся). Сигналы наследников уходят сразу в обработчике
+# кнопки, до close(); освобождение узла — в конце затухания
+const CLOSE_TIME: float = 0.1
+var _closing_overlay: bool = false
 func close() -> void:
-	queue_free()
+	if _closing_overlay:
+		return
+	_closing_overlay = true
+	if not is_inside_tree():
+		queue_free()
+		return
+	var shield := Control.new()
+	shield.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(shield)
+	shield.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var tw := create_tween().set_ignore_time_scale(true)
+	tw.tween_property(self, "modulate:a", 0.0, CLOSE_TIME)
+	tw.tween_callback(queue_free)

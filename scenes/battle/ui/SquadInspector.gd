@@ -1,6 +1,8 @@
 class_name SquadInspector
 extends Control
 
+signal squad_info_opened(squad: Squad)   # справка своего отряда открыта кликом (обучение)
+
 # Подсказки по отрядам на поле боя (UI поверх камеры, в CanvasLayer):
 #   * наведение на бойца дольше HOVER_NAME_DELAY — подпись «имя ×бойцов · ур.N»
 #     (свои золотом, враги красным; скрытые до боя враги не подписываются);
@@ -23,6 +25,16 @@ const REFRESH_INTERVAL: float = 0.1
 const INFO_WIDTH: float = 220.0
 const CELL_PX: float = 78.25   # шаг клетки вдоль оси наступления, px (√(70² + 35²)) — скорость и дальность в клетках
 const PORTRAIT_CROP = Rect2(50, 40, 260, 260)   # лицо иллюстрации карты (арт 360×504) — портрет справки
+# Подсказки к бафам справки при наведении (решение пользователя 10.11.2026): откуда бонус и что делает
+const BONUS_HINTS = {
+	"hp": "Больше здоровья каждому бойцу. Даёт уровень отряда (карта того же отряда на него) и карты-улучшения",
+	"damage": "Сильнее каждый удар и выстрел. Даёт уровень отряда и карты-улучшения",
+	"attack_speed": "Бьёт и стреляет чаще. Даёт уровень отряда и карты-улучшения",
+	"move_speed": "Быстрее добегает до врага. Даёт карта-улучшение скорости",
+	"shield": "В начале каждого боя бойцы получают щит: он принимает урон первым, пока не кончится",
+	"banner": "Аура знамени: союзники рядом с отрядом бьют сильнее. С другими аурами урона не складывается",
+}
+const POSITION_HINT = "Бонус ряда королевства: зависит от того, в каком ряду стоит отряд — переставьте, чтобы сменить"
 
 # Выключается в конце забега (shutdown)
 var enabled: bool = true
@@ -117,6 +129,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not same:
 			info_squad = squad
 			_update_info()
+			squad_info_opened.emit(squad)
 		return
 	if citadel_at(world):
 		var was := info_citadel
@@ -175,14 +188,22 @@ func shutdown() -> void:
 
 # Подпись над точкой экрана, в пределах экрана
 func show_hover(squad: Squad, screen_pos: Vector2) -> void:
-	var text = "%s ×%d" % [squad.data.unit_name, squad.soldiers.size()]
+	var text = "%s ×%d" % [squad.data.display_name(), squad.soldiers.size()]
 	if squad.team == GameConstants.TEAM_PLAYER and squad.data.squad_level > 0:
 		text += " · ур.%d" % squad.data.squad_level
 	_hover_text.text = text
-	_hover_text.add_theme_color_override("font_color",
-		UITheme.GOLD_BRIGHT if squad.team == GameConstants.TEAM_PLAYER else UITheme.RED_BRIGHT)
+	var col: Color = UITheme.GOLD_BRIGHT if squad.team == GameConstants.TEAM_PLAYER else UITheme.RED_BRIGHT
+	var boss_col := EnemyWaves.boss_color(squad.data.factory_id)   # примарх — цветом бога / легиона
+	if boss_col.a > 0.0:
+		col = boss_col
+	_hover_text.add_theme_color_override("font_color", col)
 	_hover_panel.reset_size()
+	var was_visible := _hover_panel.visible
 	_place_clear(_hover_panel, screen_pos + Vector2(14, -_hover_panel.size.y - 6))
+	if _hover_panel.visible and not was_visible:   # плавное появление подписи (18.11.2026)
+		_hover_panel.modulate.a = 0.0
+		var tw := _hover_panel.create_tween().set_ignore_time_scale(true)
+		tw.tween_property(_hover_panel, "modulate:a", 1.0, 0.12)
 
 const CLEAR_GAP: float = 6.0   # подпись сбоку от открытой карточки — с зазором
 
@@ -254,7 +275,7 @@ func _show_squad_card(squad: Squad) -> void:
 	var card := CardFactory.squad_card_for(d.factory_id)
 	var alive := squad.soldiers.size()
 	var full := maxi(d.squad_size, alive)
-	_card.setup(squad_portrait(card), d.unit_name, "×%d" % alive if alive >= full else "×%d/%d" % [alive, full],
+	_card.setup(squad_portrait(card), d.display_name(), "×%d" % alive if alive >= full else "×%d/%d" % [alive, full],
 		describe(squad), d.squad_level, UnitFactory.MAX_SQUAD_LEVEL,
 		UITheme.rarity_color(card.rarity) if card else Palette.GOLD)
 
@@ -269,7 +290,7 @@ func _show_building_card(b: Building) -> void:
 	var tex := squad_portrait(b.card)
 	if tex == null and b.sprite:
 		tex = b.sprite.sprite_frames.get_frame_texture("idle", 0)
-	_card.setup(tex, b.card.title, "", describe_building(b), b.card.building_level, CardData.MAX_BUILDING_LEVEL,
+	_card.setup(tex, b.card.display_title(), "", describe_building(b), b.card.building_level, CardData.MAX_BUILDING_LEVEL,
 		UITheme.rarity_color(b.card.rarity))
 
 # Текст справки здания (BBCode): что делает с текущими цифрами, можно ли улучшить
@@ -304,6 +325,9 @@ static func describe_citadel() -> String:
 
 # Способность отряда из данных UnitData ("" — нет)
 static func ability_text(d: UnitData) -> String:
+	if d.special_kind != "":
+		return "%s (раз в %d с); ярость на %d%% HP — приём в 1,5 раза чаще%s" % [d.special_name,
+			roundi(d.special_cooldown), roundi(Soldier.ENRAGE_AT * 100.0), "; не отбрасывается" if d.knockback_immune else ""]
 	if d.jump_range > 0.0:
 		return "прыжок на стрелка (раз за бой), удар ×%.1f и оглушение %.1f с" % [d.jump_damage_mult, d.jump_stun]
 	if d.entrench_time > 0.0:
@@ -313,6 +337,20 @@ static func ability_text(d: UnitData) -> String:
 	if d.mobile_fire:
 		return "стрельба на ходу"
 	return ""
+
+# Строка бога отряда Хаоса: «Бог: Дедушка Тысячи» цветом бога (решение пользователя 09.11.2026), дальше — благословения
+static func god_line(d: UnitData) -> String:
+	var god: String = d.get_god()
+	var text := ChaosGods.describe(god, d.blessings, d.tags)
+	var head := "Бог: %s" % ChaosGods.god_name(god)
+	if not text.begins_with(head):
+		return InfoCard.color_numbers(text, Palette.AMBER_LIGHT)
+	return "[color=#%s]%s[/color]%s" % [ChaosGods.god_color(god).to_html(false), InfoCard.hint(head, ChaosGods.blessing_hint(god)),
+		InfoCard.color_numbers(text.substr(head.length()), Palette.AMBER_LIGHT)]
+
+# Бонус справки: числа цветом, подсказка — откуда бонус и что делает
+static func _bonus(text: String, tip: String) -> String:
+	return InfoCard.hint(InfoCard.color_numbers(text, Palette.AMBER_LIGHT), tip)
 
 # Число для справки: целое — без дробной части, иначе одна цифра после запятой
 static func _num(v: float) -> String:
@@ -343,29 +381,44 @@ static func describe(squad: Squad) -> String:
 		hp += soldier.current_hp
 		max_hp += soldier.max_hp
 	lines.append(InfoCard.stat("HP отряда", "%d/%d" % [ceili(hp), ceili(max_hp)]))
+	# Бонусы — каждый с подсказкой, откуда он и что делает (числа красятся до [hint] — в подсказку теги не попадают)
 	var bonuses: Array[String] = []
-	for b in [[d.hp_multiplier, "HP"], [d.damage_multiplier, "урона"], [d.attack_speed_multiplier, "скорострельности"]]:
+	for b in [[d.hp_multiplier, "HP", BONUS_HINTS["hp"]], [d.damage_multiplier, "урона", BONUS_HINTS["damage"]],
+			[d.attack_speed_multiplier, "скорострельности", BONUS_HINTS["attack_speed"]],
+			[d.move_speed_multiplier, "скорости бега", BONUS_HINTS["move_speed"]]]:
 		if b[0] > 1.001:
-			bonuses.append("+%d%% %s" % [roundi((b[0] - 1.0) * 100.0), b[1]])
-	if d.move_speed_multiplier > 1.001:
-		bonuses.append("+%d%% скорости бега" % roundi((d.move_speed_multiplier - 1.0) * 100.0))
+			bonuses.append(_bonus("+%d%% %s" % [roundi((b[0] - 1.0) * 100.0), b[1]], b[2]))
 	if d.shield_ratio > 0.0:
-		bonuses.append("щит %d%% HP" % roundi(d.shield_ratio * 100.0))
+		bonuses.append(_bonus("щит %d%% HP" % roundi(d.shield_ratio * 100.0), BONUS_HINTS["shield"]))
 	if d.banner_aura_bonus > 0.0:
-		bonuses.append("знамя: +%d%% урона рядом" % roundi(d.banner_aura_bonus * 100.0))
+		bonuses.append(_bonus("знамя: +%d%% урона рядом" % roundi(d.banner_aura_bonus * 100.0), BONUS_HINTS["banner"]))
 	if not bonuses.is_empty():
-		lines.append("Бонусы: " + InfoCard.color_numbers(", ".join(bonuses), Palette.AMBER_LIGHT))
+		lines.append("Бонусы: " + ", ".join(bonuses))
 	var ability := ability_text(d)
 	if ability != "":
 		lines.append("Способность: " + InfoCard.color_numbers(ability, Palette.AMBER_LIGHT))
 	if squad.team == GameConstants.TEAM_PLAYER and "chaos" in d.tags and d.get_god() != "":   # бог отряда (ChaosGods)
-		lines.append(InfoCard.color_numbers(ChaosGods.describe(d.get_god(), d.blessings, d.tags), Palette.AMBER_LIGHT))
+		lines.append(god_line(d))
 	if not d.applied_upgrades.is_empty():
-		lines.append("Улучшения: " + ", ".join(d.applied_upgrades))
+		var ups: Array[String] = []
+		for title in d.applied_upgrades:
+			ups.append(InfoCard.hint(title, CardFactory.description_by_title(title)))
+		lines.append("Улучшения: " + ", ".join(ups))
+	# Казармы по соседству (решение пользователя 23.11.2026, обучение): что они сделают с этим отрядом после победы
+	if squad.team == GameConstants.TEAM_PLAYER:
+		for bcard in BattleManager.player_buildings:
+			if bcard.building_type == "barracks" \
+					and BattleManager.NEIGHBOUR_TILES.has(squad.tile - BattleManager.player_buildings[bcard]):
+				var stats: Dictionary = bcard.get_building_stats()
+				var heal := roundi(float(stats.get("heal", 0.0)) * 100.0) if bcard.faction != "chaos" else 0
+				var back := floori(float(stats.get("refill", 0.0)))
+				var text := "после победы " + ("лечат живых на %d%% и " % heal if heal > 0 else "") \
+					+ "возвращают до %d павших бойцов" % back
+				lines.append("Казармы рядом: " + InfoCard.color_numbers(text, Palette.AMBER_LIGHT))
 	var pos = SynergyManager.get_squad_position_bonus(squad)
 	if pos != "":
 		var p: Dictionary = SynergyManager.POSITION_BONUSES[pos]
-		lines.append("%s: %s" % [p["name"], InfoCard.color_numbers(p["desc"], Palette.AMBER_LIGHT)])
+		lines.append("%s: %s" % [InfoCard.hint(p["name"], POSITION_HINT), InfoCard.color_numbers(p["desc"], Palette.AMBER_LIGHT)])
 	return "\n".join(lines)
 
 # -------------------------------------------------------

@@ -21,6 +21,8 @@ var _fit_zoom: float = 1.0
 var _bounds: Rect2 = Rect2()
 var _fit_tween: Tween
 var _shake_tween: Tween
+var _shake_peak: float = 0.0     # сила последней тряски и конец её по часам — слабая не перебивает сильную
+var _shake_end_ms: int = 0
 var _shake_rng := RandomNumberGenerator.new()   # своя случайность — общий randf боя не сдвигается
 
 func fit(bounds: Rect2, area: Rect2, placement: bool, animate: bool) -> void:
@@ -62,6 +64,18 @@ func zoom_at(screen_point: Vector2, steps: float) -> void:
 	position = before - from_center / z
 	_clamp_position()
 
+# Наезд на точку мира (выход и смерть финального босса, только вид): центр экрана — на world, зум — mult от
+# вписанного (в пределах ZOOM_RANGE); тот же твин, что у fit — колесо / тяга мышью его гасят, fit — возвращает.
+# ignore_time_scale — наезд идёт в реальном времени и при замедлении мира
+func focus(world: Vector2, mult: float, time: float, ignore_time_scale: bool = false) -> void:
+	if _fit_tween and _fit_tween.is_valid():
+		_fit_tween.kill()
+	var z := clampf(_fit_zoom * mult, _fit_zoom * ZOOM_RANGE.x, _fit_zoom * ZOOM_RANGE.y)
+	_fit_tween = create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_fit_tween.set_ignore_time_scale(ignore_time_scale)
+	_fit_tween.tween_property(self, "zoom", Vector2(z, z), time)
+	_fit_tween.tween_property(self, "position", world, time)
+
 # Тянуть камеру мышью: сдвиг экрана → сдвиг мира
 func pan(screen_delta: Vector2) -> void:
 	if _fit_tween and _fit_tween.is_valid():
@@ -77,6 +91,14 @@ func _clamp_position() -> void:
 
 # Тряска (взрыв залпа): сдвиг offset гаснет за SHAKE_TIME — только вид, position не трогает
 func shake(strength: float) -> void:
+	# Слабый толчок не перебивает сильный, который ещё не угас (иначе шаг босса гасил удар приёма)
+	var now := Time.get_ticks_msec()
+	if now < _shake_end_ms:
+		var left := float(_shake_end_ms - now) / (SHAKE_TIME * 1000.0)
+		if strength < _shake_peak * left:
+			return
+	_shake_peak = strength
+	_shake_end_ms = now + int(SHAKE_TIME * 1000.0)
 	if _shake_tween and _shake_tween.is_valid():
 		_shake_tween.kill()
 	_shake_tween = create_tween()

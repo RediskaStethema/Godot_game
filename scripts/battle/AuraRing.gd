@@ -30,7 +30,6 @@ const LOOKS = {
 }
 
 static var layer: Node2D = null
-static var _add: CanvasItemMaterial
 
 var radius := 160.0
 var look := "banner"
@@ -59,10 +58,7 @@ static func _make(r: float, kind: String, target: Node2D) -> AuraRing:
 	a.radius = r
 	a.look = kind if LOOKS.has(kind) else "banner"
 	a.squad = target
-	if _add == null:
-		_add = CanvasItemMaterial.new()
-		_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	a.material = _add
+	a.material = Vfx.add_material()   # пиксельный ADD (shaders/fx_pixel_add.gdshader)
 	a.process_priority = 1
 	parent.add_child(a)
 	return a

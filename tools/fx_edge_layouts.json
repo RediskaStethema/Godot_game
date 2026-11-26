@@ -1,0 +1,82 @@
+[
+ {
+  "kind": "splatter",
+  "path": "res://assets/Spritesheets/Splatter-Sheet.png",
+  "w": 150,
+  "h": 150,
+  "from": 0,
+  "frames": 30
+ },
+ {
+  "kind": "impact",
+  "path": "res://assets/graded/Spritesheets/Spark1-Sheet.png",
+  "w": 150,
+  "h": 150,
+  "from": 1,
+  "frames": 29
+ },
+ {
+  "kind": "explosion",
+  "path": "res://assets/graded/Spritesheets/Smoke-Sheet.png",
+  "w": 80,
+  "h": 80,
+  "from": 0,
+  "frames": 19
+ },
+ {
+  "kind": "fireball",
+  "path": "res://assets/graded/Spritesheets/Fire+Sparks-Sheet.png",
+  "w": 96,
+  "h": 96,
+  "from": 0,
+  "frames": 19
+ },
+ {
+  "kind": "muzzle_smoke",
+  "path": "res://assets/graded/Spritesheets/Smoke2-Sheet.png",
+  "w": 150,
+  "h": 150,
+  "from": 0,
+  "frames": 40
+ },
+ {
+  "kind": "teleport",
+  "path": "res://assets/graded/effects/teleport/spritesheet.png",
+  "w": 256,
+  "h": 512,
+  "from": 0,
+  "frames": 12
+ },
+ {
+  "kind": "poisoned",
+  "path": "res://assets/graded/effects/status/poisoned.png",
+  "w": 256,
+  "h": 256,
+  "from": 0,
+  "frames": 8
+ },
+ {
+  "kind": "retreat_dust",
+  "path": "res://assets/graded/effects/retreat_dust/spritesheet.png",
+  "w": 32,
+  "h": 16,
+  "from": 0,
+  "frames": 6
+ },
+ {
+  "kind": "bolt",
+  "path": "res://assets/effects/Bolt/spritesheet.png",
+  "w": -1,
+  "h": -1,
+  "from": 0,
+  "frames": 4
+ },
+ {
+  "kind": "chaos_bolt",
+  "path": "res://assets/graded/effects/chaos_bolt/spritesheet.png",
+  "w": 214,
+  "h": 156,
+  "from": 0,
+  "frames": 8
+ }
+]

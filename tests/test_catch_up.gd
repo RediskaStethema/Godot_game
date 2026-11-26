@@ -66,12 +66,23 @@ func _main() -> void:
 	# 3. Магазин следующей волны: окно выбора, 3 разные Common карты
 	await create_timer(2.6).timeout
 	await _frames(3)
-	var shop = current_scene
+	await _frames(10)
+	# после волны 1 теперь выбор карты (RunMapNode.PICK), магазин — после события 4-й волны: переходим к нему
+	_check("после волны 1 — выбор карты", current_scene != null and current_scene.get("shop") != null
+		and current_scene.get("shop").scene_file_path.ends_with("CardPickScene.tscn"))
+	for n in rm.map.nodes:
+		if n.type == "event":
+			rm.current_node_id = n.id
+			rm.current_completed = true
+			break
+	rm.advance()
+	await _frames(3)
+	var shop = current_scene.get("shop")   # магазин — окно поверх поля BattleScene
 	var offers: Array = sm.catch_up_offers
 	var distinct = {}
 	for c in offers:
 		distinct[c.id] = true
-	_check("магазин: окно открыто, 3 разные Common, флаг снят", shop.name == "ShopScene" \
+	_check("магазин: окно открыто, 3 разные Common, флаг снят", shop != null and shop.name == "ShopScene" \
 		and shop.catch_up_picker != null and offers.size() == 3 and distinct.size() == 3 \
 		and offers.all(func(c): return c.rarity == "common") and not bm.catch_up_pending \
 		and shop.catch_up_button.visible)

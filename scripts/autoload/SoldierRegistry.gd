@@ -31,10 +31,27 @@ func register(soldier: Soldier) -> void:
 		_dirty = true
 		_grid_by_team.clear()
 
+# Павший убирается из кэшей сразу (оптимизация 14.11.2026): раньше гибель помечала кэш грязным, и следующий же
+# запрос пересобирал списки по всем бойцам — 240 мкс на смерть при 250 живых, залп с десятком павших давал рывок.
+# Списки заменяются копией без павшего, а не правятся на месте: их могут перебирать прямо сейчас (правило 6)
 func _on_soldier_died(soldier: Soldier) -> void:
 	active_soldiers.erase(soldier)
-	_dirty = true
 	_center_by_team.clear()
+	if _dirty:
+		return   # кэш и так будет собран заново
+	var all: Array[Soldier] = _alive_all.duplicate()
+	all.erase(soldier)
+	_alive_all = all
+	for team_id in _alive_by_team.keys():
+		if _alive_by_team[team_id].has(soldier):
+			var list: Array[Soldier] = _alive_by_team[team_id].duplicate()
+			list.erase(soldier)
+			_alive_by_team[team_id] = list
+	for team_id in _aura_by_team.keys():
+		if _aura_by_team[team_id].has(soldier):
+			var auras: Array = _aura_by_team[team_id].duplicate()
+			auras.erase(soldier)
+			_aura_by_team[team_id] = auras
 
 func get_alive_soldiers_of_team(team_id: int) -> Array[Soldier]:
 	_rebuild_if_dirty()

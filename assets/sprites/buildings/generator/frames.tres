@@ -13,6 +13,7 @@
 
 
 
+
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle_2/0.png" id="idle_2_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle_2/1.png" id="idle_2_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle_2/2.png" id="idle_2_2"]
@@ -31,9 +32,9 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/generator/idle_3/7.png" id="idle_3_7"]
 
 [resource]
-metadata/level_shift = {2: Vector2(-4, -2), 3: Vector2(-4, -2)}
-metadata/level_scale = {2: 1.171, 3: 1.273}
-metadata/level_static = ["idle_2", "idle_3"]
+metadata/level_shift = {2: Vector2(1, -4), 3: Vector2(1, -10)}
+metadata/level_scale = {2: 1.087, 3: 1.076}
+metadata/level_static = []
 animations = [{
 "frames": [{
 "duration": 1.0,

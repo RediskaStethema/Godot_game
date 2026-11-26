@@ -11,6 +11,7 @@ extends SceneTree
 #   godot --headless --path . -s tests/test_battle_ui.gd
 
 func _initialize() -> void:
+	root.get_node("GameSettings").names_language = "en"   # тесты сверяют английские названия (по умолчанию игроку показываются русские)
 	root.get_node("SaveManager").enabled = false
 	root.get_node("GameSettings").battle_speed = 1.0
 	_main()
@@ -111,6 +112,15 @@ func _main() -> void:
 	var wipe_texts = _of_class(parent, "FloatingText").filter(func(t): return "пал" in t.text)
 	_check("свой отряд пал — надпись «… пал»", _of_class(parent, "FloatingText").size() > before_wipe and wipe_texts.size() == 1)
 
+	# 2б. Уведомление (решение пользователя 11.11.2026): надпись сверху без плашки, гаснет сама; этап — в плашке прежний
+	var stage_text: String = scene.hud._message.text
+	scene._show_message("Icon of the Act → Thane (Икона отряду: союзники рядом +15% урона (не суммируется с аурами))")
+	var shown_notice: bool = scene.hud.notice_text().begins_with("Icon of the Act") and scene.hud._message.text == stage_text \
+		and not (scene.hud._notice.get_parent() is PanelContainer)
+	await create_timer(scene.hud.NOTICE_TIME + scene.hud.NOTICE_FADE + 0.3, true, false, true).timeout
+	_check("уведомление: надпись без плашки, этап «%s» не тронут, гаснет само (%s)" % [stage_text, scene.hud.notice_text()],
+		shown_notice and scene.hud.notice_text() == "")
+
 	# 3. Итог боя: урон в итогах, баннер, замедление
 	bm.credit_damage(mine[1], 120.0)
 	bm.credit_damage(enemy[0], 999.0)   # урон врага в итоги игрока не идёт
@@ -196,6 +206,18 @@ func _main() -> void:
 	pm._input(space)
 	_check("пробел при кнопке «×N» в фокусе — пауза, скорость та же; на паузе колесо зумит",
 		paused_by_queue and zoom_on_pause and not paused)
+	# Кнопка паузы в шапке (25.11.2026): в схватке нажимается, ставит и снимает паузу, значок следует за состоянием;
+	# кнопка скорости — без рамки (пустые стили)
+	var pb: Button = scene.hud._pause_button
+	scene.hud._process(0.0)
+	var enabled_in_battle: bool = not pb.disabled and pb.process_mode == Node.PROCESS_MODE_ALWAYS
+	pb.pressed.emit()
+	var paused_by_button: bool = paused and pm.is_quick_paused() and scene.hud._paused
+	pb.pressed.emit()
+	var resumed_by_button: bool = not paused and not pm.is_quick_paused() and not scene.hud._paused
+	var flat: bool = scene.hud._speed_button.get_theme_stylebox("normal") is StyleBoxEmpty 		and scene.hud._speed_button.get_theme_stylebox("hover") is StyleBoxEmpty
+	_check("кнопка паузы: нажимается в схватке, ставит и снимает паузу; кнопка скорости без рамки",
+		enabled_in_battle and paused_by_button and resumed_by_button and flat)
 	# Перетаскивание: отпускание съел UI — первое движение без зажатой кнопки его снимает
 	scene._camera_dragging = true
 	var motion := InputEventMouseMotion.new()
@@ -223,8 +245,8 @@ func _main() -> void:
 	var note_two: String = sm.get_synergy_note(CardFactory.apothecary_card())  # +1 Marine → 2
 	var note_building: String = sm.get_synergy_note(CardFactory.bolter_turret())
 	_check("сноска синергии: «%s» / «%s» / здание — нет" % [note_tac, note_two],
-		"Marine 1 → 4" in note_tac and "откроет «Astartes Brotherhood»" in note_tac \
-		and "Marine 1 → 2" in note_two and "ещё 1" in note_two and note_building == "")
+		"Криспинцы 1 → 4" in note_tac and ("откроет «%s»" % Names.of("We Few")) in note_tac \
+		and "Криспинцы 1 → 2" in note_two and "ещё 1" in note_two and note_building == "")
 	# Сноски на карте магазина — над кнопкой «Купить», ниже портрета
 	var slot = null
 	for n in current_scene.find_children("*", "", true, false):

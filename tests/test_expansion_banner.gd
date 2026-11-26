@@ -63,12 +63,12 @@ func _main() -> void:
 	var banner = battle.expansion_banner
 	var text = _banner_text(banner) if is_instance_valid(banner) else ""
 	_check("после волны 2: экран «Пришло время расширяться», цена %d Req, ещё в бою" % bm.get_tile_cost(),
-		current_scene == battle and text.contains("РАСШИРЯТЬСЯ") and text.contains("%d Req" % bm.get_tile_cost()))
+		current_scene == battle and text.contains("РАСШИРЯТЬСЯ") and text.contains(GameConstants.coins(bm.get_tile_cost())))
 
-	# 3. «В МАГАЗИН» — дальше по цепочке (магазин волны 3)
+	# 3. «ДАЛЕЕ» — дальше по цепочке (выбор карты волны 3)
+	_check("кнопка экрана — «ДАЛЕЕ» (%s)" % banner.button.text, banner.button.text == "ДАЛЕЕ")
 	banner.button.pressed.emit()
 	await _frames(3)
-	_check("«В МАГАЗИН» — магазин (%s)" % current_scene.name, current_scene.name == "ShopScene")
 
 	# После волны 8 следующим идёт событие — на кнопке «ДАЛЕЕ», а не «В МАГАЗИН»
 	battle = await _open_battle(8)
@@ -82,5 +82,5 @@ func _main() -> void:
 	var hint: String = battle.hud._message.text
 	_check("расстановка волны 3: баннера нет, подсказка «%s»" % hint,
 		bm.can_expand_kingdom() and not is_instance_valid(battle.expansion_banner) \
-		and hint.contains("%d Req" % bm.get_tile_cost()))
+		and hint.contains(GameConstants.coins(bm.get_tile_cost())))
 	quit()

@@ -50,7 +50,7 @@ func _main() -> void:
 	# 1. Карта стены — на клетку своего отряда: стена встаёт, клетка не занята стеной, здания-узла нет
 	var card := CardFactory.fortress_wall()
 	var verdict0: String = s._drop_verdict(card, Vector2i(1, 1))
-	var ok: bool = s._play_building_card(card, Vector2i(1, 1))
+	var ok: bool = s.card_play.play_building(card, Vector2i(1, 1))
 	var wall = bm.kingdom_wall
 	_check("стена построена на клетке отряда (%s), клетку не заняла, здания-узла нет" % verdict0,
 		ok and verdict0 == "playable" and wall != null and bm.player_buildings[card] == bm.WALL_TILE
@@ -63,12 +63,18 @@ func _main() -> void:
 	# 2. Уровень: такая же карта на любую клетку — звенья крепче на 50%; на максимуме — нельзя
 	var hp1: float = segs[0].max_hp
 	var verdict1: String = s._drop_verdict(CardFactory.fortress_wall(), Vector2i(0, 0))
-	s._play_building_card(CardFactory.fortress_wall(), Vector2i(0, 0))
+	s.card_play.play_building(CardFactory.fortress_wall(), Vector2i(0, 0))
 	_check("стена → ур.2 (%s): звено %.0f → %.0f HP" % [verdict1, hp1, segs[0].max_hp],
 		verdict1 == "compatible" and card.building_level == 2 and is_equal_approx(segs[0].max_hp, hp1 * 1.5))
-	s._play_building_card(CardFactory.fortress_wall(), Vector2i(0, 0))
+	# Высота: ур.2 — на 10% выше, звено дорастает за GROW_TIME
+	var grow_from: float = segs[0].shown_scale
+	await create_timer(wall.GROW_TIME + 0.3).timeout
+	_check("стена ур.2 выше на 10%%: %.4f → %.4f (цель %.4f)" % [grow_from, segs[0].shown_scale, wall.height_scale()],
+		is_equal_approx(grow_from, 1.0) and is_equal_approx(wall.height_scale(), 1.1)
+		and is_equal_approx(segs[0].shown_scale, 1.1))
+	s.card_play.play_building(CardFactory.fortress_wall(), Vector2i(0, 0))
 	_check("ур.3 — максимум: карта не тратится, ромб «нельзя»",
-		not s._play_building_card(CardFactory.fortress_wall(), Vector2i(0, 0))
+		not s.card_play.play_building(CardFactory.fortress_wall(), Vector2i(0, 0))
 		and s._drop_verdict(CardFactory.fortress_wall(), Vector2i(0, 0)) == "invalid")
 
 	# 3. Преграда: шаг снаружи внутрь через целое звено — стоп; изнутри наружу и снаружи вдоль — свободно

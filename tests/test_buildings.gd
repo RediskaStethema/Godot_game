@@ -42,7 +42,7 @@ func _main() -> void:
 	var dmg1: float = tower.stats["damage"]
 	var spd1: float = tower.stats["attack_speed"]
 	var h1: float = tower._visual_height()
-	var ok2 = battle._play_building_card(CardFactory.bolter_turret(), Vector2i(0, 0))
+	var ok2 = battle.card_play.play_building(CardFactory.bolter_turret(), Vector2i(0, 0))
 	_check("турель → ур.2: +25% урона, +20% скорострельности", ok2 and tower.card.building_level == 2 \
 		and is_equal_approx(tower.stats["damage"], dmg1 * 1.25) and is_equal_approx(tower.stats["attack_speed"], spd1 * 1.2))
 	var glows: Array = tower.get_children().filter(func(c): return c.get_script() != null \
@@ -51,8 +51,8 @@ func _main() -> void:
 	_check("улучшение: свет и вспышка, кадры 2-го уровня, здание выше прежнего (%.0f → %.0f px)" % [
 		h1, tower._visual_height()], glows.size() == 2 and tower.sprite.animation == &"idle_2" \
 		and tower._visual_height() >= h1 * 1.03 and not tower.sprite.material.get_shader_parameter("flash"))   # вспышка погасла (общий материал — без неё)
-	var ok3 = battle._play_building_card(CardFactory.bolter_turret(), Vector2i(0, 0))
-	var ok4 = battle._play_building_card(CardFactory.bolter_turret(), Vector2i(0, 0))
+	var ok3 = battle.card_play.play_building(CardFactory.bolter_turret(), Vector2i(0, 0))
+	var ok4 = battle.card_play.play_building(CardFactory.bolter_turret(), Vector2i(0, 0))
 	_check("турель → ур.3 (множители копятся), 4-я карта не тратится", ok3 and not ok4 \
 		and tower.card.building_level == 3 and is_equal_approx(tower.stats["damage"], dmg1 * 1.25 * 1.25))
 	_check("база карты не меняется", is_equal_approx(tower.card.building_stats["damage"], dmg1))
@@ -62,7 +62,7 @@ func _main() -> void:
 	var hp1: float = wall.stats["wall_hp"]
 	_check("клетка стены из сохранения свободна, здания-узла стены нет", battle._get_player_building_at(Vector2i(1, 1)) == null \
 		and bm.player_buildings.values().has(bm.WALL_TILE))
-	battle._play_building_card(CardFactory.fortress_wall(), Vector2i(2, 2))
+	battle.card_play.play_building(CardFactory.fortress_wall(), Vector2i(2, 2))
 	_check("стена → ур.2: щит +50%, звенья +50%", wall.card.building_level == 2 \
 		and is_equal_approx(wall.get_citadel_shield(), shield1 * 1.5) and is_equal_approx(wall.stats["wall_hp"], hp1 * 1.5))
 	_check("уровень на карте в забеге (сохранится)", bm.player_buildings.keys().any(
@@ -79,7 +79,10 @@ func _main() -> void:
 	_check("щит цитадели в бою — по уровню стены", bm.citadel_shield <= shield_expected + 0.01 \
 		and bm.citadel_shield > 0.0)
 
-	# Неживые ряды уровня (пакет — копии одного кадра) оживляет код: стойка дышит, выстрел — отдача
+	# Неживые ряды уровня (пакет — копии одного кадра) оживляет код: стойка дышит, выстрел — отдача.
+	# У турели с 06.11.2026 ряды уровня живые (свои листы) — неживыми их помечает сам тест, потом метка возвращается
+	var static_was = tower.sprite.sprite_frames.get_meta("level_static", [])
+	tower.sprite.sprite_frames.set_meta("level_static", ["idle_3", "attack_3"])
 	var ys := []
 	for i in 12:
 		ys.append(tower.sprite.scale.y / tower._level_k)
@@ -94,6 +97,7 @@ func _main() -> void:
 		await process_frame
 	_check("неживой ряд уровня: стойка дышит (%.3f..%.3f), выстрел — отдача (%.1f px)" % [ys.min(), ys.max(), kicked],
 		ys.max() - ys.min() > 0.01 and kicked > 1.0)
+	tower.sprite.sprite_frames.set_meta("level_static", static_was)
 
 	bm.stop_battle()
 

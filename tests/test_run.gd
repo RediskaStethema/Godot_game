@@ -79,8 +79,8 @@ func _main() -> void:
 	var bm = root.get_node("BattleManager")
 	var em = root.get_node("EconomyManager")
 	var rm = root.get_node("RunManager")
-	# Цепочка: 15 волн, перед каждой магазин, мини-босс на 5 и 10, босс на 15,
-	# события после волн RunMapData.EVENT_AFTER_WAVES (перед магазином следующей)
+	# Цепочка: 15 волн; перед 1-й волной и после событий — магазин, перед остальными — выбор карты (pick),
+	# мини-босс на 5 и 10, босс на 15, события после волн RunMapData.EVENT_AFTER_WAVES (перед магазином следующей)
 	rm.new_run(12345)
 	var seq := []
 	for n in rm.map.nodes:
@@ -93,7 +93,8 @@ func _main() -> void:
 		var expect_next = [] if i == nodes.size() - 1 else [i + 1]
 		if n.next != expect_next: ok_chain = false
 		if n.is_battle():
-			if i == 0 or nodes[i - 1].type != "shop": ok_chain = false
+			var want_before := "start_pick" if n.wave == 1 else "shop" if (n.wave - 1) in RunMapData.EVENT_AFTER_WAVES else "pick"
+			if i == 0 or nodes[i - 1].type != want_before: ok_chain = false
 			var expect_type = "boss" if n.wave == 15 else ("miniboss" if n.wave in [5, 10] else "battle")
 			if n.type != expect_type: ok_chain = false
 			if n.wave in RunMapData.EVENT_AFTER_WAVES and (nodes[i + 1].type != "event" or nodes[i + 2].type != "shop"):

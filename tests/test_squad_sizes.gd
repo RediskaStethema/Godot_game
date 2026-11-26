@@ -49,9 +49,9 @@ func _main() -> void:
 	# 3. Броня Космодесанта и техника — ×1.1 к росту, люди — прежние
 	var ok_scale = true
 	for id in UnitFactory.ARMOURED_UNITS:
-		ok_scale = ok_scale and absf(UnitFactory.create(id).sprite_scale - UF.call(id).sprite_scale * 1.1) < EPS
+		ok_scale = ok_scale and absf(UnitFactory.create(id).sprite_scale - UF.call(id).sprite_scale * 1.1 * UnitFactory.UNIT_SCALE) < EPS
 	for id in ["scout_marine", "chaos_cultist", "chaos_marine"]:
-		ok_scale = ok_scale and absf(UnitFactory.create(id).sprite_scale - UF.call(id).sprite_scale) < EPS
+		ok_scale = ok_scale and absf(UnitFactory.create(id).sprite_scale - UF.call(id).sprite_scale * UnitFactory.UNIT_SCALE) < EPS
 	_check("рост: броня и техника ×1.1, Scout и Хаос — прежние", ok_scale and not "scout_marine" in UnitFactory.ARMOURED_UNITS)
 
 	# 4. Старое сохранение: одиночка ур.1 → пара + боец уровня, доли HP те же; пехота — как раньше
@@ -83,20 +83,53 @@ func _main() -> void:
 	await process_frame
 	await process_frame
 	var squad = root.get_node("SquadRegistry").get_alive_squads_of_team(0)[0]
-	var played: bool = scene._play_squad_card(tac_card, Vector2i(1, 1))
+	var played: bool = scene.card_play.play_squad(tac_card, Vector2i(1, 1))
 	var ratio: float = squad.soldiers[0].current_hp / squad.soldiers[0].max_hp
 	_check("улучшение: ур. %d, бойцов %d из %d, раненый 0.5 → %.2f (с учётом +20%% HP уровня)" % [d5.squad_level,
 		squad.soldiers.size(), d5.squad_size, ratio],
 		played and d5.squad_level == 1 and d5.squad_size == 11 and squad.soldiers.size() == 11 and ratio > 0.6)
 	d5.squad_level = UnitFactory.MAX_SQUAD_LEVEL
 	squad.soldiers[0].current_hp = squad.soldiers[0].max_hp * 0.2
-	var healed: bool = scene._play_squad_card(tac_card, Vector2i(1, 1))
+	var healed: bool = scene.card_play.play_squad(tac_card, Vector2i(1, 1))
 	var after: float = squad.soldiers[0].current_hp / squad.soldiers[0].max_hp
 	for s in squad.soldiers:
 		s.current_hp = s.max_hp
-	var wasted: bool = scene._play_squad_card(tac_card, Vector2i(1, 1))
+	var wasted: bool = scene.card_play.play_squad(tac_card, Vector2i(1, 1))
 	_check("на максимуме — лечение 0.2 → %.2f; здоров — карта не тратится" % after,
 		healed and absf(after - 0.5) < EPS and not wasted)
 	scene.queue_free()
 	bm.reset_run()
+	_check_formations()
 	quit()
+
+# Строй (решение пользователя 11.11.2026): ноги всех бойцов — внутри ромба своей клетки, бойцы не стоят
+# друг на друге (рядом по x — на полширины модели, иначе по y — на пятую часть роста), первый — ближе к врагу
+func _check_formations() -> void:
+	var squad_script = load("res://scripts/battle/Squad.gd")
+	var ids: Array = UnitFactory.SPLIT_UNITS + UnitFactory.PAIR_UNITS + ["chaos_champion"]
+	var bad: Array = []
+	var widths: Dictionary = {}
+	for id in ids:
+		var d: UnitData = UnitFactory.create(id)
+		var w: float = squad_script.model_width(d)
+		var h: float = 31.0 * d.sprite_scale
+		widths[id] = snappedf(w, 0.1)
+		var half: Vector2 = squad_script.formation_half_size(w)
+		for team_sign in [1.0, -1.0]:
+			var fwd: Vector2 = IsoGrid.advance_direction() * team_sign
+			# Пехота — до 15 бойцов (9 + 3 × 2), пары — до 5
+			var max_n: int = 15 if id in UnitFactory.SPLIT_UNITS else 5
+			for n in range(2, max_n + 1):
+				var pts: Array = squad_script.formation_offsets(n, w, fwd)
+				var ok: bool = pts.size() == n
+				for i in pts.size():
+					var p: Vector2 = pts[i]
+					ok = ok and absf(p.x) / half.x + absf(p.y) / half.y <= 1.001
+					ok = ok and p.dot(fwd) <= pts[0].dot(fwd) + 0.5
+					for j in range(i + 1, pts.size()):
+						var q: Vector2 = pts[j]
+						ok = ok and (absf(p.x - q.x) >= 0.45 * w or absf(p.y - q.y) >= 0.2 * h)
+				if not ok:
+					bad.append("%s×%d%s" % [id, n, "" if team_sign > 0 else " враг"])
+	_check("строй: внутри клетки, не друг на друге, первый к врагу; ширины %s; плохо %s" % [widths, bad.slice(0, 8)],
+		bad.is_empty())

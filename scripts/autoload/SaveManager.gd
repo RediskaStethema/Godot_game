@@ -14,7 +14,7 @@ extends Node
 # сразу начинается заново; ход самой схватки не сохраняется.
 const SAVE_PATH: String = "user://run_save.json"
 # v2 — состояние по системам; сохранения v1 не читаются
-const SAVE_VERSION: int = 2
+const SAVE_VERSION: int = 3
 const SYSTEMS: Array[String] = ["RunManager", "EconomyManager", "SynergyManager", "BattleManager", "ShopManager", "MetaProgress"]
 
 # Путь файла; tests/test_save.gd подменяет его на свой, чтобы не трогать сохранение игрока
@@ -68,7 +68,7 @@ func delete_save() -> void:
 		print("SaveManager: сохранение удалено")
 
 func save_run() -> bool:
-	if not enabled or RunManager.map == null or RunManager.run_won:
+	if not enabled or RunManager.map == null or RunManager.run_won or RunManager.test_mode:
 		return false
 	var data = {"version": SAVE_VERSION}
 	for system in SYSTEMS:

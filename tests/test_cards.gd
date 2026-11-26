@@ -125,15 +125,15 @@ func _main() -> void:
 	# 4. Emergency Reinforcements: случайный Common отряд на пустую клетку, на занятую — нет
 	var free_tile = Vector2i(2, 2)
 	var occupied_tile = halo_squad.tile
-	var ok_free = battle._play_event_card(CardFactory.emergency_reinforcements(), free_tile)
+	var ok_free = battle.card_play.play_event(CardFactory.emergency_reinforcements(), free_tile)
 	var spawned = _squad_at(free_tile)
-	var ok_busy = battle._play_event_card(CardFactory.emergency_reinforcements(), occupied_tile)
+	var ok_busy = battle.card_play.play_event(CardFactory.emergency_reinforcements(), occupied_tile)
 	_check("подкрепление: Common отряд полным составом; на занятую клетку — нет", ok_free and spawned != null \
 		and UnitFactory.create(spawned.data.factory_id).rarity == "common" \
 		and spawned.soldiers.size() == spawned.data.squad_size and not ok_busy)
 
 	# 5. Orbital Strike: заряжен → сохраняется → в начале боя бьёт по скоплению
-	_check("удар: карта заряжает событие", battle._play_event_card(CardFactory.orbital_strike(), free_tile) \
+	_check("удар: карта заряжает событие", battle.card_play.play_event(CardFactory.orbital_strike(), free_tile) \
 		and Array(bm.armed_events) == ["orbital_strike"])
 	var saved = bm.save_state()
 	bm.armed_events.clear()

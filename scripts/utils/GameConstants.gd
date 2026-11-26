@@ -1,6 +1,18 @@
 class_name GameConstants
 extends RefCounted
 
+# --- Валюта ---
+# Валюта в текстах — «монеты» (решение пользователя 12.11.2026: «убери Req, оставь монеты»; в коде прежнее имя
+# requisition). coins(5) → «5 монет», coins(21) → «21 монета», coins(3) → «3 монеты»
+static func coins(n: int) -> String:
+	var a := absi(n)
+	var word := "монет"
+	if a % 10 == 1 and a % 100 != 11:
+		word = "монета"
+	elif a % 10 in [2, 3, 4] and not (a % 100 in [12, 13, 14]):
+		word = "монеты"
+	return "%d %s" % [n, word]
+
 # --- Battle ---
 const FIXED_TICK: float =0.1    # используется в BattleManager и Unit
 

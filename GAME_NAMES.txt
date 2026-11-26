@@ -1,0 +1,180 @@
+WH40KINGS — весь нейминг игры
+Собрано из кода 13.11.2026 (CardFactory, UnitFactory, EnemyWaves, Chapters, ChaosGods, Difficulty,
+RunEvents, SynergyManager, MetaProgress, FactionTheme). Формат: id в коде — название в игре.
+
+====================================================================
+1. РАСЫ
+====================================================================
+space_marines  — Космодесант
+chaos          — Хаос
+tyranids       — Тираниды (закрыта, «скоро»)
+
+====================================================================
+2. ОРДЕНЫ КОСМОДЕСАНТА и БОГИ ХАОСА (выбор на весь забег)
+====================================================================
+ultramarines    — Ultramarines
+blood_angels    — Blood Angels
+imperial_fists  — Imperial Fists
+space_wolves    — Space Wolves
+salamanders     — Salamanders
+
+khorne          — Khorne
+nurgle          — Nurgle
+tzeentch        — Tzeentch
+slaanesh        — Slaanesh
+
+====================================================================
+3. СЛОЖНОСТЬ
+====================================================================
+1 — Неофит
+2 — Боевой брат
+3 — Ветеран
+4 — Сержант
+5 — Капитан
+6 — Магистр ордена
+7 — Экстерминатус
+
+====================================================================
+4. КАРТЫ ОТРЯДОВ — КОСМОДЕСАНТ
+====================================================================
+Карта (название карты)      Боец (unit_name)
+Tactical Squad              Tactical Marine
+Assault Squad               Assault Marine
+Scout Squad                 Scout Marine
+Devastator Squad            Devastator
+Terminator                  Terminator
+Apothecary                  Apothecary
+Librarian                   Librarian
+Chaplain                    Chaplain
+Land Speeder                Land Speeder
+Dreadnought                 Dreadnought
+Chapter Master              Chapter Master
+
+Особые отряды орденов:
+Victrix Honour Guard        (Ultramarines)
+Sanguinary Guard            (Blood Angels)
+Centurion Devastators       (Imperial Fists)
+Thunderwolf Cavalry         (Space Wolves)
+Firedrakes                  (Salamanders)
+
+====================================================================
+5. КАРТЫ ОТРЯДОВ — ХАОС
+====================================================================
+Карта (название карты)      Боец (unit_name)
+Cultists                    Chaos Cultist
+Chaos Marines               Chaos Marine
+Raptors                     Raptor
+Havocs                      Havoc
+Plague Marines              Plague Marine
+Chaos Champions             Chaos Champion
+Hellbrute                   Hellbrute
+Chaos Lord                  Chaos Lord
+
+Особые отряды богов:
+Khorne Berzerkers           (Khorne)
+Plaguebearers               (Nurgle)
+Rubric Marines              (Tzeentch)
+Noise Marines               (Slaanesh)
+
+====================================================================
+6. ЗДАНИЯ (папка assets/sprites/buildings/<папка>)
+====================================================================
+Общие — Космодесант / Хаос:
+tower           — Bolter Turret        / Heretic Autocannon   (chaos/tower)
+artillery       — Thunderfire Cannon   / Hellfire Mortar      (chaos/artillery)
+barracks        — Barracks             / Cult Shrine          (chaos/barracks)
+wall            — Fortress Wall        / Spiked Barricade     (chaos/wall)
+generator       — Plasma Generatorium  / Dark Altar           (chaos/generator)
+apothecarion    — Apothecarion         / Warp Rift            (chaos/apothecarion)
+
+Особые здания орденов:
+codex_bastion   — Codex Bastion        (Ultramarines)
+blood_chalice   — Blood Chalice        (Blood Angels)
+fists_bastion   — Bastion              (Imperial Fists)
+wolf_totem      — Wolf Totem           (Space Wolves)
+vulkan_forge    — Vulkan's Forge       (Salamanders)
+
+Особые здания богов:
+skull_altar     — Altar of Skulls      (Khorne)
+plague_cauldron — Plague Cauldron      (Nurgle)
+warp_spire      — Warp Spire           (Tzeentch)
+pleasure_shrine — Shrine of Excess     (Slaanesh)
+
+====================================================================
+7. КАРТЫ УЛУЧШЕНИЙ (Космодесант / Хаос)
+====================================================================
+Blessed Armour         / Daemonic Armour
+Battle Fury            / Blood Rage
+Iron Halo              / Warp Ward
+Combat Stimms          / Combat Drugs
+Chapter Banner         / Icon of Chaos
+
+Только Хаос — благословения богов:
+Blessing of Khorne
+Blessing of Nurgle
+Blessing of Tzeentch
+Blessing of Slaanesh
+Chaos Gods' Blessing   (смена бога отряда)
+
+====================================================================
+8. КАРТЫ СОБЫТИЙ (Космодесант / Хаос)
+====================================================================
+Emergency Reinforcements / Cult Uprising
+Orbital Strike           / Warp Strike
+
+====================================================================
+9. ВРАГИ
+====================================================================
+Против Космодесанта (Хаос):
+Chaos Cultist, Chaos Marine, Raptor, Havoc, Plague Marine — обычные отряды
+Chaos Champion — элита
+Hellbrute — мини-босс
+Chaos Lord — прежний босс
+
+Против Хаоса (Космодесант):
+Tactical Marine, Assault Marine, Devastator, Scout Marine — обычные отряды
+Dreadnought + Terminator Veteran — мини-босс
+Chapter Master — прежний босс
+
+====================================================================
+10. ФИНАЛЬНЫЕ БОССЫ (волна 15)
+====================================================================
+Против Космодесанта — демоны-примархи:
+daemon_angron       — Angron            «Ангрон, демон-примарх Кхорна»
+daemon_mortarion    — Mortarion         «Мортарион, демон-примарх Нургла»
+daemon_magnus       — Magnus the Red    «Магнус Красный, демон-примарх Тзинча»
+daemon_fulgrim      — Fulgrim           «Фулгрим, демон-примарх Слаанеш»
+
+Против Хаоса — примархи-лоялисты:
+primarch_guilliman  — Roboute Guilliman «Робаут Жиллиман, примарх Ультрамаринов»
+primarch_sanguinius — Sanguinius        «Сангвиний, примарх Кровавых Ангелов»
+primarch_dorn       — Rogal Dorn        «Рогал Дорн, примарх Имперских Кулаков»
+primarch_russ       — Leman Russ        «Леман Русс, примарх Космических Волков»
+primarch_vulkan     — Vulkan            «Вулкан, примарх Саламандр»
+
+====================================================================
+11. СИНЕРГИИ
+====================================================================
+Космодесант:  ×3 — Astartes Brotherhood,  ×6 — For the Emperor
+Хаос:         ×3 — Path to Glory,         ×6 — Black Crusade
+Элита:        ×2 — Veteran Command
+Ряды королевства: Передний ряд, Задний ряд
+
+====================================================================
+12. СОБЫТИЯ ЗАБЕГА (между волнами 4, 8, 12, 14)
+====================================================================
+Тайник Муниторума
+Техножрецы Марса
+Сигнал бедствия
+Реликвия ордена
+Полевой госпиталь
+Варп-шторм
+Культисты в тылу
+Экстренное подкрепление
+Трофеи с поля боя
+
+====================================================================
+13. АРСЕНАЛ (мета-прогрессия за Славу)
+====================================================================
+Ветки: Муниторум, Бастион, Воинство, Командование
+Пассивки: Резервы Ордена, Освящённые стены, Ветеранская выучка, Связи в Муниторуме

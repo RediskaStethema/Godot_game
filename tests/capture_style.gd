@@ -39,7 +39,7 @@ func _shot(name: String) -> void:
 	root.get_viewport().get_texture().get_image().save_png(path)
 	print("SHOT ", path)
 
-# Отряд как из карты (BattleScene._play_squad_card): состав — unit_count карты, все с полным HP
+# Отряд как из карты (BattleCardPlay.play_squad): состав — unit_count карты, все с полным HP
 func _squad(card_id: String) -> UnitData:
 	var card = CardFactory.create(card_id)
 	var d := UnitFactory.create(card.unit_factory_id)
@@ -58,9 +58,10 @@ func _setup_run(faction: String, wave: int, battle: bool) -> void:
 	rm.player_faction = faction
 	bm.reset_run()
 	rm.new_run(7)
+	# у шага магазина волна не проставлена — магазин волны = шаг перед её боем
 	for n in rm.map.nodes:
-		if n.wave == wave and n.is_battle() == battle:
-			rm.current_node_id = n.id
+		if n.wave == wave and n.is_battle():
+			rm.current_node_id = n.id if battle else n.id - 1
 			rm.current_completed = false
 			break
 	root.get_node("EconomyManager").round_number = wave
@@ -103,7 +104,7 @@ func _battle(faction: String) -> void:
 	if faction == "space_marines":
 		# Баннеры итога (подложки пакета интерфейса) и экран расширения — поверх боя
 		for r in [["ПОБЕДА", true, "result_victory"], ["ПОРАЖЕНИЕ", false, "result_defeat"]]:
-			current_scene.hud.show_result(r[0], "+24 Req
+			current_scene.hud.show_result(r[0], "+24 монеты
 Лучший отряд: Tactical Squad — 412 урона · Потери: 6 из 31 бойцов", r[1])
 			await create_timer(0.4, true, false, true).timeout
 			await _shot(r[2])
@@ -178,23 +179,52 @@ func _main() -> void:
 		dialog.queue_free()
 		await _frames(2)
 
-	_setup_run("space_marines", 3, false)
+	# Стартовый выбор (волна 1, вместо магазина): 6 карт рубашкой вверх, три берутся вслепую
+	_setup_run("space_marines", 1, false)
+	change_scene_to_file("res://scenes/battle/BattleScene.tscn")
+	await _frames(10)
+	await create_timer(1.6, true, false, true).timeout   # выкладка 6 карт кончилась
+	await _shot("start_pick")
+	var start_pick = current_scene.shop
+	start_pick._on_start_taken(1)
+	start_pick._on_start_taken(4)
+	await create_timer(0.9, true, false, true).timeout   # переворот кончился
+	await _shot("start_pick_taken")
+
+	# Магазин (после события 4-й волны) — окно поверх поля (BattleScene.shop): рука, обновление набора
+	_setup_run("space_marines", 5, false)
 	var hand: Array = ["tactical_squad", "devastator_squad", "fortress_wall", "iron_halo", "dreadnought_card"]
 	for id in hand:
 		var c = CardFactory.create(id)
 		if c:
 			root.get_node("BattleManager").pending_cards.append(c)
-	change_scene_to_file("res://scenes/shop/ShopScene.tscn")
+	change_scene_to_file("res://scenes/battle/BattleScene.tscn")
 	await _frames(20)
 	await _shot("shop")
 	# Обновление набора: карты переворачиваются из рубашки (ShopSlot.reveal)
-	current_scene._on_reroll_pressed()
+	current_scene.shop._on_reroll_pressed()
 	await create_timer(0.18).timeout
 	await _shot("shop_backs")
 	await create_timer(0.27).timeout
 	await _shot("shop_flip")
 	await create_timer(1.0).timeout
 	await _shot("shop_reroll")
+
+	# Выбор карты (волна 3, шаг PICK) — окно поверх поля (CardPickScene, embedded): выкладка, открытые, описание
+	_setup_run("space_marines", 3, false)
+	change_scene_to_file("res://scenes/battle/BattleScene.tscn")
+	await _frames(10)
+	await create_timer(1.3, true, false, true).timeout   # выкладка 4 карт кончилась
+	await _shot("pick")
+	var pick = current_scene.shop
+	pick._on_back_clicked(0)
+	pick._on_back_clicked(1)
+	await create_timer(0.9, true, false, true).timeout   # переворот кончился
+	await _shot("pick_open")
+	pick._on_card_hover(0, true)
+	await _frames(3)
+	await _shot("pick_info")
+	pick._on_card_hover(0, false)
 
 	await _battle("space_marines")
 	await _battle("chaos")

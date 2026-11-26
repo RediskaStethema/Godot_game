@@ -14,7 +14,10 @@
   (наибольшее IoU масок нижних ALIGN_ZONE силуэта). Building ставит спрайт уровня со сдвигом, ствол — тоже.
 - Высота (решение пользователя 26.10.2026: улучшенное здание чуть выше прежнего уровня, пусть и шире):
   metadata/level_scale {уровень: k} — масштаб кадров уровня, чтобы рост над точкой основания был не
-  ниже LEVEL_GROWTH высоты прежнего уровня (часть зданий художник нарисовал на 2/3 уровне ниже 1-го).
+  ниже LEVEL_GROWTH высоты прежнего уровня (часть зданий художник нарисовал на 2/3 уровне ниже 1-го), но
+  основание (самая широкая строка нижних 40% силуэта) не шире MAX_BASE_GROWTH основания 1-го уровня — иначе
+  здание вылезает на соседние клетки (06.11.2026: Кодекс-бастион ×2.2–2.3 — основание 1.6–1.75 прежнего,
+  Кузня Вулкана — 1.45–1.5); предел важнее роста.
 - Неживые ряды (пакет 26.10.2026: стойка — копии одного кадра, выстрел и пополнение — неподвижное здание
   с наложенной вспышкой 1-го уровня): движение «тела» здания между кадрами (непрозрачные пиксели без огней и
   свечения) меньше STATIC_MOTION % — ряд в metadata/level_static, Building оживляет его кодом (дыхание стойки,
@@ -47,8 +50,18 @@ ALIGN_RANGE = (90, 14)   # поиск сдвига ± px по x, y
 ALPHA = 200
 HEIGHT_ALPHA = 128
 LEVEL_GROWTH = 1.06      # уровень выше прежнего на 6%
+# Сдвиг постамента вручную — где IoU ошибается: уровень нарисован намного мельче 1-го, маленький постамент
+# «прилипает» к краю большого (06.11.2026: Кодекс-бастион 2-го уровня +36 px вместо 0 — съезжал с клетки,
+# 3-го −38 вместо −27); значения — по центру постамента (нижние 35% силуэта)
+SHIFT_OVERRIDE = {"codex_bastion": {2: (0, 0), 3: (-27, 3)}}
+MAX_BASE_GROWTH = 1.2    # основание уровня — не шире 1.2 основания 1-го уровня (0.96 клетки при SPRITE_WIDTH 0.8)
 SAT_RATIO = (0.6, 1.3)
 STATIC_MOTION = 20.0     # % пикселей тела, сменившихся между кадрами ряда: меньше — ряд неживой
+# Ряды, нарисованные живыми, но с малым движением корпуса — не оживлять кодом (07.11.2026, проверено глазами:
+# у Казарм 3-го уровня живут огни и знамёна, у Hellfire Mortar 2-го — свечение пасти и свой выстрел с отдачей;
+# движение 17–21% у порога STATIC_MOTION, код добавлял «дыхание» поверх настоящей анимации, а соседний уровень
+# той же мортиры с 19% не помечался — уровни вели себя по-разному)
+LIVE_ROWS = {"barracks": ["idle_3"], "hellfire_mortar": ["idle_2", "attack_2"]}
 CALM = (0.7, 0.75)       # тело — яркость и насыщенность ниже (огни, вспышки, свечение не в счёт)   # пределы множителей насыщенности золота / синего
 
 
@@ -86,6 +99,19 @@ def base_y(path):
         if len(xs) and xs[-1] - xs[0] + 1 > best:
             best = xs[-1] - xs[0] + 1
     return bottom - best / 4.0
+
+
+def base_width(path):
+    """Ширина основания, как в base_y / Building.find_base: самая широкая строка нижних 40% силуэта."""
+    a = np.array(Image.open(path).convert("RGBA"))[..., 3] > 127
+    ys = np.nonzero(a)[0]
+    top, bottom = ys.min(), ys.max() + 1
+    best = 0
+    for y in range(bottom - 1, max(top, bottom - int((bottom - top) * 0.4)) - 1, -1):
+        xs = np.nonzero(a[y])[0]
+        if len(xs):
+            best = max(best, xs[-1] - xs[0] + 1)
+    return float(best)
 
 
 def height_of(path, ground):
@@ -167,6 +193,15 @@ def strip_levels(dst, text):
     return re.sub(r"load_steps=\d+", f"load_steps={n + 1}", text)
 
 
+def to_canvas(img, canvas):
+    """Кадр пакета — на холст 1-го уровня, если тот расширен (по бокам поровну, сверху): низ и середина — на месте."""
+    if img.size == canvas:
+        return img
+    c = Image.new("RGBA", canvas)
+    c.paste(img, ((canvas[0] - img.width) // 2, canvas[1] - img.height), img)
+    return c
+
+
 def add_levels(name, src, dst):
     tres = dst / "frames.tres"
     text = strip_levels(dst, tres.read_text(encoding="utf-8"))
@@ -179,7 +214,8 @@ def add_levels(name, src, dst):
     params = anim_params(text)
     ref_files = sorted(p for a in params for p in (dst / a).glob("*.png"))
     res = "res://" + dst.as_posix()
-    ext, anims, shifts, heights, static = [], [], {}, {}, []
+    ext, anims, shifts, heights, static, bases = [], [], {}, {}, [], {}
+    canvas = Image.open(dst / "idle" / "0.png").size   # кадры уровня — на холст 1-го (его могли расширить)
     ground = base_y(dst / "idle" / "0.png")   # основание 1-го уровня; у кадров уровня — со сдвигом
     heights[1] = height_of(dst / "idle" / "0.png", ground)
     for level in sorted({lv for _, lv in groups}):
@@ -194,7 +230,7 @@ def add_levels(name, src, dst):
             out.mkdir()
             refs = []
             for i in range(len(groups[(anim, level)])):
-                next(graded).save(out / f"{i}.png")
+                to_canvas(next(graded), canvas).save(out / f"{i}.png")
                 (out / f"{i}.png.import").write_text(IMPORT_PARAMS, encoding="utf-8")
                 ext.append(f'[ext_resource type="Texture2D" path="{res}/{row}/{i}.png" id="{row}_{i}"]')
                 refs.append(f'{{\n"duration": 1.0,\n"texture": ExtResource("{row}_{i}")\n}}')
@@ -203,20 +239,28 @@ def add_levels(name, src, dst):
                          f'"speed": {speed}\n}}')
             if anim == "idle":
                 shifts[level], score = shift_to(dst / "idle" / "0.png", out / "0.png")
+                if level in SHIFT_OVERRIDE.get(name, {}):
+                    shifts[level], score = SHIFT_OVERRIDE[name][level], -1.0
                 heights[level] = height_of(out / "0.png", ground - shifts[level][1])
+                bases[level] = base_width(out / "0.png")
                 print(f"  уровень {level}: сдвиг {shifts[level]} (IoU постамента {score:.2f})")
             motion = body_motion(groups[(anim, level)])
-            if motion < STATIC_MOTION:
+            dead = motion < STATIC_MOTION and row not in LIVE_ROWS.get(name, [])
+            if dead:
                 static.append(row)
             print(f"  {row}: {len(groups[(anim, level)])} кадров, {speed} к/с, движение {motion:.0f}%"
-                  + (" — неживой, оживит код" if motion < STATIC_MOTION else ""))
+                  + (" — неживой, оживит код" if dead else " — живой (LIVE_ROWS)" if motion < STATIC_MOTION else ""))
     if not anims:
         return
     scales, prev = {}, heights[1]
     for level in sorted(shifts):
         scales[level] = max(1.0, prev * LEVEL_GROWTH / heights[level])
+        cap = MAX_BASE_GROWTH * base_width(dst / "idle" / "0.png") / max(bases[level], 1.0)
+        capped = scales[level] > cap
+        scales[level] = min(scales[level], cap)
         prev = heights[level] * scales[level]
-        print(f"  уровень {level}: высота {heights[level]:.0f} px, масштаб x{scales[level]:.2f}")
+        print(f"  уровень {level}: высота {heights[level]:.0f} px, масштаб x{scales[level]:.2f}"
+              + (f" (предел основания ×{MAX_BASE_GROWTH})" if capped else ""))
     m = re.search(r"load_steps=(\d+)", text)
     text = text.replace(m.group(0), f"load_steps={int(m.group(1)) + len(ext)}")
     meta = ("metadata/level_shift = {" + ", ".join(f"{lv}: Vector2({dx}, {dy})" for lv, (dx, dy) in sorted(shifts.items()))

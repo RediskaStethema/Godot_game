@@ -26,7 +26,7 @@ const CARD_NAMES = {
 const EVENTS: Array = [
 	{
 		"id": "munitorum_cache",
-		"title": "Тайник Муниторума",
+		"title": "Кладовая Плюшкина",
 		"text": "Разведчики нашли нетронутый склад Имперской Гвардии. Унести всё не выйдет.",
 		"options": [
 			{"label": "Забрать припасы", "gain": [{"req": 10}]},
@@ -35,8 +35,8 @@ const EVENTS: Array = [
 	},
 	{
 		"id": "tech_priests",
-		"title": "Техножрецы Марса",
-		"text": "Адепты Механикус предлагают помощь. Дух машины требует подношений.",
+		"title": "Послы Ретортариев",
+		"text": "Послы Ретортариев предлагают помощь. Гомункул в колбе требует подношений.",
 		"options": [
 			{"label": "Ремонт цитадели", "gain": [{"heal": 250}]},
 			{"label": "Освятить орудия", "cost_req": 8, "gain": [{"building_level": 1}]},
@@ -45,7 +45,7 @@ const EVENTS: Array = [
 	},
 	{
 		"id": "distress_signal",
-		"title": "Сигнал бедствия",
+		"title": "Зов из Ночи",
 		"text": "Слабый сигнал с подбитого «Громового ястреба». Это может быть ловушкой.",
 		"options": [
 			{"label": "Выслать отряд", "chance": 0.6, "gain": [{"card": {"rarity": "rare"}}],
@@ -55,7 +55,7 @@ const EVENTS: Array = [
 	},
 	{
 		"id": "chapter_relic",
-		"title": "Реликвия ордена",
+		"title": "Мощи Криспина",
 		"text": "В руинах капеллы найден реликварий павшего брата-капитана.",
 		"options": [
 			{"label": "Вручить достойным", "gain": [{"level_squad": 1}]},
@@ -64,7 +64,7 @@ const EVENTS: Array = [
 	},
 	{
 		"id": "field_hospital",
-		"title": "Полевой госпиталь",
+		"title": "Лазарет брата-лекаря",
 		"text": "Апотекарии развернули госпиталь у линии фронта. Медикаментов мало.",
 		"options": [
 			{"label": "Вылечить армию", "cost_req": 6, "gain": [{"heal_army": 1}]},
@@ -73,26 +73,26 @@ const EVENTS: Array = [
 	},
 	{
 		"id": "warp_storm",
-		"title": "Варп-шторм",
-		"text": "Над полем разразился варп-шторм. Он терзает всех — и своих, и чужих.",
+		"title": "Гиадова буря",
+		"text": "Над полем разразилась Гиадова буря. Он терзает всех — и своих, и чужих.",
 		"options": [
 			{"label": "Идти сквозь шторм", "cost_hp": 100,
-				"gain": [{"enemy_hp": 0.8, "note": "Варп-шторм измотал врага: −20% HP"}]},
+				"gain": [{"enemy_hp": 0.8, "note": "Гиадова буря измотала врага: −20% HP"}]},
 			{"label": "Укрыться", "gain": []},
 		],
 	},
 	{
 		"id": "cultists",
-		"title": "Культисты в тылу",
+		"title": "Маски за стеной",
 		"text": "В тылу объявились еретики. Если их не выжечь, они придут на помощь врагу.",
 		"options": [
 			{"label": "Выжечь ересь", "cost_req": 8, "gain": []},
-			{"label": "Не отвлекаться", "gain": [{"enemy_hp": 1.2, "note": "Культисты усилили врага: +20% HP"}]},
+			{"label": "Не отвлекаться", "gain": [{"enemy_hp": 1.2, "note": "Маски усилили врага: +20% HP"}]},
 		],
 	},
 	{
 		"id": "reinforcements",
-		"title": "Экстренное подкрепление",
+		"title": "Подмога Сечи",
 		"text": "Орбитальный транспорт сбросил подкрепление в зону высадки.",
 		"options": [
 			{"label": "Принять отряд", "gain": [{"card": {"rarity": "common", "card_type": "squad"}}]},
@@ -101,7 +101,7 @@ const EVENTS: Array = [
 	},
 	{
 		"id": "battlefield_spoils",
-		"title": "Трофеи с поля боя",
+		"title": "Скупка мёртвых душ",
 		"text": "После боя поле усеяно телами и оружием. Обыск займёт время.",
 		"options": [
 			{"label": "Обыскать павших", "chance": 0.5, "gain": [{"req": 18}], "fail": []},
@@ -126,7 +126,7 @@ static func for_run(seed_value: int, index: int) -> Dictionary:
 static func blocker(option: Dictionary) -> String:
 	var req: int = option.get("cost_req", 0)
 	if req > EconomyManager.requisition:
-		return "нужно %d Req" % req
+		return "нужно %s" % GameConstants.coins(req)
 	var hp: float = option.get("cost_hp", 0.0)
 	if hp > 0.0 and BattleManager.citadel_hp <= hp:
 		return "цитадель слишком слаба"
@@ -140,7 +140,7 @@ static func blocker(option: Dictionary) -> String:
 static func describe(option: Dictionary) -> String:
 	var parts: Array[String] = []
 	if option.get("cost_req", 0) > 0:
-		parts.append("−%d Req" % option["cost_req"])
+		parts.append("−%s" % GameConstants.coins(option["cost_req"]))
 	if option.get("cost_hp", 0.0) > 0.0:
 		parts.append("−%d HP цитадели" % int(option["cost_hp"]))
 	var gain: Array[String] = []
@@ -183,7 +183,7 @@ static func _effect_blocker(e: Dictionary) -> String:
 	return ""
 
 static func _effect_text(e: Dictionary) -> String:
-	if e.has("req"): return "+%d Req" % e["req"]
+	if e.has("req"): return "+%s" % GameConstants.coins(e["req"])
 	if e.has("heal"): return "+%d HP цитадели" % e["heal"]
 	if e.has("damage"): return "−%d HP цитадели" % e["damage"]
 	if e.has("card"):
@@ -198,7 +198,7 @@ static func _effect_text(e: Dictionary) -> String:
 static func _apply_effect(e: Dictionary, rng: RandomNumberGenerator) -> String:
 	if e.has("req"):
 		EconomyManager.add_requisition(e["req"])
-		return "+%d Req" % e["req"]
+		return "+%s" % GameConstants.coins(e["req"])
 	if e.has("heal"):
 		return "Цитадель восстановлена: +%d HP" % roundi(BattleManager.heal_citadel(float(e["heal"])))
 	if e.has("damage"):
@@ -247,9 +247,10 @@ static func _upgradable_buildings() -> Array:
 
 static func _give_card(rng: RandomNumberGenerator, rarity: String, card_type: String) -> String:
 	var options: Array = []
+	var hidden: Array = Tutorial.hidden_card_ids()   # обучение: орудие — только из магазина
 	for card in CardFactory.build_pool():
 		if (rarity == "" or card.rarity == rarity) and (card_type == "" or card.card_type == card_type) \
-				and MetaProgress.is_card_unlocked(card.id):   # закрытые мета-прогрессией — нет, как в магазине
+				and MetaProgress.is_card_unlocked(card.id) and not hidden.has(card.id):   # закрытые мета-прогрессией — нет, как в магазине
 			options.append(card)
 	if options.is_empty():
 		return "Ничего не нашлось"
@@ -257,6 +258,6 @@ static func _give_card(rng: RandomNumberGenerator, rarity: String, card_type: St
 	if BattleManager.pending_cards.size() >= BattleManager.MAX_HAND_SIZE:
 		var refund = EconomyManager.get_sell_price(card)
 		EconomyManager.add_requisition(refund)
-		return "Рука полна — %s обменяна на +%d Req" % [card.title, refund]
+		return "Рука полна — %s обменяна на +%s" % [card.title, GameConstants.coins(refund)]
 	BattleManager.pending_cards.append(card)
 	return "В руку: %s" % card.title

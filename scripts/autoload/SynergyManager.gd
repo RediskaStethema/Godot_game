@@ -11,21 +11,21 @@ extends Node
 # Бонусы к экономике: epic_discount — скидка на следующую Epic карту
 const SYNERGY_DEFINITIONS = {
 	"marine": [
-		{"threshold": 3, "name": "Astartes Brotherhood", "bonus": {"hp_mult": 1.15},
-			"desc": "+15% HP всем Marine"},
-		{"threshold": 6, "name": "For the Emperor", "bonus": {"damage_mult": 1.10},
-			"desc": "+10% урона всем Marine"},
+		{"threshold": 3, "name": "We Few", "bonus": {"hp_mult": 1.15},
+			"desc": "+15% HP всем Криспинцам"},
+		{"threshold": 6, "name": "More Light!", "bonus": {"damage_mult": 1.10},
+			"desc": "+10% урона всем Криспинцам"},
 	],
 	# Хаос игрока (решение пользователя 16.10.2026): те же пороги, бонусы в обратном порядке
 	"chaos": [
-		{"threshold": 3, "name": "Path to Glory", "bonus": {"damage_mult": 1.10},
-			"desc": "+10% урона всем бойцам Хаоса"},
-		{"threshold": 6, "name": "Black Crusade", "bonus": {"hp_mult": 1.15},
-			"desc": "+15% HP всем бойцам Хаоса"},
+		{"threshold": 3, "name": "Thane's Path", "bonus": {"damage_mult": 1.10},
+			"desc": "+10% урона всем Кровоподписантам"},
+		{"threshold": 6, "name": "The Second Act", "bonus": {"hp_mult": 1.15},
+			"desc": "+15% HP всем Кровоподписантам"},
 	],
 	"elite": [
-		{"threshold": 2, "name": "Veteran Command", "bonus": {"epic_discount": 1},
-			"desc": "-1 Req к следующей Epic карте"},
+		{"threshold": 2, "name": "Greymoustaches", "bonus": {"epic_discount": 1},
+			"desc": "−1 монета к цене следующей Epic карты"},
 	],
 }
 
@@ -65,6 +65,15 @@ var epic_discount_pending: int = 0
 signal synergies_changed(active: Array)
 
 # Считаем теги по бойцам (1 боец = 1 юнит, как в лимите армии)
+# Название расы синергии для игрока (тег marine / chaos — внутренний; RENAMING_MAP 17.11.2026)
+func tag_label(tag: String) -> String:
+	match tag:
+		"marine":
+			return "Криспинцы"
+		"chaos":
+			return "Кровоподписанты"
+	return tag.capitalize()
+
 func calculate_synergies(soldiers: Array) -> void:
 	tag_counts.clear()
 	active_synergies.clear()
@@ -214,14 +223,6 @@ func apply_commander_bonus(soldiers: Array) -> void:
 	for s in soldiers:
 		s.current_damage *= 1.0 + bonus
 	print("SynergyManager: командир — +%d%% урона армии" % roundi(bonus * 100.0))
-
-# Синергии, действующие на бойцов с этими тегами (без экономических)
-func get_soldier_synergy_names(tags: Array) -> Array[String]:
-	var names: Array[String] = []
-	for s in active_synergies:
-		if s["tag"] in tags and not s["bonus"].has("epic_discount"):
-			names.append(s["name"])
-	return names
 
 # -------------------------------------------------------
 # ЭКОНОМИКА

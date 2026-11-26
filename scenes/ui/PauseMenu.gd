@@ -11,6 +11,8 @@ extends CanvasLayer
 const LAYER: int = 10   # поверх UI сцены
 const QUICK_PAUSE_TOP: float = 90.0   # подпись паузы пробелом — под шапкой боя
 
+signal quick_pause_changed(on: bool)   # пауза без меню включена / снята — кнопка в шапке боя
+
 var enabled: bool = true   # выключается на экране конца забега
 var _menu: ModalOverlay = null
 var _settings: SettingsPanel = null
@@ -46,10 +48,11 @@ var _quick_paused: bool = false
 var _quick_label: Label = null
 func _set_quick_pause(on: bool) -> void:
 	_quick_paused = on
+	quick_pause_changed.emit(on)
 	get_tree().paused = on
 	AudioManager.play("pause")
 	if on and _quick_label == null:
-		_quick_label = UITheme.make_label("ПАУЗА — пробел, чтобы продолжить", "HeaderLabel")
+		_quick_label = UITheme.make_label("ПАУЗА — пробел или кнопка, чтобы продолжить", "HeaderLabel")
 		_quick_label.add_theme_color_override("font_outline_color", UITheme.OUTLINE)
 		_quick_label.add_theme_constant_override("outline_size", 8)
 		_quick_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -61,6 +64,11 @@ func _set_quick_pause(on: bool) -> void:
 	elif not on and _quick_label:
 		_quick_label.queue_free()
 		_quick_label = null
+
+# Пауза кнопкой шапки боя (то же, что пробел): только в схватке или чтобы снять уже включённую
+func toggle_quick_pause() -> void:
+	if _menu == null and enabled and (BattleManager.is_battle_running() or _quick_paused):
+		_set_quick_pause(not _quick_paused)
 
 func is_quick_paused() -> bool:
 	return _quick_paused

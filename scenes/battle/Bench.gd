@@ -48,11 +48,36 @@ func _ready() -> void:
 	cards_container.offset_right = -SIDE_MARGIN
 	cards_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cards_container.resized.connect(_layout_cards)
+	_add_backing()
 	empty_hint = UITheme.make_label("Рука пуста — карты покупаются в магазине", "DimLabel")
 	empty_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	empty_hint.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	empty_hint.add_theme_constant_override("outline_size", 4)
 	empty_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+# Тёмная подложка под рукой (решение пользователя 18.11.2026): градиент снизу вверх — карты читаются на любом грунте
+const BACKING_HEIGHT: float = 180.0
+func _add_backing() -> void:
+	var g := Gradient.new()
+	g.set_color(0, Color(0.02, 0.012, 0.02, 0.0))
+	g.set_color(1, Color(0.02, 0.012, 0.02, 0.82))
+	var tex := GradientTexture2D.new()
+	tex.gradient = g
+	tex.fill_from = Vector2(0.0, 0.0)
+	tex.fill_to = Vector2(0.0, 1.0)
+	tex.height = 64
+	tex.width = 4
+	var back := TextureRect.new()
+	back.name = "HandBacking"
+	back.texture = tex
+	back.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	back.stretch_mode = TextureRect.STRETCH_SCALE
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(back)
+	move_child(back, 0)   # за картами
+	back.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	back.offset_top = -BACKING_HEIGHT
+	back.offset_bottom = 0
 
 func _exit_tree() -> void:
 	if dragging_card:   # ушли со сцены посреди перетаскивания — курсор вернуть
@@ -218,6 +243,9 @@ func _on_drop(screen_pos: Vector2) -> void:
 		tw.tween_property(preview, "modulate:a", 0.0, RETURN_TIME)
 	tw.chain().tween_callback(preview.queue_free)
 	tw.tween_callback(_restore_hand_card.bind(hand_node))   # карта на руке проявляется, когда долетела
+	# отпустили над полем, а карта осталась — не сыграна: красная вспышка по рамке (EFFECTS_NEEDED 1.6)
+	if bench_cards.has(card) and screen_pos.y < get_viewport().get_visible_rect().size.y - PEEK:
+		tw.tween_callback(CardReject.flash.bind(hand_node))
 
 # Без типа: карта сыграна — её узел в руке освобождается раньше колбэка твина, а освобождённый объект в
 # типизированный аргумент не передать («Cannot convert argument 1 from Object to Object»)

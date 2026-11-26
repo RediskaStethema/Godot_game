@@ -42,7 +42,7 @@ var building_level: int = 1
 @export var event_stats: Dictionary = {}
 
 # Куда класть карту в бою — подсказка для магазина и скамейки. Новый тип карты:
-# строка здесь + обработчик в BattleScene._card_handlers
+# строка здесь + обработчик в BattleCardPlay (scenes/battle/BattleCardPlay.gd, _handlers)
 const PLAY_HINTS = {
 	"upgrade": "на свой отряд",
 	"building": "на клетку или на такое же",
@@ -76,8 +76,13 @@ func level_up_building() -> bool:
 	return true
 
 # Строка состава/характеристик отряда («×3  HP 100  УРН 12  ДАЛ 250»), пусто — не отряд
-func get_stats_line() -> String:
+# Характеристики отряда для плашек подсказки (UITheme.make_stat_chips); не отряд — пусто
+func get_stats() -> Dictionary:
 	if card_type != "squad":
-		return ""
+		return {}
 	var u = UnitFactory.create(unit_factory_id)
-	return "×%d   HP %d   УРН %d   ДАЛ %d" % [unit_count, u.hp, u.damage, u.attack_range]
+	return {"count": unit_count, "hp": int(u.hp), "damage": int(u.damage), "range": int(u.attack_range)}
+
+# Название для игрока на выбранном языке (Names.of); title — английский ключ, в UI его не показывают напрямую
+func display_title() -> String:
+	return Names.of(title)

@@ -27,9 +27,16 @@ func _ready() -> void:
 	z_index = 11   # поверх бойцов и снарядов
 	visible = false
 
+func _exit_tree() -> void:
+	if visible:
+		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+
 func _process(delta: float) -> void:
 	var cannon = _pick_cannon()
-	visible = cannon != null and camera != null
+	var shown = cannon != null and camera != null
+	if shown != visible:   # наводка — курсор-прицел (UITheme.CURSORS), иначе стрелка
+		Input.set_default_cursor_shape(Input.CURSOR_CROSS if shown else Input.CURSOR_ARROW)
+	visible = shown
 	if not visible:
 		return
 	_time += delta

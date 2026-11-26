@@ -1,7 +1,10 @@
 """Кадры цитадели одной расы (<раса>_<анимация>_NN.png: idle — 1 кадр, attack / hit / fall — по N) →
 лист кадров для FactionTheme "citadel" (ряды idle, attack, hit, fall; кадр — размер файлов).
 
-    python tools/citadel_frames_fit.py <папка кадров> <раса> <лист.png> <anchor x> <anchor y> <scale>
+    python tools/citadel_frames_fit.py <папка кадров> <раса> <лист.png> <anchor x> <anchor y> <scale> [эталон]
+
+эталон — ряд, к 1-му кадру которого подгоняются остальные (по умолчанию attack; пакет Космодесанта 10.11.2026 —
+idle: стойку видно чаще всего, её кадры не пересэмплируются).
 
 Ряды пакета нарисованы в разном масштабе (25.10.2026: у Хаоса попадание на 20% мельче выстрела, стойка —
 крупнее) — цитадель прыгала бы в размере. Эталон — 1-й кадр выстрела (решение пользователя): 1-й кадр
@@ -78,15 +81,15 @@ def transform(frame, anchor, scale, dx, dy):
     return np.array(out)
 
 
-def main(folder, race, out_path, ax, ay, theme_scale):
+def main(folder, race, out_path, ax, ay, theme_scale, ref_anim="attack"):
     citadel_from_sheet.REG_SHIFT = REG_SHIFT
     anchor = (float(ax), float(ay))
     rows = load_rows(folder, race)
-    ref = silhouette(rows["attack"][0], anchor, 1.0, REG_BODY)
-    fits = {"attack": (1.0, 1.0, 0, 0)}
-    for anim in ["idle", "hit", "fall"]:
+    ref = silhouette(rows[ref_anim][0], anchor, 1.0, REG_BODY)
+    fits = {ref_anim: (1.0, 1.0, 0, 0)}
+    for anim in [a for a in ROWS if a != ref_anim]:
         fits[anim] = register(rows[anim][0], anchor, ref, REG_BODY)
-    h, w = rows["attack"][0].shape[:2]
+    h, w = rows[ref_anim][0].shape[:2]
     cols = max(len(rows[a]) for a in ROWS)
     sheet = Image.new("RGBA", (w * cols, h * len(ROWS)))
     for r, anim in enumerate(ROWS):
@@ -104,4 +107,4 @@ def main(folder, race, out_path, ax, ay, theme_scale):
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:7])
+    main(*sys.argv[1:8])

@@ -113,7 +113,9 @@ func _main() -> void:
 
 	# 5. Смерть от яда; у павшего эффекты сняты
 	var c = tacs[2]
-	c.current_hp = 1.5
+	# Яд за 1 с — 2 × доля бойца (unit_weight); раньше 1.5 HP «добивало» случайно: боец стоял в 18 px от горящего
+	# и ловил огонь, при строе под размер модели (11.11.2026) — дальше 45 px
+	c.current_hp = 1.5 * c.data.unit_weight
 	c.apply_status(StatusEffects.POISONED, 2.0, 4.0)
 	_ticks(c, 1.0)
 	_check("яд добивает, у павшего эффектов нет", c.current_state == c.State.DEAD and c.status_effects.is_empty())

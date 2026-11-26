@@ -69,32 +69,107 @@ func _reform() -> void:
 		soldiers[i].formation_offset = offsets[i]
 		soldiers[i].position = offsets[i]
 
-# Строй как в 9 Kings: шеренги вдоль осей изометрии, фронт смотрит на врага.
-# Шеренга (до FORMATION_MAX_RANK бойцов) — вдоль оси row, ряды уходят в тыл
-# вдоль оси наступления. Первый ряд — ближе к противнику.
-const FORMATION_MAX_RANK: int = 5   # 15 бойцов — 3 ряда по 5
-# 23.10.2026 (решение пользователя: бойцы сливались в одно пятно) — было 14 / 12
-const RANK_SPACING: float = 18.0   # между бойцами в шеренге, px
-const FILE_SPACING: float = 15.0   # между рядами, px
+# Строй под размер модели (решение пользователя 11.11.2026, `Screenshot 2026-11-11 114144.png`: крупные бойцы
+# вылезали на соседние клетки и стояли друг на друге — шаг был один на всех, 18×15 px по осям изометрии, и боец
+# (ряд+1, шеренга+1) вставал ровно над соседом). Теперь — решётка кирпичом в экранных координатах: шаг по x —
+# ширина модели на экране (соседи в ряду не накрывают друг друга), по y — половина (изометрия 2:1), ряды со сдвигом
+# на полшага; ноги всех бойцов — внутри ромба своей клетки. Не влезают — шаг меньше, но наружу клетки строй не выходит.
+const FORMATION_FILL: float = 0.85        # доля ромба клетки под ноги (запас до кромки)
+const FORMATION_GAP: float = 1.5          # шаг в ряду, в ширинах модели (свободно; не влезают — теснее)
+const FORMATION_ROW_RATIO: float = 0.5    # шаг рядов от шага в ряду
+const FORMATION_BODY_INSET: float = 0.3   # ромб ног уже по x на эту долю ширины модели — тело не за кромкой
+const FORMATION_SHRINK: float = 0.92      # шаг ×, пока точек меньше, чем бойцов
+const FORMATION_MIN_STEP: float = 0.4     # не теснее этой доли ширины
+const MODEL_WIDTH_FALLBACK: float = 0.6   # ширина без листа — доля роста
+static var _width_cache: Dictionary = {}  # sprite_path → ширина фигуры / рост (кадр idle 0)
+
+# Ширина модели на экране, px мира (непрозрачная часть кадра стойки, рост — как в Soldier._load_animations)
+static func model_width(unit: UnitData) -> float:
+	var height := Soldier.TARGET_SPRITE_HEIGHT * unit.sprite_scale
+	var path := unit.sprite_path
+	if not _width_cache.has(path):
+		var ratio := MODEL_WIDTH_FALLBACK
+		var frames: SpriteFrames = Soldier._get_frames(path) if path != "" else null
+		if frames and frames.has_animation("idle") and frames.get_frame_count("idle") > 0:
+			var tex := frames.get_frame_texture("idle", 0)
+			var img := tex.get_image() if tex else null
+			if img:
+				var used := img.get_used_rect()
+				var fig_h := float(frames.get_meta("figure_height", img.get_height()))
+				if used.size.x > 0 and fig_h > 0.0:
+					ratio = used.size.x / fig_h
+		_width_cache[path] = ratio
+	return _width_cache[path] * height
 
 func _get_formation_offsets(count: int) -> Array[Vector2]:
-	var offsets: Array[Vector2] = []
-	var cols = min(count, FORMATION_MAX_RANK)
-	var rows = int(ceil(float(count) / cols))
-	var rank_dir = IsoGrid.rank_direction()
 	# Игрок наступает вдоль +advance, враг — навстречу
 	var forward = IsoGrid.advance_direction() * (1.0 if team == GameConstants.TEAM_PLAYER else -1.0)
+	return formation_offsets(count, model_width(data), forward)
 
-	for i in range(count):
-		var col = i % cols
-		var row = i / cols
-		# Неполный последний ряд центрируем
-		var in_row = cols if row < rows - 1 else count - row * cols
-		var along_rank = (col - (in_row - 1) / 2.0) * RANK_SPACING
-		var depth = ((rows - 1) / 2.0 - row) * FILE_SPACING   # row 0 — впереди
-		offsets.append(rank_dir * along_rank + forward * depth)
+# Ноги внутри ромба клетки (с запасом FORMATION_FILL; по x уже на часть ширины тела)
+static func formation_half_size(width: float) -> Vector2:
+	var hw := maxf(IsoGrid.TILE_WIDTH / 2.0 * FORMATION_FILL - width * FORMATION_BODY_INSET, IsoGrid.TILE_WIDTH * 0.15)
+	return Vector2(hw, IsoGrid.TILE_HEIGHT / 2.0 * FORMATION_FILL)
 
-	return offsets
+static func _in_diamond(p: Vector2, half: Vector2) -> bool:
+	return absf(p.x) / half.x + absf(p.y) / half.y <= 1.0 + 0.0001
+
+# Строй из count бойцов шириной width (px мира); первый — ближе всех к врагу (forward — куда наступает отряд)
+static func formation_offsets(count: int, width: float, forward: Vector2) -> Array[Vector2]:
+	var result: Array[Vector2] = []
+	if count <= 0:
+		return result
+	if count == 1:
+		result.append(Vector2.ZERO)
+		return result
+	var half := formation_half_size(width)
+	var dx := width * FORMATION_GAP
+	var points: Array[Vector2] = []
+	while true:
+		points = _diamond_lattice(dx, dx * FORMATION_ROW_RATIO, half)
+		if points.size() >= count or dx <= width * FORMATION_MIN_STEP:
+			break
+		dx = maxf(dx * FORMATION_SHRINK, width * FORMATION_MIN_STEP)
+	# Ближние к центру (метрика ромба), при равенстве — порядок решётки (детерминированно)
+	points.sort_custom(func(a: Vector2, b: Vector2) -> bool:
+		var da := absf(a.x) / half.x + absf(a.y) / half.y
+		var db := absf(b.x) / half.x + absf(b.y) / half.y
+		if absf(da - db) > 0.0001:
+			return da < db
+		return a.y < b.y if absf(a.y - b.y) > 0.0001 else a.x < b.x)
+	var picked: Array[Vector2] = points.slice(0, mini(count, points.size()))
+	while picked.size() < count:   # тесно даже на минимальном шаге (не бывает у отрядов игры) — в центр
+		picked.append(Vector2.ZERO)
+	# Строй — в центр клетки, если после сдвига все ноги внутри ромба
+	var centroid := Vector2.ZERO
+	for p in picked:
+		centroid += p
+	centroid /= picked.size()
+	if picked.all(func(p: Vector2) -> bool: return _in_diamond(p - centroid, half)):
+		for i in picked.size():
+			picked[i] -= centroid
+	# Первый ряд — к врагу, при равенстве — по оси шеренги
+	var rank_dir := IsoGrid.rank_direction()
+	picked.sort_custom(func(a: Vector2, b: Vector2) -> bool:
+		var fa := a.dot(forward)
+		var fb := b.dot(forward)
+		if absf(fa - fb) > 0.5:
+			return fa > fb
+		return a.dot(rank_dir) < b.dot(rank_dir))
+	return picked
+
+# Точки решётки кирпичом (ряд через один сдвинут на dx/2) внутри ромба half
+static func _diamond_lattice(dx: float, dy: float, half: Vector2) -> Array[Vector2]:
+	var points: Array[Vector2] = []
+	var rows := int(half.y / dy)
+	for j in range(-rows, rows + 1):
+		var shift := dx * 0.5 if absi(j) % 2 == 1 else 0.0
+		var cols := int(half.x / dx) + 1
+		for i in range(-cols, cols + 1):
+			var p := Vector2(i * dx + shift, j * dy)
+			if _in_diamond(p, half):
+				points.append(p)
+	return points
 
 # -------------------------------------------------------
 # ГЛАВНЫЙ ТИК
@@ -166,7 +241,8 @@ func start_march() -> void:
 # на дальность удара + DEEP_STRIKE_GAP перед ним, со своей стороны. Раз за бой
 const DEEP_STRIKE_GAP: float = 30.0
 const DEEP_STRIKE_MIN_DIST: float = 150.0   # враг уже ближе — телепорт не нужен
-const DEEP_STRIKE_ORIGIN_POOF: float = 2.5    # облачко на месте отряда — во столько раз крупнее
+const FALL_SHAKE: float = 2.0                # px — толчок камеры, когда свой отряд пал
+const FALL_RING_RADIUS: float = 26.0         # px мира — кольцо «отряд пал» (× sprite_scale)
 var deep_struck: bool = false
 var _deep_strike_timer: float = 0.0
 
@@ -190,13 +266,14 @@ func _tick_deep_strike(delta: float) -> void:
 	var anchor := foe.global_position + back * (data.attack_range + DEEP_STRIKE_GAP)
 	if center.distance_to(anchor) < DEEP_STRIKE_MIN_DIST:
 		return
-	# Облачко — у каждого бойца на месте высадки и одно крупное там, откуда отряд исчез
-	# (по облачку на бойца с обеих сторон — 24 эффекта в один тик, выброс тика)
+	# Телепорт — лист художника (EFFECTS_NEEDED 5.3, решение пользователя 09.11.2026; до того — полосы кодом
+	# BuildingFx.teleport, ещё раньше — облачка poof): на месте ухода лист задом наперёд, на месте высадки — вперёд
 	var size: float = data.sprite_scale * Soldier.EFFECT_SCALE
-	Vfx.spawn(get_parent(), "poof", center, size * DEEP_STRIKE_ORIGIN_POOF)
 	for s in alive:
+		Vfx.spawn_reversed(get_parent(), "teleport", s.global_position, size)
 		s.teleport_to(anchor + s.formation_offset)
-		Vfx.spawn(get_parent(), "poof", s.global_position, size)
+		Vfx.spawn(get_parent(), "teleport", s.global_position, size)
+		DustLayer.puff(s.global_position, 7.0 * s.data.sprite_scale, 2, 5.0)
 	SoldierRegistry.invalidate_grid()   # сдвиг больше GRID_SLACK за тик
 	AudioManager.play("deep_strike")
 
@@ -253,7 +330,7 @@ func is_wounded() -> bool:
 	return false
 
 # -------------------------------------------------------
-# ПОРАБОЩЕНИЕ (благословение Слаанеш, Soldier.charm)
+# ПОРАБОЩЕНИЕ (благословение Короля Второго Акта, Soldier.charm)
 # -------------------------------------------------------
 # Боец уходит из отряда: последний ушёл — отряд пал (бой кончается, когда у стороны нет отрядов)
 func release_soldier(soldier: Soldier) -> void:
@@ -278,10 +355,18 @@ func _on_soldier_died(soldier: Soldier) -> void:
 	# Если все бойцы мертвы — отряд уничтожен
 	if soldiers.is_empty():
 		current_state = State.DEAD
+		# Отряд пал целиком (решение пользователя 09.11.2026): кольцо цвета стороны по земле и пыль — обе стороны
+		if BattleManager.is_battle_running():
+			BuildingFx.squad_fall(soldier.global_position, FALL_RING_RADIUS * data.sprite_scale,
+				team == GameConstants.TEAM_PLAYER)
+			if team == GameConstants.TEAM_PLAYER and is_inside_tree():   # свой отряд пал — короткий толчок
+				var cam := get_viewport().get_camera_2d()
+				if cam and cam.has_method("shake"):
+					cam.shake(FALL_SHAKE)
 		# Свой отряд пал целиком — надпись над местом гибели последнего бойца (только вид)
 		if team == GameConstants.TEAM_PLAYER and BattleManager.is_battle_running():
 			FloatingText.spawn(get_parent(), soldier.global_position + Vector2(0.0, -Soldier.TARGET_SPRITE_HEIGHT * 1.5),
-				"%s пал" % data.unit_name, Soldier.FLOAT_HIT_TO_PLAYER, 0.9, true)
+				"%s пал" % data.display_name(), Soldier.FLOAT_HIT_TO_PLAYER, 0.9, true)
 			Vfx.spawn(get_parent(), "squad_lost", soldier.global_position)   # сломанное знамя и черепа
 		emit_signal("squad_wiped", self)
 

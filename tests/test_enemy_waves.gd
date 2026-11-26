@@ -78,8 +78,27 @@ func _main() -> void:
 	var boss = EnemyWaves.build(15, "boss", 9, 5)
 	var mini_boss = EnemyWaves.build(10, "miniboss", 9, 5)
 	var small = EnemyWaves.build(14, BATTLE, 4, 5)
-	_check("босс и мини-босс впереди, состав не больше клеток зоны", boss[0]["unit"] == "chaos_lord"
+	_check("босс и мини-босс впереди, состав не больше клеток зоны", boss[0]["unit"] in EnemyWaves.BOSS["units"]
 		and mini_boss[0]["unit"] == "chaos_hellbrute" and mini_boss[1]["unit"] == "chaos_champion" and small.size() == 4)
+
+	# 5б. Финальный босс — демон-примарх по seed забега: тот же seed — тот же, за 40 seed — все четыре;
+	# у каждого свой лист (figure_height, ряды special / appear / death), приём и неотбрасываемость
+	var boss_seen := {}
+	var stable := true
+	for seed_value in 40:
+		var u: String = EnemyWaves.build(15, "boss", 9, seed_value)[0]["unit"]
+		boss_seen[u] = true
+		stable = stable and u == EnemyWaves.boss_unit(seed_value) and u == EnemyWaves.build(15, "boss", 9, seed_value)[0]["unit"]
+	_check("финальный босс от seed: стабилен, выпадают все 4 демона (%d)" % boss_seen.size(), stable and boss_seen.size() == 4)
+	var bosses_ok := true
+	for id in EnemyWaves.BOSS["units"] + EnemyWaves.SM_BOSS["units"]:
+		var d := UnitFactory.create(id)
+		var frames: SpriteFrames = load(d.sprite_path + "/frames.tres")
+		bosses_ok = bosses_ok and d.factory_id == id and d.special_kind != "" and d.special_cooldown > 0.0 			and d.knockback_immune and d.retreat_hp_threshold == 0.0 and d.hp >= 2200.0 and "boss" in d.tags 			and EnemyWaves.BOSS_TITLES.has(id) and frames != null and frames.has_meta("figure_height") 			and frames.get_frame_count("special") == 16 and frames.get_frame_count("death") == 16 			and frames.get_meta("special_frame") == 10 and frames.get_meta("hit_frame") == 7
+		if not bosses_ok:
+			print("  не так: ", id)
+			break
+	_check("9 примархов: лист, приём, не хрупкие (HP ≥ 2200), не отступают и не отбрасываются", bosses_ok)
 
 	# 6. Юниты архетипов: id, роль, снаряд
 	var ok_units = true

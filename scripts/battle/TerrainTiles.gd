@@ -60,7 +60,7 @@ static func draw_theme_tile(canvas: CanvasItem, entry, top_center: Vector2, modu
 		var i := int(floor(phase))
 		draw_theme_tile(canvas, frames[posmod(i, frames.size())], top_center, modulate, flip)
 		var blend := phase - i
-		if blend > 0.0:
+		if blend > 0.0 and entry.get("blend", true):   # "blend": false — кадры шагом (рябь реки)
 			var next_modulate := modulate
 			next_modulate.a *= blend
 			draw_theme_tile(canvas, frames[posmod(i + 1, frames.size())], top_center, next_modulate, flip)

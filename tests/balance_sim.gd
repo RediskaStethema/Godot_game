@@ -63,6 +63,8 @@ var last_wave := WAVES
 var em: Node
 var bm: Node
 
+var seed_shift: int = -1   # boss=<id>: seed забега 1000 + seed_shift вместо 1000 + волна
+
 func _initialize() -> void:
 	# Скорость боя игрока (GameSettings) не должна влиять на тест
 	root.get_node("GameSettings").battle_speed = 1.0
@@ -85,6 +87,19 @@ func _main() -> void:
 	if args.size() > 0 and args[0] == "campaign":
 		await _main_campaign(args)
 		return
+	# boss=<id> (финальные боссы-примархи, 09.11.2026): волна 15 с этим боссом — seed забега подбирается под него
+	for a in args.duplicate():
+		if a.begins_with("boss="):
+			args.erase(a)
+			var want: String = a.substr(5)
+			for s in 10000:
+				if EnemyWaves.boss_unit(1000 + s) == want or EnemyWaves.boss_unit(1000 + s, "space_marines") == want:
+					seed_shift = s
+					break
+			print("босс волны 15: %s (seed %d)" % [want, 1000 + seed_shift])
+		elif a.begins_with("seed="):   # seed забега 1000 + N для всех волн (сверка до / после на том же составе)
+			args.erase(a)
+			seed_shift = int(a.substr(5))
 	var strategy: String = args[0] if args.size() > 0 else "all"
 	var runs: int = int(args[1]) if args.size() > 1 else 3
 	first_wave = int(args[2]) if args.size() > 2 else 1
@@ -221,7 +236,7 @@ func _battle(wave: int, units: Array[UnitData], bought: int) -> Dictionary:
 	bm.reset_run()
 	for k in range(bought):
 		bm.kingdom_tiles.append(EXTRA_TILES[k])
-	rm.new_run(1000 + wave)
+	rm.new_run(1000 + (seed_shift if seed_shift >= 0 else wave))
 	# Текущий шаг — бой нужной волны
 	for n in rm.map.nodes:
 		if n.is_battle() and n.wave == wave:

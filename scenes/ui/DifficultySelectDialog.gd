@@ -9,6 +9,7 @@ extends ModalOverlay
 const CARD_SIZE = Vector2(132, 176)
 const CARD_PADDING: float = 6.0
 const NAME_FONT_SIZE: int = 15   # «Экстерминатус» — в одну строку
+const ICON_SIZE: float = 56.0     # значок ранга assets/ui/difficulty/<уровень>.png
 
 signal chosen(level: int)
 
@@ -18,7 +19,7 @@ func setup() -> void:
 	close_on_cancel = true
 	build_frame(1040.0)
 	add_title("СЛОЖНОСТЬ")
-	add_title("Больше врагов в волнах и чаще сильные отряды Хаоса", "DimLabel")
+	add_title("Больше врагов в волнах и чаще сильные отряды Кровоподписантов", "DimLabel")
 	var row = HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 8)
@@ -49,6 +50,14 @@ func _make_card(level: int) -> Control:
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override("separation", 4)
 	card.add_child(box)
+	var icon := UITheme.make_icon("difficulty", str(level), ICON_SIZE)
+	if icon:
+		icon.name = "RankIcon"
+		icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		if not open:
+			icon.self_modulate = Color(0.45, 0.45, 0.5)
+			UITheme.add_lock_badge(icon)
+		box.add_child(icon)
 	var num = UITheme.make_label(str(level), "TitleLabel")
 	var name_label = UITheme.make_label(d["name"], "HeaderLabel")
 	name_label.add_theme_font_size_override("font_size", UITheme.ui_px(NAME_FONT_SIZE))

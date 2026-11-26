@@ -73,6 +73,7 @@ var _pending_shot: Dictionary = {}
 var _flash_material: ShaderMaterial
 # Спрайт листа — шейдер бойцов (контур + вспышка; Soldier.unit_shader), свой материал: вспышка — только этой крепости
 var _sprite_material: ShaderMaterial = null
+const SOFTEN: float = 0.2   # доля плавной выборки листа цитадели (Soldier.UNIT_SHADER "soften")
 var _env: Dictionary = {}   # тема "building_env" (пусто — без света местности)
 var _siege_shown: bool = false   # тревога штурма показана (цитадель — новая на каждый бой)
 var _flash_left: float = 0.0   # сек до конца вспышки попадания (гаснет в _process, не Tween на удар)
@@ -125,10 +126,14 @@ func apply_theme(citadel_theme: Dictionary) -> void:
 	var k: float = _sheet.get("scale", 1.0)
 	_sprite.scale = Vector2(k, k)
 	_sprite.position = -Vector2(_sheet.get("anchor", Vector2(frame.x / 2.0, frame.y))) * k
-	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# Менее пиксельная (решение пользователя 07.11.2026, «на 20%»): фильтр LINEAR, а шейдер смешивает выборку по
+	# центру пикселя листа (как NEAREST) с плавной в доле SOFTEN — края блоков мягче, рисунок не мылится
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_sprite.modulate = _sheet.get("tint", Color.WHITE)   # вспышка попадания — modulate узла, не спрайта
 	_sprite_material = ShaderMaterial.new()
 	_sprite_material.shader = Soldier.unit_shader()
+	Soldier.apply_style(_sprite_material, "building")   # светотень ступенями и палитра расы, как у зданий
+	_sprite_material.set_shader_parameter("soften", SOFTEN)
 	_env = FactionTheme.current().get("building_env", {})
 	var outline_px: float = _env.get("outline_px", Building.OUTLINE_WORLD_PX)
 	_sprite_material.set_shader_parameter("outline_px", float(maxi(1, roundi(outline_px / maxf(k, 0.01)))))
@@ -141,7 +146,12 @@ func apply_theme(citadel_theme: Dictionary) -> void:
 	_sprite.animation_changed.connect(_update_env_ao)
 	add_child(_sprite)
 	move_child(_sprite, 0)   # под HP-баром
+	# отброшенная тень (WorldLight, 12.11.2026): основание — anchor в координатах кадра, рост — до верха кадра
+	var anchor := Vector2(_sheet.get("anchor", Vector2(frame.x / 2.0, frame.y)))
+	WorldLight.attach(_sprite, anchor, anchor.y)
 	_sprite.play("idle" if BattleManager.citadel_hp > 0.0 else "fall")
+	# Свечение огней кодом (решение пользователя 23.11.2026): точки — ключ темы "lights", нет ключа — автопоиск по кадру
+	BuildingGlow.attach(_sprite, _sheet.get("lights", []))
 	_update_env_ao()
 	queue_redraw()
 
@@ -167,6 +177,10 @@ func play_state(anim: String) -> void:
 		return
 	if anim == "attack" and _sprite.animation == "hit" and _sprite.is_playing():
 		return
+	# Штурм бьёт десятки раз в секунду: «hit» не перезапускается, пока идёт сам —
+	# раньше кадры прыгали 0→1→0 на каждое попадание (решение пользователя 20.11.2026: «дерганные»)
+	if anim == "hit" and _sprite.animation == "hit" and _sprite.is_playing():
+		return
 	_sprite.play(anim)
 
 func get_sprite_animation() -> String:
@@ -179,6 +193,7 @@ func _on_sprite_animation_finished() -> void:
 func _process(delta: float) -> void:
 	if _sprite:
 		_sprite.self_modulate = self_modulate * _env.get("tint", Color.WHITE)
+		Building.hold_frame_rate(_sprite)   # кадры не ускоряются с боем, кроме выстрела
 	if _flash_left > 0.0:
 		_flash_left = maxf(_flash_left - delta, 0.0)
 		_set_flash(HIT_FLASH_STRENGTH * _flash_left / HIT_FLASH_TIME)
@@ -314,13 +329,23 @@ func _shot_delay() -> float:
 	return float(_sheet["shot_frame"]) / _sprite.sprite_frames.get_animation_speed("attack")
 
 func _launch_shot(point: Vector2, target: Soldier) -> void:
-	var shot = Projectile.launch(get_parent(), SHOT_PROJECTILE, to_global(_muzzle()), target,
+	# снаряд и разрыв — по теме расы ("projectile" / "impact_vfx" листа цитадели), иначе огненный шар
+	var shot = Projectile.launch(get_parent(), _sheet.get("projectile", SHOT_PROJECTILE), to_global(_muzzle()), target,
 			Vector2.ZERO if target else point)
+	# Вспышка и свет у ствола / рта на кадре выстрела: сам ряд attack почти неподвижен и выстрела не видно
+	# (решение пользователя 20.11.2026: «анимация атаки не видна совсем»); только вид
+	var mz: Vector2 = to_global(_muzzle())
+	var mk: Dictionary = _sheet.get("muzzle_fx", {})
+	Vfx.spawn(get_parent(), mk.get("vfx", "muzzle_flash"), mz, mk.get("size", 1.2), (point - mz).angle())
+	IsoGridRenderer.flash_light(mz, mk.get("color", Color(1.0, 0.65, 0.3)), mk.get("radius", 150.0), 0.3)
+	var cam := get_viewport().get_camera_2d() if is_inside_tree() else null
+	if cam and cam.has_method("shake"):
+		cam.shake(MUZZLE_SHAKE)
 	shot.damage = DAMAGE
 	shot.splash_radius = SPLASH_RADIUS
 	shot.splash_team = GameConstants.TEAM_ENEMY
 	shot.on_impact = _show_explosion
-	shot.impact_vfx = SHOT_IMPACT_VFX
+	shot.impact_vfx = _sheet.get("impact_vfx", SHOT_IMPACT_VFX)
 
 func _show_explosion(point: Vector2) -> void:
 	shot_target = point
@@ -330,6 +355,7 @@ func _show_explosion(point: Vector2) -> void:
 # Враг атаковал цитадель
 func take_hit(amount: float) -> void:
 	AudioManager.play("citadel_hit")
+	WorldGrade.pulse(0.3)
 	var shielded := BattleManager.citadel_shield > 0.0
 	BattleManager.damage_citadel(amount)
 	if shielded and BattleManager.citadel_shield <= 0.0:   # щит стен кончился — стена гаснет красным, искры у цитадели
@@ -338,6 +364,28 @@ func take_hit(amount: float) -> void:
 		Vfx.spawn(get_parent(), "hit_spark", global_position + Vector2(0.0, -40.0), 2.0)
 	play_state("fall" if BattleManager.citadel_hp <= 0.0 else "hit")
 	_flash_hit()
+	_hit_feedback(shielded and BattleManager.citadel_shield <= 0.0, BattleManager.citadel_hp <= 0.0)
+
+# Вес удара по цитадели (только вид): лёгкая тряска и красноватый отсвет на земле, не чаще HIT_FEEDBACK_GAP_MS
+# (на штурме бьют десятки врагов); щит лопнул и цитадель пала — сильнее и без паузы
+const MUZZLE_SHAKE: float = 2.0   # толчок камеры при выстреле
+const HIT_SHAKE: float = 1.5
+const SHIELD_BREAK_SHAKE: float = 4.0
+const FALL_SHAKE: float = 8.0
+const HIT_FEEDBACK_GAP_MS: int = 250
+var _hit_feedback_at: int = 0
+func _hit_feedback(shield_broke: bool, fell: bool) -> void:
+	var now := Time.get_ticks_msec()
+	var strong := shield_broke or fell
+	if not strong and now - _hit_feedback_at < HIT_FEEDBACK_GAP_MS:
+		return
+	_hit_feedback_at = now
+	var strength := FALL_SHAKE if fell else (SHIELD_BREAK_SHAKE if shield_broke else HIT_SHAKE)
+	var camera := get_viewport().get_camera_2d() if is_inside_tree() else null
+	if camera and camera.has_method("shake"):
+		camera.shake(strength)
+	IsoGridRenderer.flash_light(global_position, Color(Palette.FIRE, 0.7 if strong else 0.35),
+		110.0 if strong else 70.0, 0.3 if strong else 0.18)
 
 func _get_flash_material() -> ShaderMaterial:
 	if _flash_material == null:

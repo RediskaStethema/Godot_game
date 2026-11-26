@@ -8,6 +8,7 @@ extends SceneTree
 #   godot --headless --path . -s tests/test_building_hover.gd
 
 func _initialize() -> void:
+	root.get_node("GameSettings").names_language = "en"   # тесты сверяют английские названия (по умолчанию игроку показываются русские)
 	root.get_node("SaveManager").enabled = false
 	root.get_node("GameSettings").battle_speed = 1.0
 	_main()
@@ -65,7 +66,7 @@ func _main() -> void:
 	var neighbours = b_node.get_effect_tiles("barracks", Vector2i(1, 1))
 	_check("Казармы под курсором: подсказка «%s», здание закреплено" % text.get_slice("\n", 0),
 		scene.hovered_building == b_node and scene.inspector.is_building_hover_visible()
-		and text.contains("Barracks") and text.contains("ур. 1/") and scene.fader.pinned == b_node)
+		and text.contains("Kuren") and text.contains("ур. 1/") and scene.fader.pinned == b_node)
 	_check("зона Казарм — %d соседа по сторонам" % neighbours.size(),
 		neighbours.size() == 4 and scene.renderer.effect_tiles == neighbours)
 
@@ -88,7 +89,12 @@ func _main() -> void:
 	for y in range(int(rect.position.y) + 2, int(rect.end.y), 4):
 		for x in range(int(rect.position.x) + 2, int(rect.end.x), 4):
 			var p = Vector2(x, y)
-			if not building_tiles.has(grid.screen_to_tile(p)):
+			var t = grid.screen_to_tile(p)
+			# не у границы клеток: экран → мир при движении мыши округляет — точка на шве уходила к соседу
+			var inside := true
+			for d in [Vector2(3, 0), Vector2(-3, 0), Vector2(0, 3), Vector2(0, -3)]:
+				inside = inside and grid.screen_to_tile(p + d) == t
+			if inside and not building_tiles.has(t):
 				on_model = p
 				break
 		if on_model != Vector2.INF:

@@ -1,12 +1,12 @@
 """Кадры моделек юнитов — в одну папку для правки и обратно в игру.
 
-Выгрузка: все кадры, которые играет игра (по frames.tres каждой папки assets/sprites/<юнит>, на которую ссылается
+Выгрузка: все кадры, которые играет игра (по frames.tres каждой папки assets/units/<раса>/<юнит>, на которую ссылается
 UnitFactory), копируются в одну папку с именами <юнит>_<анимация>_<номер кадра в анимации>.png
-(space_marine_tactical_walk_03.png). Номер — порядок кадра в анимации, как его играет игра, а не номер файла
+(space_marines_tactical_walk_03.png). Номер — порядок кадра в анимации, как его играет игра, а не номер файла
 (у Centurion стойка — файлы 1, 2, 5, 4). Рядом — manifest.json: имя → исходный файл. В папке .gdignore —
 Godot копии не импортирует.
 
-Загрузка: правленые файлы папки (отличаются от исходника) копируются на свои места в assets/sprites. Размер кадра
+Загрузка: правленые файлы папки (отличаются от исходника) копируются на свои места (пути — в manifest.json). Размер кадра
 должен остаться прежним — по холсту стоят ноги (низ кадра = точка бойца), считается рост и ствол (muzzle);
 файл другого размера пропускается (--force — всё равно). После загрузки — импорт: godot --headless --import.
 
@@ -46,25 +46,25 @@ ANIM_RE = re.compile(r'\{\n"frames": \[(.*?)\],\n"loop": \w+,\n"name": &"(\w+)",
 def unit_folders():
     """Папки спрайтов, на которые ссылаются юниты (UnitFactory.sprite_path), по алфавиту."""
     text = open(FACTORY, encoding="utf-8").read()
-    names = sorted(set(re.findall(r'res://assets/sprites/([a-z_]+)"', text)))
-    return [n for n in names if os.path.exists(os.path.join(ROOT, "assets", "sprites", n, "frames.tres"))]
+    names = sorted(set(re.findall(r'res://(assets/units/(?:space_marines|chaos)/[a-z_]+)"', text)))
+    return [n for n in names if os.path.exists(os.path.join(ROOT, n, "frames.tres"))]
 
 
 def building_folders():
-    """Папки спрайтов зданий от assets/sprites (buildings/tower, buildings/chaos/tower), по алфавиту."""
+    """Папки спрайтов зданий от корня проекта (assets/sprites/buildings/tower, …/chaos/tower), по алфавиту."""
     found = []
     for sub in ("", "chaos"):
         base = os.path.join(ROOT, BUILDINGS, sub)
         for name in sorted(os.listdir(base)):
             if name in UNUSED_BUILDINGS or not os.path.exists(os.path.join(base, name, "frames.tres")):
                 continue
-            found.append("/".join(p for p in ("buildings", sub, name) if p))
+            found.append("/".join(p for p in (BUILDINGS.replace(os.sep, "/"), sub, name) if p))
     return found
 
 
 def animations(unit):
-    """[(анимация, [путь кадра от корня проекта, …])] в порядке frames.tres."""
-    text = open(os.path.join(ROOT, "assets", "sprites", unit, "frames.tres"), encoding="utf-8").read()
+    """[(анимация, [путь кадра от корня проекта, …])] в порядке frames.tres; unit — папка от корня проекта."""
+    text = open(os.path.join(ROOT, unit, "frames.tres"), encoding="utf-8").read()
     ext = {i: p.replace("res://", "") for p, i in re.findall(r'path="([^"]+)" id="([^"]+)"', text)}
     body = text[text.find("animations = ["):]
     return [(name, [ext[i] for i in re.findall(r'ExtResource\("([^"]+)"\)', ids)]) for ids, name in ANIM_RE.findall(body)]
@@ -136,7 +136,7 @@ def export(folder, folders):
     manifest = {}
     seen = {}   # исходный файл → имя выгрузки (кадр стоит в анимации дважды — один файл)
     for unit in folders:
-        prefix = unit.replace("buildings/", "").replace("/", "_")
+        prefix = re.sub(r"^assets/(units|sprites/buildings)/", "", unit).replace("/", "_")
         for anim, paths in animations(unit):
             for n, src in enumerate(paths):
                 if src in seen:

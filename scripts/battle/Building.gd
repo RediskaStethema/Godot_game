@@ -75,9 +75,12 @@ const WALL_SLOW_LINGER: float = 0.5        # сек замедления пос�
 const SLOW_AURA_COLOR = Color(UITheme.SLOW_BLUE, 0.05)
 const SLOW_AURA_LINE = Color(UITheme.SLOW_BLUE, 0.30)
 # Уровень здания — ромбики над ним (1-й уровень без отметки)
-const LEVEL_PIP_SIZE: float = 5.0
-const LEVEL_PIP_GAP: float = 14.0
-const LEVEL_PIP_COLOR = UITheme.AMBER_LIGHT
+# Стилизация 12.11.2026: ромбик — пиксельная бусина: тёмная обводка, янтарь, блик сверху; координаты — целые px
+const LEVEL_PIP_SIZE: float = 4.0
+const LEVEL_PIP_GAP: float = 11.0
+const LEVEL_PIP_COLOR = Palette.GOLD
+const LEVEL_PIP_LIGHT = UITheme.AMBER_LIGHT
+const LEVEL_PIP_EDGE = Palette.OUTLINE
 # Уровень здания видно на модели (решение пользователя 24.10.2026: были только ромбики; листов по уровням нет —
 # ASSETS_NEEDED P2): здание крупнее (LEVEL_SCALES по уровню) и кольцо у основания в цвете расы — на 2-м одно,
 # на 3-м двойное со свечением. Только вид. Есть свои кадры уровня (idle_2 / idle_3) — рост из листа (_level_scale)
@@ -108,8 +111,14 @@ const LEVEL_RING_GLOW_ALPHA: float = 0.13
 # не выше SPRITE_MAX_HEIGHT клетки (узкие и высокие: тотем, шпиль). Здания Хаоса (карты CHAOS_RESKINS
 # с тем же building_type) — <SPRITES_DIR>/chaos/<building_type>, нет там листа — общий
 const SPRITES_DIR: String = "res://assets/sprites/buildings/"
-const SPRITE_WIDTH: float = 0.8
-const SPRITE_MAX_HEIGHT: float = 1.25
+# 07.11.2026 (решение пользователя: «здания всех уровней слишком большие — на 15% меньше»): было 0.8 / 1.25,
+# стало ×0.85; уровни 2 / 3 считаются от масштаба 1-го (level_scale) — уменьшились так же
+# 25.11.2026 (решение пользователя: «уменьши все здания и все уровни зданий на 25%»): 0.68 / 1.0625 → ×0.75 (0.51 / 0.797)
+const SPRITE_WIDTH: float = 0.51
+# Здания Хаоса на 10% меньше (решение пользователя 21.11.2026: «здания слишком выделяются, не на своей клетке — уменьши на 10%»;
+# новые листы 21.11.2026 крупнее прежних). Стена не здание клетки — её рисует KingdomWall
+const CHAOS_SIZE: float = 0.9
+const SPRITE_MAX_HEIGHT: float = 0.796875
 # Основание на листе — самая широкая строка силуэта в нижней BASE_ZONE кадра; в центре клетки — центр
 # ромба основания: выше нижнего пикселя на четверть его ширины (изометрия 2:1). Раньше в центре клетки
 # стоял нижний пиксель кадра — передний угол основания, и здание съезжало на клетку назад
@@ -139,15 +148,23 @@ var _base_scale: float = 1.0   # масштаб спрайта 1-го уровн
 var sprite: AnimatedSprite2D = null         # свой спрайт (если есть лист), иначе null — блоки
 var _level_k: float = 1.0      # масштаб спрайта уровня (_apply_level_scale); на экране — с ростом и оживлением
 var _grow: float = 1.0         # рост из прежнего масштаба при улучшении (play_level_up)
+var _pip_key: String = ""      # ромбики уровня: для какого ряда / масштаба посчитана высота (_draw_level_pips)
+var _pip_top: float = 0.0
 var _kick: float = 0.0         # отдача неживого выстрела: 1 — только что, гаснет к 0
 var _kick_wait: float = 0.0    # до кадра вспышки, сек
 var _pulse: float = 0.0        # толчок неживого пополнения / щита
+var _mouths: Array[Sprite2D] = []   # накал жерла у каждого ствола (code_flash): растёт к готовности выстрела, вспыхивает после него
+var _heat: float = 0.0         # накал после выстрела: 1 — только что, гаснет к 0
+var _flash_queue: Array = []   # вспышки выстрела кодом, ждут кадра выстрела: {t, at, dir, tint}
 
 func setup(building_card: CardData, grid_tile: Vector2i) -> void:
 	card = building_card
 	tile = grid_tile
 	building_type = card.building_type
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# Рисунок узла (тень, кольца уровня, круги аур, ромбики, круг залпа) — пиксельно, как эффекты боя (стилизация
+	# 12.11.2026: цвет и прозрачность ступенями с дизерингом Байера); у спрайта — свой материал
+	material = Vfx.soft_mix_material()   # мелкие ступени: тень и круги аур — большие слабые заливки
 	_load_sprite()
 	refresh_stats()
 
@@ -169,6 +186,11 @@ func _apply_level_scale() -> void:
 	if env.is_empty():
 		sprite.material = Soldier.outline_material(k, OUTLINE_WORLD_PX, Palette.BUILDING_OUTLINE)   # контур как у бойцов
 		return
+	# Поправка к свету местности для отдельных зданий (тема "building_env_by_type", 23.11.2026): общий "building_env" — ещё и у
+	# цитадели, ей темнее нельзя, а часть зданий (яркая оранжевая башня) выбивалась из ряда
+	var tweak: Dictionary = FactionTheme.current().get("building_env_by_type", {}).get(building_type, {})
+	if not tweak.is_empty():
+		env = env.merged(tweak, true)
 	sprite.self_modulate = env.get("tint", Color.WHITE)
 	sprite.material = _environment_material(env, k)
 
@@ -201,13 +223,25 @@ func play_level_up(from_scale: Vector2) -> void:
 			if sprite.material == flash:   # контур и свет местности — снова общий материал
 				sprite.material = shared)
 
+# Непрозрачная часть кадра стойки уровня (px кадра) — раз на ряд (get_image дорогой)
+var _used_anim: String = ""
+var _used_rect := Rect2()
+func _idle_used_rect() -> Rect2:
+	var anim := _level_anim("idle")
+	if anim != _used_anim:
+		_used_anim = anim
+		var tex: Texture2D = sprite.sprite_frames.get_frame_texture(anim, 0)
+		var img := tex.get_image()
+		_used_rect = Rect2(img.get_used_rect()) if img else Rect2(Vector2.ZERO, tex.get_size())
+		if _used_rect.size == Vector2.ZERO:
+			_used_rect = Rect2(Vector2.ZERO, tex.get_size())
+	return _used_rect
+
 # Рост здания над основанием, px мира (кадр стойки уровня; блоки — по прямоугольнику блоков)
 func _visual_height() -> float:
 	if sprite == null:
 		return global_position.y - get_occlusion_rect().position.y
-	var tex: Texture2D = sprite.sprite_frames.get_frame_texture(_level_anim("idle"), 0)
-	var img := tex.get_image()
-	var top := float(img.get_used_rect().position.y) if img else 0.0
+	var top := _idle_used_rect().position.y
 	return (-sprite.offset.y - top) * _level_k
 
 # Здание в свет местности (тема "building_env"): шейдер бойцов — мягкий контур, насыщенность, приглушение
@@ -228,6 +262,7 @@ func _environment_material(env: Dictionary, k: float) -> ShaderMaterial:
 		m.set_shader_parameter("ao_strength", env.get("ao", 0.0))
 		m.set_shader_parameter("ao_from", bv - ENV_AO_HEIGHT)
 		m.set_shader_parameter("ao_to", bv + ENV_AO_BELOW)
+		Soldier.apply_style(m, "building")   # светотень ступенями и палитра расы (стилизация 12.11.2026)
 		_env_materials[key] = m
 	return _env_materials[key]
 
@@ -240,8 +275,8 @@ func _draw_level_ring() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))   # изометрия: круг на земле — эллипс 2:1
 	if card.building_level >= 3:
 		draw_circle(Vector2.ZERO, r, Color(col, LEVEL_RING_GLOW_ALPHA))
-		draw_arc(Vector2.ZERO, r + LEVEL_RING_GAP, 0.0, TAU, 64, Color(col, LEVEL_RING_ALPHA * 0.6), 2.0, true)
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 64, Color(col, LEVEL_RING_ALPHA), 2.5, true)
+		draw_arc(Vector2.ZERO, r + LEVEL_RING_GAP, 0.0, TAU, 64, Color(col, LEVEL_RING_ALPHA * 0.6), 2.0)
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 64, Color(col, LEVEL_RING_ALPHA), 2.0)   # без сглаживания — пиксельно
 	draw_set_transform(Vector2.ZERO)
 
 # -------------------------------------------------------
@@ -274,6 +309,8 @@ func _load_sprite() -> void:
 	_set_flip(false)
 	_base_scale = minf(IsoGrid.TILE_WIDTH * SPRITE_WIDTH / maxf(frames.get_meta("body_width"), 1.0),
 			IsoGrid.TILE_WIDTH * SPRITE_MAX_HEIGHT / size.y)
+	if card.faction == "chaos":
+		_base_scale *= CHAOS_SIZE
 	_apply_level_scale()
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	sprite.animation_finished.connect(func():
@@ -282,6 +319,10 @@ func _load_sprite() -> void:
 	sprite.animation_changed.connect(_update_offset)   # у рядов уровня свой сдвиг (level_shift)
 	add_child(sprite)
 	sprite.play(_level_anim("idle"))
+	# отброшенная тень по земле от основания (WorldLight, 12.11.2026); основание — начало координат спрайта
+	WorldLight.attach(sprite, Vector2.ZERO, frames.get_meta("base_point").y)
+	BuildingGlow.attach(sprite)   # свечение огней, ламп и кристаллов кодом (точки — по кадру стойки)
+	_make_mouth_glow()
 
 # Центр ромба основания в кадре (px): самая широкая строка силуэта внизу кадра, выше нижнего пикселя
 # на четверть её ширины. Пустой кадр — центр низа
@@ -304,6 +345,15 @@ static func find_base(img: Image) -> Vector2:
 			best_w = right - left + 1
 			best_cx = (left + right + 1) / 2.0
 	return Vector2(best_cx, bottom - best_w / 4.0)
+
+# Не разворачиваются к цели левее (решение пользователя 13.11.2026: «Heretic Autocannon не должна поворачиваться»):
+# «раса/тип» (раса — card.faction, "" — Космодесант); спрайт всегда как нарисован, снаряд — из ствола по его оси
+# и дугой к цели (Projectile.launch_dir), цели прежние
+const NO_FLIP = ["chaos/tower"]
+
+func _flips_to_aim() -> bool:
+	var race := "chaos" if card.faction == "chaos" else ""
+	return not NO_FLIP.has(("%s/%s" % [race, building_type]) if race != "" else building_type)
 
 # Отражение спрайта (выстрел влево) — основание остаётся в точке здания
 func _set_flip(on: bool) -> void:
@@ -337,15 +387,16 @@ func play_once(base: String) -> bool:
 	var anim := _level_anim(base)
 	if not sprite.sprite_frames.has_animation(anim):
 		return false
-	_set_flip(base == "attack" and aim.x < 0.0)
+	_set_flip(base == "attack" and aim.x < 0.0 and _flips_to_aim())
 	sprite.stop()
 	sprite.play(anim)
-	if _is_static(anim):   # неживой ряд уровня — оживить кодом
-		if base == "attack":
-			_kick = 1.0
-			_kick_wait = _shot_delay()
-		else:
-			_pulse = 1.0
+	# Отдача выстрела — у любого ряда выстрела (решение пользователя 16.11.2026: «пушки без импакта»; корпус в рядах
+	# выстрела — кадр стойки, tools/building_shot_impact.py); толчок пополнения / щита — только неживым рядам уровня
+	if base == "attack":
+		_kick = 1.0
+		_kick_wait = _shot_delay()
+	elif _is_static(anim):
+		_pulse = 1.0
 	return true
 
 func _is_static(anim: StringName) -> bool:
@@ -356,7 +407,7 @@ func _apply_motion(delta: float) -> void:
 	var sx := 1.0
 	var sy := 1.0
 	var pos := Vector2.ZERO
-	if BattleManager.is_battle_running() and sprite.animation.begins_with("idle") and _is_static(sprite.animation):
+	if sprite.animation.begins_with("idle") and (_is_static(sprite.animation) or _has_code_flash()):   # дыхание неживой стойки — и на расстановке (21.11.2026); у листов с code_flash кадры стойки неподвижны (разница 0) — плавность даёт код
 		var b := sin(Time.get_ticks_msec() / 1000.0 * TAU / BREATH_PERIOD + float(hash(tile) % 628) / 100.0)
 		sy += BREATH * b
 		sx -= BREATH * 0.5 * b
@@ -364,8 +415,9 @@ func _apply_motion(delta: float) -> void:
 		_kick_wait -= delta
 	elif _kick > 0.0:
 		_kick = maxf(0.0, _kick - delta / KICK_TIME)
-		var e := _kick * _kick
-		pos = -aim.normalized() * KICK_PX * e
+		# отдача пружиной (21.11.2026, «неплавная анимация выстрела»): быстрый откат, мягкий возврат с лёгким перехлёстом
+		var e := _kick * _kick * (1.0 - 0.3 * sin((1.0 - _kick) * TAU))
+		pos = Vector2(0.0, KICK_PX * 1.6 * e) if building_type == "artillery" else -aim.normalized() * KICK_PX * e   # мортира садится вниз
 		sy *= 1.0 - KICK_SQUASH * e
 		sx *= 1.0 + KICK_SQUASH * 0.75 * e
 	if _pulse > 0.0:
@@ -380,15 +432,48 @@ func _apply_motion(delta: float) -> void:
 func _sprite_muzzle() -> Vector2:
 	var size := sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
 	var m: Vector2 = sprite.sprite_frames.get_meta("muzzle", Vector2(0, -size.y * 0.6))
+	# у ряда уровня свои стволы (пакет 05.11.2026): metadata/level_muzzle {уровень: Vector2} — та же мера, что
+	# muzzle, на холсте ряда уровня (tools/building_levels_muzzle.py); нет — вспышка там же, где у 1-го уровня
+	var attack := _level_anim("attack")
+	if attack != "attack":
+		m = sprite.sprite_frames.get_meta("level_muzzle", {}).get(card.building_level, m)
+	return _muzzle_to_world(m)
+
+# Все стволы для залпа (решение пользователя 06.11.2026 «залп из всех стволов»): metadata/level_barrels
+# {уровень: [Vector2, …]} — по стволу на каждую вспышку кадра выстрела (tools/building_levels_muzzle.py),
+# та же мера, что muzzle; нет записи уровня — один ствол _sprite_muzzle
+func _sprite_barrels() -> Array:
+	var points: Array = sprite.sprite_frames.get_meta("level_barrels", {}).get(card.building_level, [])
+	if points.is_empty():
+		return [_sprite_muzzle()]
+	return points.map(func(m): return _muzzle_to_world(m))
+
+# Точка листа (мера muzzle: px холста от центра низа кадра) → мир, с отражением и сдвигом ряда уровня
+func _muzzle_to_world(m: Vector2) -> Vector2:
+	var size := sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
 	var base: Vector2 = sprite.sprite_frames.get_meta("base_point", Vector2(size.x / 2.0, size.y))
 	var p := Vector2(size.x / 2.0 + m.x, size.y + m.y) - base   # muzzle — от центра низа кадра (sheet_to_frames)
-	# вспышка в кадрах уровня — там же на холсте, что у 1-го уровня: ствол едет вместе с рядом уровня
-	p += _level_shift(_level_anim("attack"))
-	if aim.x < 0.0:   # выстрел влево — спрайт отразится (play_once), основание на месте
+	p += _level_shift(_level_anim("attack"))   # ствол едет вместе с рядом уровня
+	if aim.x < 0.0 and _flips_to_aim():   # выстрел влево — спрайт отразится (play_once), основание на месте
 		p.x = -p.x
 	return to_global(p * _level_k)
 
 # Задержка снаряда до кадра выстрела листа (metadata shot_frame) — как у бойцов
+# Ось ствола уровня в мире (metadata/level_barrel_dir листа, tools/building_levels_muzzle.py; лист «смотрит вправо»,
+# отражённый к цели — x наоборот): снаряд вылетает по ней (Projectile.launch_dir). Нет — ZERO, прямо на цель
+func _sprite_barrel_dir() -> Vector2:
+	var dirs: Dictionary = sprite.sprite_frames.get_meta("level_barrel_dir", {})
+	var d: Vector2 = dirs.get(card.building_level, dirs.get(1, Vector2.ZERO))
+	if sprite.flip_h:
+		d.x = -d.x
+	return d
+
+# Вспышка в листе началась: ряд выстрела дошёл до shot_frame или уже сменился (снаряд — с ней, Projectile.show_fn)
+func _shot_flash_started(anim: StringName) -> bool:
+	if not is_instance_valid(sprite) or sprite.animation != anim:
+		return true
+	return sprite.frame >= int(sprite.sprite_frames.get_meta("shot_frame", 0))
+
 func _shot_delay() -> float:
 	var frames := sprite.sprite_frames
 	if not frames.has_meta("shot_frame"):
@@ -396,24 +481,38 @@ func _shot_delay() -> float:
 	return frames.get_meta("shot_frame") / frames.get_animation_speed(sprite.animation)
 
 # Прозрачность OcclusionFader (self_modulate) — и на спрайт: дочерний узел self_modulate не наследует.
-# Вне схватки стойка — один кадр (hold_idle_outside_battle)
+# Стойка играет и вне схватки (hold_idle_outside_battle, IDLE_ON_PLACEMENT)
 func _process(delta: float) -> void:
 	if sprite:
 		sprite.modulate.a = self_modulate.a
 		hold_idle_outside_battle(sprite)
+		hold_frame_rate(sprite)
 		_apply_motion(delta)
+		_tick_flash_queue(delta)
+		_update_mouth(delta)
 	if _aura_ring != null and not BattleManager.is_battle_running():
 		if is_instance_valid(_aura_ring):
 			_aura_ring.dismiss()
 		_aura_ring = null
 		queue_redraw()
 
-# Вне схватки (расстановка, итог) стойка здания — один кадр idle, в бою — анимация (решение пользователя
-# 20.10.2026: покачивание стоек на расстановке мелькало; бойцы анимируются всегда). Уровни — idle_2 / idle_3
+# Кадры здания не ускоряются вместе с боем (решение пользователя 12.11.2026: «не ускоряй смену кадров зданий во
+# время ускорения боя, кроме кадров стрельбы у пушек»): ряды выстрела (attack, attack_2…) — как бой, остальные
+# (стойка, пополнение, щит) — делятся на BattleManager.battle_speed_now. Цитадель — так же (Citadel._process)
+static func hold_frame_rate(s: AnimatedSprite2D) -> void:
+	var k := 1.0 if String(s.animation).begins_with("attack") else 1.0 / maxf(BattleManager.battle_speed_now, 0.01)
+	if s.speed_scale != k:
+		s.speed_scale = k
+
+# Стойка здания играет и на расстановке (решение пользователя 21.11.2026: «добавь анимации idle для зданий во время стадии
+# планирования»; прежнее решение 20.10.2026 — вне схватки один кадр, «покачивание мелькало» — снято: корпус кадров листа
+# уже закреплён lock_reg.py, живое — только огни, дым и ткань). IDLE_ON_PLACEMENT false вернёт один кадр вне боя
+const IDLE_ON_PLACEMENT: bool = true
+
 static func hold_idle_outside_battle(s: AnimatedSprite2D) -> void:
 	if not String(s.animation).begins_with("idle"):
 		return
-	var still := not BattleManager.is_battle_running()
+	var still := not IDLE_ON_PLACEMENT and not BattleManager.is_battle_running()
 	if still and (s.is_playing() or s.frame != 0):
 		s.stop()   # stop — кадр 0, анимация та же
 	elif not still and not s.is_playing():
@@ -427,10 +526,10 @@ func _draw() -> void:
 	_draw_level_ring()
 	if _aura_ring == null and stats.get("slow_radius", 0.0) > 0.0:   # в бою — кольцо ауры (_show_aura)
 		draw_circle(Vector2.ZERO, stats["slow_radius"], SLOW_AURA_COLOR)
-		draw_arc(Vector2.ZERO, stats["slow_radius"], 0.0, TAU, 48, SLOW_AURA_LINE, 1.5, true)
+		draw_arc(Vector2.ZERO, stats["slow_radius"], 0.0, TAU, 48, SLOW_AURA_LINE, 2.0)
 	if _aura_ring == null and stats.get("poison_radius", 0.0) > 0.0:
 		draw_circle(Vector2.ZERO, stats["poison_radius"], POISON_AURA_COLOR)
-		draw_arc(Vector2.ZERO, stats["poison_radius"], 0.0, TAU, 48, POISON_AURA_LINE, 1.5, true)
+		draw_arc(Vector2.ZERO, stats["poison_radius"], 0.0, TAU, 48, POISON_AURA_LINE, 2.0)
 	if sprite:   # свой спрайт — блоков и нарисованных стволов нет
 		if building_type == "artillery" and _explosion_id > 0:
 			draw_circle(to_local(_explosion_point), stats.get("splash_radius", 0.0), EXPLOSION_COLOR)
@@ -467,12 +566,27 @@ static func draw_ground_shadow(ci: CanvasItem, center: Vector2, width: float) ->
 func _draw_level_pips() -> void:
 	if card.building_level <= 1:
 		return
-	var top = get_occlusion_rect().position.y - global_position.y - LEVEL_PIP_SIZE * 2.0
+	var top: float
+	if sprite:
+		# над моделью, не над холстом кадра (06.11.2026: у кадров уровня над зданием пустой холст — ромбики
+		# висели в воздухе или ложились на соседние здания); высота — по силуэту кадра стойки уровня, раз на ряд
+		var key := "%s|%.4f" % [_level_anim("idle"), _level_k]
+		if key != _pip_key:
+			_pip_key = key
+			_pip_top = -_visual_height()
+		top = _pip_top - LEVEL_PIP_SIZE * 2.0
+	else:
+		top = get_occlusion_rect().position.y - global_position.y - LEVEL_PIP_SIZE * 2.0
 	var x0 = -LEVEL_PIP_GAP * (card.building_level - 1) / 2.0
 	for i in range(card.building_level):
-		var c = Vector2(x0 + i * LEVEL_PIP_GAP, top)
-		draw_colored_polygon(PackedVector2Array([c + Vector2(0, -LEVEL_PIP_SIZE), c + Vector2(LEVEL_PIP_SIZE, 0),
-			c + Vector2(0, LEVEL_PIP_SIZE), c + Vector2(-LEVEL_PIP_SIZE, 0)]), LEVEL_PIP_COLOR)
+		var c := Vector2(x0 + i * LEVEL_PIP_GAP, top).round()
+		_pip(c, LEVEL_PIP_SIZE + 1.5, LEVEL_PIP_EDGE)
+		_pip(c, LEVEL_PIP_SIZE, LEVEL_PIP_COLOR)
+		_pip(c + Vector2(0, -LEVEL_PIP_SIZE * 0.4), LEVEL_PIP_SIZE * 0.45, LEVEL_PIP_LIGHT)
+
+func _pip(c: Vector2, r: float, col: Color) -> void:
+	draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r),
+		c + Vector2(-r, 0)]), col)
 
 # Центр верхней грани блока подклетки (i, j) на ярусе level
 func _block_top(i: float, j: float, level: int) -> Vector2:
@@ -507,7 +621,7 @@ static func get_effect_tiles(type: String, at: Vector2i) -> Array[Vector2i]:
 
 # Подсказка: название и уровень, что делает (с текущими цифрами), можно ли улучшить
 func describe() -> String:
-	return "\n".join(["%s · ур. %d/%d" % [card.title, card.building_level, CardData.MAX_BUILDING_LEVEL],
+	return "\n".join(["%s · ур. %d/%d" % [card.display_title(), card.building_level, CardData.MAX_BUILDING_LEVEL],
 		effect_text(), upgrade_text()])
 
 func upgrade_text() -> String:
@@ -529,7 +643,7 @@ func effect_text() -> String:
 		"barracks":
 			if card.faction == "chaos":   # Святилище культа: не лечит, отряд бога рядом — павшие встают его бойцами
 				lines.append(("После каждой победы возвращают %d павших бойцов отрядам на соседних клетках (подсвечены). "
-					+ "Отряд бога Хаоса рядом — павшие других соседей встают его бойцами (сила — по редкости отряда)") \
+					+ "Отряд Внешнего рядом — павшие других соседей встают его бойцами (сила — по редкости отряда)") \
 					% floori(stats.get("refill", 0.0)))
 			else:
 				lines.append("После каждой победы лечат отряды на соседних клетках (подсвечены) на %d%% HP и возвращают %d павших" \
@@ -553,7 +667,7 @@ func effect_text() -> String:
 			lines.append("Отряды на соседних клетках (подсвечены) +%d%% урона. После боя чинит цитадель на %d HP" % [
 				roundi(stats.get("damage_bonus", 0.0) * 100.0), stats.get("repair", 0.0)])
 		"skull_altar":
-			lines.append("Каждый убитый враг: +%.1f%% урона всей армии, отрядам Кхорна ещё +%.1f%%, до конца боя (до +%d%%)" % [
+			lines.append("Каждый убитый враг: +%.1f%% урона всей армии, отрядам Кипящего ещё +%.1f%%, до конца боя (до +%d%%)" % [
 				stats.get("per_kill", 0.0) * 100.0, stats.get("khorne_per_kill", 0.0) * 100.0,
 				roundi(stats.get("max_bonus", 0.0) * 100.0)])
 		"plague_cauldron":
@@ -568,7 +682,7 @@ func effect_text() -> String:
 		_:
 			lines.append(card.description)
 	if not special_active():
-		lines.append("Не ваш %s — особый эффект не действует" % ("бог" if card.faction == "chaos" else "орден"))
+		lines.append("Не ваш Внешний — особый эффект не действует" if card.faction == "chaos" else "Не ваше братство — особый эффект не действует")
 	return "\n".join(lines)
 
 
@@ -576,8 +690,14 @@ func effect_text() -> String:
 # OcclusionFader делает здание полупрозрачным, если за ним стоит боец
 func get_occlusion_rect() -> Rect2:
 	if sprite:
-		var size: Vector2 = sprite.sprite_frames.get_frame_texture("idle", 0).get_size() * sprite.scale
-		return Rect2(global_position + sprite.offset * sprite.scale, size)
+		# по силуэту кадра стойки уровня, не по холсту (06.11.2026: холст уровня ×1.6 с пустыми полями — рамка
+		# накрывала бойцов на соседних клетках, и здание гасло на расстановке без причины)
+		var used := _idle_used_rect()
+		if sprite.flip_h:
+			var w := sprite.sprite_frames.get_frame_texture(_level_anim("idle"), 0).get_width()
+			used.position.x = w - used.end.x
+		return Rect2(global_position + sprite.position + (sprite.offset + used.position) * sprite.scale,
+			used.size * sprite.scale)
 	var rect = Rect2()
 	for b in BLOCKS.get(building_type, []):
 		var r = TerrainTiles.block_rect(_block_top(b[1], b[2], b[3]), BLOCK_SCALE)
@@ -589,7 +709,10 @@ func get_occlusion_rect() -> Rect2:
 # -------------------------------------------------------
 func tick(delta: float) -> void:
 	if building_type == "artillery":
+		var was_waiting := cooldown_left > Soldier.TIMER_EPSILON
 		cooldown_left = maxf(cooldown_left - delta, 0.0)
+		if was_waiting and cooldown_left <= Soldier.TIMER_EPSILON:
+			AudioManager.play("artillery_ready")   # орудие снова готово (после залпа; в начале боя оно уже готово — тишина)
 		return
 	if stats.get("slow_radius", 0.0) > 0.0:
 		_tick_slow_aura()
@@ -606,23 +729,41 @@ func tick(delta: float) -> void:
 	if target == null:
 		return
 	attack_timer = 1.0 / stats.get("attack_speed", 1.0)
-	var aim_offset = Vector2(0, -Soldier.TARGET_SPRITE_HEIGHT / 2.0)
+	var aim_offset = Vector2(0, -Soldier.TARGET_SPRITE_HEIGHT / 2.0 + Soldier.GROUND_SINK)
 	aim = target.global_position + aim_offset - global_position
 	queue_redraw()
-	var barrel_end = to_global(_block_top(0.5, 0.5, TOWER_LEVELS) + aim.normalized() * BARREL_LENGTH)
+	var barrels := [to_global(_block_top(0.5, 0.5, TOWER_LEVELS) + aim.normalized() * BARREL_LENGTH)]
 	var delay := 0.0
-	if sprite:   # свой спрайт: снаряд из его ствола (на кадре вспышки, если есть ряд attack)
-		barrel_end = _sprite_muzzle()
+	var tint := Color(0, 0, 0, 0)
+	var show_fn := Callable()
+	var launch_dir := Vector2.ZERO
+	if sprite:   # свой спрайт: снаряд из каждого его ствола (на кадре вспышки, если есть ряд attack)
+		barrels = _sprite_barrels()
+		tint = sprite.sprite_frames.get_meta("muzzle_color", tint)   # снаряд в цвет вспышки листа, как у бойцов
 		if play_once("attack"):
 			delay = _shot_delay()
-	var shot = Projectile.launch(get_parent(), SHOOTERS[building_type], barrel_end, target, aim_offset, delay)
-	shot.damage = stats.get("damage", 0.0)
-	shot.stun = stats.get("stun", 0.0)
+			show_fn = _shot_flash_started.bind(sprite.animation)   # снаряд — с кадром вспышки в листе
+		launch_dir = _sprite_barrel_dir()   # после play_once: отражение к цели уже выставлено
+		_queue_code_flash(barrels, delay)
+	for barrel_end in barrels:   # залп: урон поровну, сумма — как у одного выстрела; оглушение — у каждого
+		var shot = Projectile.launch(get_parent(), SHOOTERS[building_type], barrel_end, target, aim_offset, delay,
+			false, tint)
+		shot.damage = stats.get("damage", 0.0) / barrels.size()
+		shot.stun = stats.get("stun", 0.0)
+		shot.show_fn = show_fn
+		shot.launch_dir = launch_dir
+
+# Стрелки, которые бьют только вперёд — по полю боя (решение пользователя 06.11.2026: бастион Imperial Fists —
+# стена с пушками, не разворачивается к врагам у цитадели и в тылу); цель — не левее здания на экране
+const FORWARD_ONLY = ["fists_bastion"]
 
 func _find_target(attack_range: float) -> Soldier:
 	var best: Soldier = null
 	var best_dist: float = attack_range
+	var forward_only: bool = building_type in FORWARD_ONLY
 	for e in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY):
+		if forward_only and e.global_position.x < global_position.x:
+			continue
 		var d = global_position.distance_to(e.global_position)
 		if d <= best_dist:
 			best_dist = d
@@ -644,23 +785,129 @@ func fire_at(point: Vector2) -> bool:
 	aim = point - global_position
 	queue_redraw()
 	var base = _block_top(0.5, 0.5, ARTILLERY_LEVELS)
-	var muzzle = to_global(base + aim.normalized() * ARTILLERY_BARREL_LENGTH)
+	var barrels := [to_global(base + aim.normalized() * ARTILLERY_BARREL_LENGTH)]
 	var delay := 0.0
 	if sprite:
-		muzzle = _sprite_muzzle()
+		barrels = _sprite_barrels()
 		if play_once("attack"):
 			delay = _shot_delay()
+		_queue_code_flash(barrels, delay, true)
 	var hellfire: bool = card.faction == "chaos"
-	var shot = Projectile.launch(get_parent(), HELLFIRE_PROJECTILE if hellfire else ARTILLERY_PROJECTILE,
-		muzzle, null, point, delay)
-	shot.damage = stats.get("damage", 0.0)
-	shot.splash_radius = stats.get("splash_radius", 0.0)
-	shot.splash_team = GameConstants.TEAM_ENEMY
-	shot.on_impact = _show_explosion
-	shot.impact_vfx = HELLFIRE_IMPACT_VFX if hellfire else ARTILLERY_IMPACT_VFX
-	shot.arc_height = ARTILLERY_ARC
-	_play_fire_animation(muzzle)
+	for i in barrels.size():   # залп: ракета из каждого ствола в ту же точку, урон поровну (сумма прежняя)
+		var shot = Projectile.launch(get_parent(), HELLFIRE_PROJECTILE if hellfire else ARTILLERY_PROJECTILE,
+			barrels[i], null, point, delay)
+		shot.damage = stats.get("damage", 0.0) / barrels.size()
+		shot.splash_radius = stats.get("splash_radius", 0.0)
+		shot.splash_team = GameConstants.TEAM_ENEMY
+		if i == 0:   # взрыв (огонь, дым, обломки), круг и тряска камеры — раз за залп: ракеты ложатся в одну точку
+			shot.on_impact = _show_explosion
+			shot.impact_vfx = HELLFIRE_IMPACT_VFX if hellfire else ARTILLERY_IMPACT_VFX
+			shot.heavy = true   # стоп-кадр и вспышка света при разрыве
+		shot.arc_height = ARTILLERY_ARC
+		if _has_code_flash():   # вспышку и накал рисует _tick_flash_queue (на кадре выстрела)
+			continue
+		if delay > Soldier.TIMER_EPSILON and is_inside_tree():   # вспышка — на кадре выстрела листа, когда ствол поднят
+			get_tree().create_timer(delay, false).timeout.connect(_play_fire_animation.bind(barrels[i]))
+		else:
+			_play_fire_animation(barrels[i])
 	return true
+
+# Вспышка выстрела кодом (BuildingFx.muzzle_flash): у листов с metadata/code_flash — кадры ряда выстрела без нарисованной
+# вспышки (tools/building_shot_clean.py), язык пламени, искры, свет и накал рисует код на кадре выстрела (shot_frame)
+func _has_code_flash() -> bool:
+	return sprite != null and bool(sprite.sprite_frames.get_meta("code_flash", false))
+
+func _queue_code_flash(barrels: Array, delay: float, mortar: bool = false) -> void:
+	if not _has_code_flash():
+		return
+	var dir := _sprite_barrel_dir()
+	if dir == Vector2.ZERO:   # нет оси ствола: орудие стреляет вверх по дуге, остальные — на цель
+		dir = Vector2(0.18, -1.0) if mortar else aim.normalized()
+	var tint: Color = sprite.sprite_frames.get_meta("muzzle_color", Color(1.0, 0.6, 0.2))
+	var size := (1.0 + 0.18 * (card.building_level - 1)) * (0.85 if barrels.size() > 1 else 1.0) * (1.15 if mortar else 1.0)
+	for b in barrels:
+		_flash_queue.append({"t": delay, "at": b, "dir": dir, "tint": tint, "size": size, "mortar": mortar})
+
+# Жерло в пикселях кадра (та же метка muzzle, что у вспышки, но без перевода в мир)
+func _muzzle_px() -> Vector2:
+	var size := sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
+	var m: Vector2 = sprite.sprite_frames.get_meta("muzzle", Vector2(0, -size.y * 0.6))
+	if _level_anim("attack") != "attack":
+		m = sprite.sprite_frames.get_meta("level_muzzle", {}).get(card.building_level, m)
+	return Vector2(size.x / 2.0 + m.x, size.y + m.y)
+
+# Накал жерла (21.11.2026, «флегетон мортар плохо анимирован — добавь свечение жерла»): мягкий ADD-шар на метке muzzle;
+# орудие — после выстрела тускло тлеет и по перезарядке разгорается до полной готовности (дышит), стрелок — ровно тлеет;
+# выстрел — вспышка накала (_heat) и шар крупнее
+func _make_mouth_glow() -> void:
+	if not _has_code_flash():
+		return
+	_sync_mouths()
+
+# Накал — у каждого ствола уровня (24.11.2026, «огонёк слишком далеко от дула и только у 1 дула»): число шаров = число стволов
+# ряда (level_barrels), шаров нет — один у muzzle; пересобирается при смене уровня
+func _sync_mouths() -> void:
+	var need := _barrel_px_list().size()
+	if _mouths.size() == need:
+		return
+	for m in _mouths:
+		m.queue_free()
+	_mouths.clear()
+	for i in need:
+		var m := Sprite2D.new()
+		m.texture = BuildingGlow._glow_texture()
+		m.centered = true
+		m.material = Vfx.soft_add_material()
+		sprite.add_child(m)
+		_mouths.append(m)
+
+# Жерла уровня в пикселях кадра (мера _muzzle_px); у залпа — каждый ствол
+func _barrel_px_list() -> Array:
+	var size := sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
+	var pts: Array = sprite.sprite_frames.get_meta("level_barrels", {}).get(card.building_level, [])
+	if pts.is_empty():
+		return [_muzzle_px()]
+	return pts.map(func(m): return Vector2(size.x / 2.0 + m.x - 14.0, size.y + m.y))   # шар в глубине ствола: диск целиком внутри ствола, не торчит за срез (виделся вторым концом)
+
+func _update_mouth(delta: float) -> void:
+	if _mouths.is_empty():
+		return
+	_sync_mouths()
+	_heat = maxf(0.0, _heat - delta / 0.9)
+	var ready := 1.0
+	if building_type == "artillery":
+		var cd: float = maxf(stats.get("cooldown", 1.0), 0.01)
+		ready = 1.0 - clampf(cooldown_left / cd, 0.0, 1.0)
+	elif SHOOTERS.has(building_type):
+		ready = 1.0 - clampf(attack_timer / maxf(1.0 / stats.get("attack_speed", 1.0), 0.01), 0.0, 1.0)
+	var t := Time.get_ticks_msec() / 1000.0
+	var pulse := 0.5 + 0.5 * sin(t * (2.2 + 3.0 * ready) + float(hash(tile) % 100))
+	var size := sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
+	var tint: Color = sprite.sprite_frames.get_meta("muzzle_color", Color(1.0, 0.6, 0.2))
+	var a := 0.22 + 0.4 * ready * (0.75 + 0.25 * pulse) + 0.5 * _heat
+	var pts := _barrel_px_list()
+	var k := 1.0 if pts.size() == 1 else 0.45   # у залпа шары мельче — не сливаются в «второй ствол»
+	for i in mini(pts.size(), _mouths.size()):
+		var p: Vector2 = pts[i]
+		var x := (size.x - p.x) if sprite.flip_h else p.x
+		var mouth := _mouths[i]
+		mouth.position = sprite.offset + Vector2(x, p.y)
+		mouth.modulate = Color(tint.lerp(Color(1.0, 0.9, 0.6), 0.35 * _heat + 0.2 * ready), minf(a * (1.0 if k == 1.0 else 0.7), 1.0))
+		mouth.scale = Vector2.ONE * k * (20.0 + 8.0 * ready + 14.0 * _heat) / 32.0
+
+func _tick_flash_queue(delta: float) -> void:
+	if _flash_queue.is_empty():
+		return
+	var rest: Array = []
+	for f in _flash_queue:
+		f["t"] -= delta
+		if f["t"] > 0.0:
+			rest.append(f)
+			continue
+		BuildingFx.muzzle_flash(get_parent(), f["at"], f["dir"], f["tint"], f["size"])
+		_heat = 1.0
+		Vfx.spawn(get_parent(), "muzzle_smoke", f["at"])
+	_flash_queue = rest
 
 # Только вид: вспышка и дым из ствола, ствол откатывается и возвращается
 func _play_fire_animation(muzzle: Vector2) -> void:
@@ -705,7 +952,7 @@ func _tick_slow_aura() -> void:
 		if global_position.distance_to(e.global_position) <= r:
 			e.apply_status(StatusEffects.SLOWED, power, WALL_SLOW_LINGER, false)
 
-# Котёл Нургла: врагам в радиусе — яд без стаков, держится POISON_LINGER после выхода
+# Котёл Дедушки Тысячи: врагам в радиусе — яд без стаков, держится POISON_LINGER после выхода
 func _tick_poison_aura() -> void:
 	var r: float = stats["poison_radius"]
 	for e in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY):
@@ -716,7 +963,7 @@ func _tick_poison_aura() -> void:
 # пересчитывается отношением, когда растёт счёт)
 var _enemies_at_start: int = 0
 var _altar_bonus: float = 0.0
-var _altar_khorne_bonus: float = 0.0   # отрядам Кхорна — сверх прибавки армии (решение пользователя 25.10.2026)
+var _altar_khorne_bonus: float = 0.0   # отрядам Кипящего — сверх прибавки армии (решение пользователя 25.10.2026)
 
 func _tick_skull_altar() -> void:
 	var kills := maxi(_enemies_at_start - SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_ENEMY).size(), 0)
@@ -738,7 +985,7 @@ func _tick_skull_altar() -> void:
 	for s in SoldierRegistry.get_alive_soldiers_of_team(GameConstants.TEAM_PLAYER):
 		s.current_damage *= k
 
-# Особый эффект здания ордена / бога (на соседние отряды, прибавка отрядам Кхорна у Алтаря) — только когда игрок играет
+# Особый эффект здания ордена / бога (на соседние отряды, прибавка отрядам Кипящего у Алтаря) — только когда игрок играет
 # за этого бога / орден (решение пользователя 25.10.2026); общие здания — всегда. Основное действие (аура, выстрел) — всегда
 func special_active() -> bool:
 	var owner := Chapters.building_owner(card.id)
@@ -765,6 +1012,21 @@ static func apply_battle_start() -> void:
 			if sq.tile in area:
 				for s in sq.soldiers:
 					b._apply_start_effect(s)
+
+# Волна от здания к соседним отрядам, на которых сработает эффект начала боя (BuildingFx, EFFECTS_NEEDED 4.2) —
+# по «В БОЙ», пока отряды ещё на своих клетках (сам эффект — apply_battle_start, после построения). Только вид
+static func show_start_waves() -> void:
+	var squads := SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER)
+	for b in BattleManager.buildings:
+		if not is_instance_valid(b) or not b.special_active():
+			continue
+		var area := get_effect_tiles(b.building_type, b.tile)
+		var reached: Array = []   # сдвиги к центрам клеток отрядов
+		for sq in squads:
+			if sq.tile in area:
+				var d: Vector2i = sq.tile - b.tile
+				reached.append(Vector2((d.x - d.y) * IsoGrid.TILE_WIDTH / 2.0, (d.x + d.y) * IsoGrid.TILE_HEIGHT / 2.0))
+		BuildingFx.wave(b.global_position, reached, b.building_type)
 
 # Аура здания в бою — кольцо на земле вместо круга расстановки (AuraRing; только вид; снимает _process после боя)
 func _show_aura() -> void:

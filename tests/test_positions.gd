@@ -6,6 +6,7 @@ extends SceneTree
 const EPS: float = 0.001
 
 func _initialize() -> void:
+	root.get_node("GameSettings").names_language = "en"   # тесты сверяют английские названия (по умолчанию игроку показываются русские)
 	root.get_node("SaveManager").enabled = false
 	root.get_node("GameSettings").battle_speed = 1.0
 	_main()

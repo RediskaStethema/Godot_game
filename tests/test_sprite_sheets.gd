@@ -1,17 +1,18 @@
 extends SceneTree
 
-# Все листы кадров (frames.tres в assets/sprites): каждый кадр каждой анимации загружается и не пустой.
+# Все листы кадров (frames.tres в assets/units — юниты и боссы, assets/sprites — здания): каждый кадр каждой анимации загружается и не пустой.
 # Решение пользователя 19.10.2026: Апотекарион «на 1 кадр исчезал» — кадр не импортировался (valid=false
 # в .import), а SpriteFrames молча показывал пустоту.
 #   godot --headless --path . -s tests/test_sprite_sheets.gd
 
-const ROOT = "res://assets/sprites"
+const ROOTS = ["res://assets/units", "res://assets/sprites"]
 
 var _fails := 0
 
 func _initialize() -> void:
 	var sheets: Array[String] = []
-	_collect(ROOT, sheets)
+	for root in ROOTS:
+		_collect(root, sheets)
 	var broken: Array[String] = []
 	var frames_total := 0
 	for path in sheets:
