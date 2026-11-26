@@ -29,7 +29,9 @@ const BUILDING_OUTLINE = Color(0.0, 0.0, 0.0, 1.0)  # контур зданий:
 const DIM_OVERLAY  = Color(0.0, 0.0, 0.0, 0.6)    # затемнение под окнами и баннерами
 const PLAYER_SIDE  = GOLD                         # свои: кольцо под бойцом, рамка королевства
 const ENEMY_SIDE   = RED_BRIGHT
-const AMBER_LIGHT  = Color(1.0, 0.83, 0.4)        # огонёк: ромбики уровня, усиление, выстрел цитадели
+const TUTORIAL_DIM = Color(0.05, 0.035, 0.04, 0.38)   # затемнение под диалогом обучения: тёплый тёмный камень вместо чистого чёрного
+const TUTORIAL_PULSE = Color(1.45, 1.25, 0.8)         # пульс подсказанной карты / слота: было (1.7, 1.4, 0.7) — пересвет
+const AMBER_LIGHT  =Color(1.0, 0.83, 0.4)        # огонёк: ромбики уровня, усиление, выстрел цитадели
 const TIMELINE_DONE = Color(0.95, 0.42, 0.36)    # лента забега: пройденный путь и волны тлеют красным
 const TIMELINE_GLOW = Color(1.0, 0.27, 0.18)     # лента забега: свечение текущей волны
 const GOLD_PALE    = Color("ffeaa8")               # белое золото: ромб клетки «свой отряд того же типа»
@@ -111,7 +113,6 @@ const PRIMARCH_COLORS = {
 	"primarch_vulkan": Color("4fa83e"),       # Саламандры — зелёный
 }
 
-# Космос главного меню (решение пользователя 06.11.2026: «меню на фоне космоса, звёзды сияют») — MenuStarfield
 const LANDING_CLOUD = Color("3a3c40")              # дым посадки на поле (BattleLanding) — Космодесант: пепельный
 const LANDING_CLOUD_CHAOS = Color("3b2422")        # то же у Хаоса — бурый дым
 const LANDING_FIRE   = Color("8a3a12")              # отсвет пожаров снизу сквозь дым (гримдарк, 08.11.2026)
@@ -122,8 +123,6 @@ const WARP_RIFT_CORE = Color("7a2a5a")
 const MENU_SPACE   = Color("0b1018")               # космос главного меню — ровный, как на образце exampel.png
 const MENU_BUTTON_TEXT = Color("d6cfc0")           # надпись кнопки меню — бежево-белая (образец)
 const MENU_TITLE   = Color("cdc4b2")               # название Grim Kingdom — светлый беж (образец)
-const MENU_SUBTITLE = Color("9a9282")              # «Удержите цитадель 15 волн»
-const SPACE_DEEP   = Color("05070c")               # глубина космоса (низ и левый край)
 # Жетоны выбора расы / ордена (TokenCarousel, 13.11.2026): потемневшая латунь обода — от тени к блику
 const TOKEN_RIM = [Color("140e09"), Color("2e2114"), Color("4f3a20"), Color("7a5b30"), Color("a98446"), Color("dcbf7c")]
 const TOKEN_OUTLINE = Color("07060a")

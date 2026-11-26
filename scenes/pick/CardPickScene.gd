@@ -30,6 +30,7 @@ const BURN_STAGGER: float = 0.09
 const BURN_TINT: Color = Color(1.9, 0.75, 0.3, 1.0)
 
 var embedded: bool = false
+var hold_deal: bool = false   # обучение: карты не выкладывать до deal_now()
 
 var _grid: GridContainer
 var _hint: Label
@@ -43,6 +44,8 @@ var _info_title: Label
 var _info_kind: Label
 var _info_desc: Label
 var _faces: Array[Control] = []
+var _glared: Dictionary = {}   # слоты, где подсветка редкости уже навешена
+var _face_ids: Array[String] = []   # id карты на лице каждой рубашки (см. _sync_faces)
 var _backs: Array[TextureRect] = []    # рубашка поверх лица
 var _flipping: Dictionary = {}         # рубашки, которые сейчас переворачиваются (_refresh их не прячет скачком)
 var _dealing: bool = false             # идёт выкладка — клики по рубашкам не принимаются
@@ -66,7 +69,20 @@ func _ready() -> void:
 	_refresh_hud()
 	SaveManager.save_run()   # вылет на выборе — «Продолжить» вернёт сюда же с тем же набором
 	_refresh()
-	_deal_in()
+	if hold_deal:   # обучение: пока наставники говорят о поле (цитадель), карты не показываем — deal_now() выложит их
+		_dealing = true
+		modulate.a = 0.0   # окно целиком (и затемнение поля под ним) — до deal_now()
+		for c in _slots:
+			c.modulate.a = 0.0
+	else:
+		_deal_in()
+
+# Обучение: карты ещё не выложены (hold_deal) — выложить сейчас
+func deal_now() -> void:
+	if hold_deal:
+		hold_deal = false
+		create_tween().tween_property(self, "modulate:a", 1.0, 0.3)
+		_deal_in()
 
 func _build() -> void:
 	var back: Control
@@ -154,11 +170,8 @@ func _build_info() -> void:
 func _make_slot(i: int, card: CardData) -> Control:
 	var holder := Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var face: Control
-	if UITheme.has_card_art(card):
-		face = UITheme.make_card_face(card, CARD_WIDTH)
-	else:
-		face = _plain_face(card)
+	var face: Control = _make_face(card)
+	_face_ids.append(card.id)
 	holder.custom_minimum_size = face.custom_minimum_size
 	holder.add_child(face)
 	face.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -186,6 +199,40 @@ func _make_slot(i: int, card: CardData) -> Control:
 	_backs.append(back)
 	_hits.append(hit)
 	return holder
+
+func _make_face(card: CardData) -> Control:
+	return UITheme.make_card_face(card, CARD_WIDTH) if UITheme.has_card_art(card) else _plain_face(card)
+
+# Подсветка редкости (синяя — Rare, фиолетовая — Epic), как у карт магазина. Только у открытой карты: на закрытой рубашке
+# она выдала бы редкость вслепую
+func _glow_open_faces() -> void:
+	for k in _faces.size():
+		if _glared.has(k) or _flipping.has(k):
+			continue
+		if not (ShopManager.pick_open.has(k) or ShopManager.pick_start_taken.has(k)):
+			continue
+		var card: CardData = ShopManager.pick_offers[k]
+		if not _faces[k] is PanelContainer:
+			CardGlare.attach(_faces[k], card.rarity, true)
+		_glared[k] = true
+
+# Обучение подменяет карты местами уже после раздачи (ShopManager._tutorial_swap_start): лицо рубашки должно показывать ту карту,
+# что ляжет в руку, — иначе игрок видит одно, а в руке другое
+func _sync_faces() -> void:
+	for k in mini(_faces.size(), ShopManager.pick_offers.size()):
+		var card: CardData = ShopManager.pick_offers[k]
+		if _face_ids[k] == card.id:
+			continue
+		var old: Control = _faces[k]
+		var face := _make_face(card)
+		var holder: Control = _holders[k]
+		holder.add_child(face)
+		holder.move_child(face, old.get_index())
+		face.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		old.queue_free()
+		_glared.erase(k)
+		_faces[k] = face
+		_face_ids[k] = card.id
 
 func _on_card_clicked(i: int) -> void:
 	if _start:   # стартовый выбор: клик по рубашке — карта вслепую в руку; взятые не трогаем
@@ -264,7 +311,7 @@ func _deal_in() -> void:
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.tween_property(cell, "rotation", 0.0, DEAL_TIME).set_delay(d) \
 			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tw.tween_callback(AudioManager.play.bind("ui_click")).set_delay(d)
+		tw.tween_callback(AudioManager.play.bind("card_draw")).set_delay(d)
 	tw.chain().tween_callback(func():
 		_dealing = false
 		_refresh())
@@ -273,8 +320,11 @@ func _on_back_clicked(i: int) -> void:
 	if _dealing or _burned or not ShopManager.pick_reveal(i):
 		return
 	SaveManager.save_run()
+	_sync_faces()   # обучение: открывается обязательная карта, её рубашка меняется местами с нажатой
 	_flip(i)
 	_refresh()
+	if Tutorial.pick_target_card() != null:
+		_hint.text = Tutorial.pick_hint()
 
 # Переворот: карта приподнимается и кренится, рубашка сужается к ребру, с ребра раскрывается лицо; по краю — вспышка
 func _flip(i: int) -> void:
@@ -303,12 +353,31 @@ func _flip(i: int) -> void:
 		holder.rotation = 0.0
 		holder.modulate = Color.WHITE
 		_flipping.erase(i)
-		_refresh())
-	AudioManager.play("ui_click")
+		_refresh()
+		if ShopManager.pick_ready() and not ShopManager.pick_done():
+			_tutorial_notify("pick_ready"))
+	AudioManager.play("card_draw")
+
+# Обучение: наставник подсказывает / ругает (BattleScene — текущая сцена, окно выбора лежит поверх неё)
+func _tutorial_notify(event: String) -> void:
+	var main := get_tree().current_scene
+	if main != null and main.has_method("_tutorial_notify"):
+		main.call("_tutorial_notify", event, self)
+
+# Рамки открытых карт, которые обучение разрешает взять (подсвечиваются пульсом)
+func tutorial_holders() -> Array:
+	var out: Array = []
+	for i in ShopManager.pick_open:
+		if i < _holders.size() and Tutorial.pick_accepts(ShopManager.pick_offers[i]):
+			out.append(_holders[i])
+	return out
 
 func _on_take_pressed(i: int) -> void:
 	var card := ShopManager.pick_take(i)
 	if card == null:
+		if Tutorial.pick_target_card() != null:   # обучение: взять надо обязательную карту
+			_hint.text = Tutorial.pick_hint()
+			_tutorial_notify("pick_wrong")
 		return
 	var msg := ""
 	if BattleManager.pending_cards.size() >= BattleManager.MAX_HAND_SIZE:
@@ -330,6 +399,7 @@ func _on_start_taken(i: int) -> void:
 	var card := ShopManager.pick_start_take(i)
 	if card == null:
 		return
+	_sync_faces()
 	if BattleManager.pending_cards.size() >= BattleManager.MAX_HAND_SIZE:
 		EconomyManager.sell_card(card)   # рука полна (стартовая карта меты и др.) — карта сразу продаётся
 	else:
@@ -370,6 +440,7 @@ func _burn_others(kept: Array) -> void:
 		tw.tween_property(holder, "modulate:a", 0.0, BURN_TIME * 0.7).set_trans(Tween.TRANS_QUAD)
 
 func _refresh() -> void:
+	_glow_open_faces()
 	var n := ShopManager.pick_open.size()
 	var done := ShopManager.pick_done()
 	for i in _slots.size():

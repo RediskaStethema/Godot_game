@@ -65,6 +65,11 @@ const FALL_TIME: float = 0.9
 const RIFT_TIME: float = 0.85
 const SHIELD_TIME: float = 0.45
 const SHIELD_SHARDS: int = 8
+const MUZZLE_TIME: float = 0.16     # вспышка выстрела: быстро и резко
+const MUZZLE_LEN: float = 34.0      # px мира, длина языка при size 1
+const MUZZLE_WIDTH: float = 11.0
+const MUZZLE_SPARKS: int = 5
+const HEAT_TIME: float = 0.8        # накал жерла после выстрела
 const BONUS_TIME: float = 1.6
 const BONUS_GAP: float = 13.0        # px мира между знаками бонусов
 # Вид знака бонуса: цвет кромки и ядра
@@ -216,6 +221,9 @@ static func squad_fall(at: Vector2, r: float, own: bool) -> void:
 static func rift(at: Vector2, r: float, wait: float = 0.0) -> void:
 	if not is_instance_valid(AuraRing.layer):
 		return
+	if ResourceLoader.exists(Vfx.FX_DIR + "chaos_rift/rift_back.png"):   # листы разлома (25.11.2026), иначе прежний код ниже
+		_rift_sheets(at, r, wait)
+		return
 	var fx := _make("rift", AuraRing.layer.get_parent() if AuraRing.layer.get_parent() else AuraRing.layer, true)
 	fx.z_index = Vfx.Z_INDEX_WORLD
 	fx.global_position = at
@@ -225,6 +233,46 @@ static func rift(at: Vector2, r: float, wait: float = 0.0) -> void:
 	for i in 10:   # искры варпа
 		fx.parts.append({"p": Vector2(_rng.randf_range(-0.4, 0.4) * r, _rng.randf_range(-1.6, -0.2) * r),
 			"v": Vector2(_rng.randf_range(-30.0, 30.0), _rng.randf_range(-50.0, -10.0)), "size": _rng.randf_range(0.8, 1.8)})
+
+# Разлом листами: back — на землю под бойцов (слой AuraRing.layer, z 0), front — поверх (ADD). Размер — по отряду
+const RIFT_SIZE_MIN: float = 0.9
+const RIFT_SIZE_MAX: float = 1.5
+const RIFT_SIZE_K: float = 1.15
+static func _rift_sheets(at: Vector2, r: float, wait: float) -> void:
+	var size := clampf(r / Soldier.TARGET_SPRITE_HEIGHT, RIFT_SIZE_MIN, RIFT_SIZE_MAX) * RIFT_SIZE_K
+	var ground: Node = AuraRing.layer
+	var above: Node = ground.get_parent() if ground.get_parent() else ground
+	# Эффекты создаются сразу, а при wait > 0 ждут скрытыми и неподвижными до своей очереди (отряды выходят по одному)
+	var back := Vfx.spawn(ground, "rift_back", at, size)
+	if back:
+		back.z_index = 0   # под бойцами: слой земли стоит раньше контейнера бойцов
+	var front := Vfx.spawn(above, "rift_front", at, size)
+	if wait <= 0.0:
+		return
+	var parts: Array = [back, front]
+	for v in parts:
+		if v:
+			v.visible = false
+			v.pause()
+			v.set_process(false)
+	ground.get_tree().create_timer(wait, false).timeout.connect(func():
+		for v in parts:
+			if is_instance_valid(v):
+				v.visible = true
+				v.set_process(true)
+				v.play("play"))
+
+# Появление цитадели (25.11.2026): кольцо трещин и пыль / разлом вокруг площадки — back под цитаделью (слой земли), front поверх;
+# вид по расе игрока (Vfx.race_kind). Саму цитадель проявляет BattleScene._citadel_appear
+static func citadel_spawn(at: Vector2) -> void:
+	if not is_instance_valid(AuraRing.layer):
+		return
+	var ground: Node = AuraRing.layer
+	var above: Node = ground.get_parent() if ground.get_parent() else ground
+	var back := Vfx.spawn(ground, Vfx.race_kind("citadel_spawn_back"), at, 1.0)
+	if back:
+		back.z_index = 0
+	Vfx.spawn(above, Vfx.race_kind("citadel_spawn_front"), at, 1.0)
 
 static func shield_break(s: Node2D, sprite_scale: float = 1.0) -> void:
 	var parent: Node = s.get_parent().get_parent() if s.get_parent() else null
@@ -248,6 +296,26 @@ static func bonus_marks(squad: Node2D, kinds: Array, wait: float = 0.0) -> void:
 	fx.parts = kinds.duplicate()
 	fx.delay = wait
 	fx.duration = BONUS_TIME + wait
+
+# Выстрел здания кодом (21.11.2026, «у стреляющих зданий проблемы с анимациями выстрелов»): вместо вспышки, нарисованной
+# в кадре листа (клин вдоль ствола, срезанный краем холста, дрожал между кадрами), — язык пламени по оси ствола тремя
+# слоями (кромка цвета выстрела → тёплый → белое ядро), искры веером, свет на земле и бойцах, накал жерла.
+# parent — контейнер зданий (y-sort), at — жерло в мире, dir — ось ствола, tint — цвет выстрела (metadata/muzzle_color)
+static func muzzle_flash(parent: Node, at: Vector2, dir: Vector2, tint: Color, size: float = 1.0) -> void:
+	if not is_instance_valid(parent):
+		return
+	var d := dir.normalized() if dir.length() > 0.01 else Vector2.RIGHT
+	var fx := _make("muzzle", parent, true)
+	fx.global_position = at
+	fx.look = {"dir": d, "tint": tint, "size": size}
+	fx.duration = MUZZLE_TIME
+	for i in MUZZLE_SPARKS:
+		fx.parts.append({"a": _rng.randf_range(-0.55, 0.55), "l": _rng.randf_range(12.0, 26.0), "d": _rng.randf_range(0.0, 0.3)})
+	var heat := _make("heat", parent, true)
+	heat.global_position = at
+	heat.look = {"tint": tint, "size": size}
+	heat.duration = HEAT_TIME
+	IsoGridRenderer.flash_light(at, Color(tint, 0.6), 80.0 * size, 0.18)
 
 static func _stone_colors(chaos: bool) -> Array:
 	return [Palette.CHAOS_WALL_STONE, Palette.CHAOS_WALL_TOP, Palette.CHAOS_WALL_SPIKE] if chaos \
@@ -308,6 +376,10 @@ func _draw() -> void:
 			_draw_shield()
 		"bonus":
 			_draw_bonus()
+		"muzzle":
+			_draw_muzzle()
+		"heat":
+			_draw_heat()
 
 func _draw_wave() -> void:
 	var edge: Color = look["edge"]
@@ -574,3 +646,39 @@ func _draw_bonus() -> void:
 					pts.append(Vector2.from_angle(-PI / 2.0 + TAU * k / 10.0) * rr)
 				draw_colored_polygon(pts, Color(core, 0.9 * a))
 	draw_set_transform(Vector2.ZERO)
+
+func _draw_muzzle() -> void:
+	var d: Vector2 = look["dir"]
+	var tint: Color = look["tint"]
+	var size: float = look["size"]
+	var t := _t / duration
+	var grow := minf(_t / 0.035, 1.0)                      # язык вырастает за кадр-два
+	var fade := 1.0 - t * t
+	var len := MUZZLE_LEN * size * grow * (1.0 - 0.25 * t)
+	var w := MUZZLE_WIDTH * size * (1.0 - 0.5 * t)
+	var n := Vector2(-d.y, d.x)
+	# слои: чем глубже, тем короче, уже и горячее
+	var layers := [[1.0, 1.0, Color(tint, 0.55 * fade)], [0.72, 0.62, Color(tint.lerp(Palette.FORGE_PALE, 0.55), 0.8 * fade)],
+		[0.42, 0.3, Color(Palette.FORGE_PALE.lerp(Color.WHITE, 0.5), 0.95 * fade)]]
+	for l in layers:
+		var L: float = len * l[0]
+		var W: float = w * l[1]
+		var pts := PackedVector2Array([n * W * 0.5, d * L * 0.35 + n * W * 0.62, d * L * 0.75 + n * W * 0.22, d * L,
+			d * L * 0.7 - n * W * 0.25, d * L * 0.3 - n * W * 0.6, -n * W * 0.5])
+		draw_colored_polygon(pts, l[2])
+	for sp in parts:
+		if _t < float(sp["d"]) * duration:
+			continue
+		var a: float = sp["a"]
+		var dir := d.rotated(a)
+		var k := clampf((_t - float(sp["d"]) * duration) / (duration * 0.8), 0.0, 1.0)
+		draw_line(dir * (len * 0.25 + float(sp["l"]) * k * size), dir * (len * 0.25 + float(sp["l"]) * k * size + 5.0 * size),
+			Color(Palette.FORGE_PALE, (1.0 - k) * 0.85), 1.5)
+
+func _draw_heat() -> void:
+	var tint: Color = look["tint"]
+	var size: float = look["size"]
+	var t := _t / duration
+	var a := (1.0 - t) * (1.0 - t) * 0.5
+	for i in 3:   # мягкий накал ступенями — без шашечки
+		draw_circle(Vector2.ZERO, (9.0 - i * 2.5) * size, Color(tint.lerp(Palette.FORGE_PALE, i * 0.3), a * (0.4 + i * 0.3)))

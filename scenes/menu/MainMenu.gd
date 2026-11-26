@@ -14,10 +14,6 @@ const COLUMN_SHADE_WIDTH: float = 0.42  # доля ширины окна
 const MENU_LEFT: float = 52.0          # отступ колонки меню от левого края (эталон меню 16.11.2026: 4% ширины)
 const ART_DIR = "res://assets/ui/menu/"
 const MenuSceneArt = preload("res://scenes/menu/MenuSceneArt.gd")
-# Туманности за меню: [цвет (альфа — сила), центр, радиус — доли экрана]
-# Решение пользователя 08.11.2026 (образец assets/source_sheets/FInalUI/exampel.png): фон — почти чёрный космос без туманностей
-# (были NEBULA_BLUE в 0.22, 0.3 и NEBULA_WARP в 0.48, 0.85); вернуть — записи сюда
-const NEBULAE = []
 # Шапка меню по эталону (решение пользователя 16.11.2026, ассеты — NewAssets/07_ui, tools/menu_v2_assets.py): череп в венке
 # между двумя половинками шипастого разделителя, название, подпись и разделитель целиком. Аквила с бликом и логотип
 # logo_eagle* больше не используются (прежние файлы — assets/source_sheets/_backup_before_redesign_2026-11-15/ui/menu_anim)
@@ -78,6 +74,9 @@ func _build_layout() -> void:
 		var test = _make_button("ТЕСТОВЫЙ РЕЖИМ", "icon_gear", _on_test_mode_pressed)
 		test.name = "TestModeButton"
 		col.add_child(test)
+		var tut = _make_button("ОБУЧЕНИЕ (ТЕСТ)", "icon_wreath", _on_tutorial_test_pressed)   # сценарий «Козёл учит» с начала
+		tut.name = "TutorialTestButton"
+		col.add_child(tut)
 	col.add_child(_make_button("НАСТРОЙКИ", "icon_gear", _on_settings_pressed))
 	col.add_child(_make_button("ВЫХОД", "icon_exit", _on_quit_pressed))
 
@@ -104,27 +103,6 @@ func _make_backdrop() -> TextureRect:
 	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return rect
-
-# Туманность: радиальное пятно цвета color (альфа — сила) с центром center и радиусом radius (доли экрана), ADD
-func _make_nebula(color: Color, center: Vector2, radius: float) -> TextureRect:
-	var g = Gradient.new()
-	g.set_color(0, color)
-	g.set_color(1, Color(color, 0.0))
-	var tex = GradientTexture2D.new()
-	tex.gradient = g
-	tex.fill = GradientTexture2D.FILL_RADIAL
-	tex.fill_from = center
-	tex.fill_to = center + Vector2(radius, 0.0)
-	var r = TextureRect.new()
-	r.texture = tex
-	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	r.stretch_mode = TextureRect.STRETCH_SCALE
-	r.set_anchors_preset(Control.PRESET_FULL_RECT)
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var mat = CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	r.material = mat
-	return r
 
 # Сцена справа на всю высоту; левый край растворяется в фоне
 # (живая — слоями пакета assets/ui/menu/anim, MenuSceneArt; нет пакета — неподвижная menu_scene.png)
@@ -185,10 +163,7 @@ func _make_title_block() -> VBoxContainer:
 	title.add_theme_color_override("font_outline_color", Color(0.03, 0.025, 0.02))
 	title.add_theme_constant_override("outline_size", 6)
 	box.add_child(title)
-	var sub = UITheme.make_label("———  УДЕРЖИТЕ ЦИТАДЕЛЬ 15 ВОЛН  ———", "DimLabel")
-	sub.add_theme_color_override("font_color", Palette.MENU_SUBTITLE)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(sub)
+	# Подписи «Удержите цитадель 15 волн» под названием больше нет (решение пользователя 23.11.2026: «убери вообще»)
 	if rule:
 		var divider = TextureRect.new()
 		divider.texture = rule
@@ -401,6 +376,29 @@ func _on_test_mode_pressed() -> void:
 		_track_select(chapters)
 		chapters.setup(faction, true)
 		chapters.chosen.connect(func(chapter): RunManager.start_test_mode(faction, chapter)))
+
+# Режим проверки обучения (решение пользователя 24.11.2026: «сделай отдельный режим в меню типа туториал для теста
+# туториала»; только в сборке для разработки, как тестовый режим): раса → орден / бог (все открыты) → обычный забег
+# с обучением, включённым и начатым с INTRO (`GameSettings.set_tutorial_enabled(true)` стирает прогресс и показанные
+# подсказки), сложность 1, без стартовой карты Арсенала; сохранение забега заменяется, как при новом забеге
+func _on_tutorial_test_pressed() -> void:
+	var dialog = RaceSelectDialog.new()
+	add_child(dialog)
+	_track_select(dialog)
+	dialog.setup()
+	dialog.chosen.connect(func(faction):
+		if not Chapters.has_chapters(faction):
+			_start_tutorial_run(faction, "")
+			return
+		var chapters = ChapterSelectDialog.new()
+		add_child(chapters)
+		_track_select(chapters)
+		chapters.setup(faction, true)
+		chapters.chosen.connect(func(chapter): _start_tutorial_run(faction, chapter)))
+
+func _start_tutorial_run(faction: String, chapter: String) -> void:
+	GameSettings.set_tutorial_enabled(true)
+	_start_new_run(faction, chapter, 1)
 
 func _on_arsenal_pressed() -> void:
 	var dialog = ArsenalDialog.new()

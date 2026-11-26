@@ -1,6 +1,8 @@
 class_name SquadInspector
 extends Control
 
+signal squad_info_opened(squad: Squad)   # справка своего отряда открыта кликом (обучение)
+
 # Подсказки по отрядам на поле боя (UI поверх камеры, в CanvasLayer):
 #   * наведение на бойца дольше HOVER_NAME_DELAY — подпись «имя ×бойцов · ур.N»
 #     (свои золотом, враги красным; скрытые до боя враги не подписываются);
@@ -127,6 +129,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not same:
 			info_squad = squad
 			_update_info()
+			squad_info_opened.emit(squad)
 		return
 	if citadel_at(world):
 		var was := info_citadel
@@ -401,6 +404,17 @@ static func describe(squad: Squad) -> String:
 		for title in d.applied_upgrades:
 			ups.append(InfoCard.hint(title, CardFactory.description_by_title(title)))
 		lines.append("Улучшения: " + ", ".join(ups))
+	# Казармы по соседству (решение пользователя 23.11.2026, обучение): что они сделают с этим отрядом после победы
+	if squad.team == GameConstants.TEAM_PLAYER:
+		for bcard in BattleManager.player_buildings:
+			if bcard.building_type == "barracks" \
+					and BattleManager.NEIGHBOUR_TILES.has(squad.tile - BattleManager.player_buildings[bcard]):
+				var stats: Dictionary = bcard.get_building_stats()
+				var heal := roundi(float(stats.get("heal", 0.0)) * 100.0) if bcard.faction != "chaos" else 0
+				var back := floori(float(stats.get("refill", 0.0)))
+				var text := "после победы " + ("лечат живых на %d%% и " % heal if heal > 0 else "") \
+					+ "возвращают до %d павших бойцов" % back
+				lines.append("Казармы рядом: " + InfoCard.color_numbers(text, Palette.AMBER_LIGHT))
 	var pos = SynergyManager.get_squad_position_bonus(squad)
 	if pos != "":
 		var p: Dictionary = SynergyManager.POSITION_BONUSES[pos]

@@ -102,14 +102,14 @@ func _main() -> void:
 	idle.play("idle_2")
 	idle.frame = 2
 	hold.call(idle)
-	var held: bool = not idle.is_playing() and idle.frame == 0
+	var plays_planning: bool = idle.is_playing() and idle.animation == &"idle_2"   # расстановка — стойка играет (21.11.2026)
 	bm.start_battle()
 	hold.call(idle)
 	var plays: bool = idle.is_playing() and idle.animation == &"idle_2"
 	bm.stop_battle()
 	hold.call(idle)
-	_check("стойка здания: вне боя — кадр 0 (%s), в бою — играет (%s), после боя — снова кадр 0" % [held, plays],
-		held and plays and not idle.is_playing())
+	_check("стойка здания: на расстановке играет (%s), в бою играет (%s), после боя — снова играет" % [plays_planning, plays],
+		plays_planning and plays and idle.is_playing())
 
 	# Ускорение боя не ускоряет кадры зданий, кроме выстрела (решение пользователя 12.11.2026)
 	var rate = load("res://scripts/battle/Building.gd").hold_frame_rate

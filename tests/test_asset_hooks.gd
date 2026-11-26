@@ -256,14 +256,14 @@ func _main() -> void:
 	_check("события звука: музыка боя, выстрел снаряда (%s)" % ", ".join(audio.history.slice(0, 4)),
 		audio.current_music() == "battle" and audio.history.any(func(h): return h.begins_with("shot_bolt")))
 	# Пакет звуков пользователя (09.11.2026): у подключённых событий есть файлы в assets/audio, музыка menu / shop /
-	# battle грузится, боя с боссом своего трека нет — запасной боевой
+	# battle / boss грузится (boss — главный босс, 26.11.2026); запасной боевой трек на месте
 	audio._streams.clear()   # сброс подмен выше — дальше настоящие файлы
 	var need := ["shot_bolt", "shot_spark", "shot_charged", "melee_hit", "death", "death_vehicle", "hit", "buy", "place",
 		"reroll", "sell", "ui_click", "pause", "no_money", "step", "step_heavy", "boss_step"]
 	var missing: Array = need.filter(func(e): return audio._get_streams(e).is_empty())
-	var music_ok: bool = ["menu", "shop", "battle"].all(func(t): return audio._find_music(t) != null)
-	var boss_fallback: bool = audio._find_music("boss") == null and audio._find_music(audio.MUSIC_FALLBACK["boss"]) != null
-	_check("звуки пакета: у %d событий файлы (нет у: %s), музыка menu / shop / battle, босс — боевая" % [
+	var music_ok: bool = ["menu", "shop", "battle", "boss"].all(func(t): return audio._find_music(t) != null)
+	var boss_fallback: bool = audio._find_music(audio.MUSIC_FALLBACK["boss"]) != null
+	_check("звуки пакета: у %d событий файлы (нет у: %s), музыка menu / shop / battle / boss, запасная у босса" % [
 		need.size() - missing.size(), str(missing)], missing.is_empty() and music_ok and boss_fallback)
 	# Щелчок у любой кнопки дерева (09.11.2026: кнопки не из UITheme.make_button молчали); со своим звуком — без щелчка
 	var plain := Button.new()

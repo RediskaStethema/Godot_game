@@ -12,6 +12,9 @@ const COLUMN_WIDTH: float = 165.0       # ширина колонки ветки
 const NODE_SIZE: float = 56.0           # значок узла
 const LANE_STEP: float = 46.0           # сдвиг узла lane ±1 от середины колонки
 const BRANCH_HEADER: float = 48.0       # название ветки над узлами
+const HEAD_MIN_PX: int = 12             # название ветки не мельче
+const HEAD_WRAP_SCALE: float = 0.88     # кегль длинного названия, которое идёт в две строки
+const HEAD_WRAP_SHIFT: float = 14.0     # подпись «открыто» ниже у такого названия
 const ROW_STEP_MAX: float = 88.0        # шаг рядов; в низком окне — меньше, не ниже ROW_STEP_MIN
 const ROW_STEP_MIN: float = 70.0
 const WINDOW_CHROME: float = 250.0      # рамка, заголовок и «Закрыть» вокруг древа — древо вписано в экран
@@ -101,10 +104,20 @@ func _make_tree() -> Control:
 		head.position = Vector2(COLUMN_WIDTH * i, 0)
 		head.size = Vector2(COLUMN_WIDTH, BRANCH_HEADER * 0.55)
 		head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# Длинное название («Совет Монструваканов», «Ревизская палата») обрезалось и налезало на соседнюю колонку (25.11.2026):
+		# идёт в две строки кеглем поменьше (HEAD_WRAP_SCALE, не мельче HEAD_MIN_PX), подпись «открыто N/M» чуть ниже
+		var head_font: Font = head.get_theme_font("font")
+		var head_px: int = head.get_theme_font_size("font_size")
+		var wraps := false
+		if head_font != null and head_font.get_string_size(head.text, HORIZONTAL_ALIGNMENT_LEFT, -1, head_px).x > COLUMN_WIDTH - 10.0:
+			wraps = true
+			head.add_theme_font_size_override("font_size", maxi(int(round(head_px * HEAD_WRAP_SCALE)), HEAD_MIN_PX))
+			head.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			head.add_theme_constant_override("line_spacing", -2)
 		tree.add_child(head)
 		var sub := UITheme.make_label("открыто %d/%d" % [owned, nodes.size()], "DimLabel")
 		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		sub.position = Vector2(COLUMN_WIDTH * i, BRANCH_HEADER * 0.5)
+		sub.position = Vector2(COLUMN_WIDTH * i, BRANCH_HEADER * 0.5 + (HEAD_WRAP_SHIFT if wraps else 0.0))
 		sub.size = Vector2(COLUMN_WIDTH, BRANCH_HEADER * 0.4)
 		tree.add_child(sub)
 	for n in MetaProgress.TREE:

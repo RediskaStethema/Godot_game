@@ -39,6 +39,9 @@ func _main() -> void:
 	var button = menu.find_child("TestModeButton", true, false)
 	_check("меню: кнопка «ТЕСТОВЫЙ РЕЖИМ» в сборке для разработки (debug %s)" % OS.is_debug_build(),
 		(button != null) == OS.is_debug_build())
+	var tut_button = menu.find_child("TutorialTestButton", true, false)
+	_check("меню: кнопка «ОБУЧЕНИЕ (ТЕСТ)» — в сборке для разработки, как тестовый режим",
+		(tut_button != null) == OS.is_debug_build())
 	menu.queue_free()
 
 	# 2. Вход: сразу расстановка, панель, королевство 4×4, рука пуста; карты — все расы и особые всех орденов
@@ -118,8 +121,19 @@ func _main() -> void:
 
 	# 6. Бой: цитадель не падает; итог — та же расстановка, цитадель целая
 	scene._play_building_card(CardFactory.create("fists_bastion"), Vector2i(1, 0))
+	var audio = root.get_node("AudioManager")
+	var placement_music: String = audio.current_music()
 	scene._on_start_pressed(false)
 	await _frames(2)
+	var battle_music: String = audio.current_music()
+	await create_timer(audio.MUSIC_PUNCH["boss"] + 0.15).timeout   # прежний трек погас — босс сразу в полную громкость
+	var player: AudioStreamPlayer = audio.get("_music")
+	var loop = player.stream as AudioStreamWAV
+	_check("музыка босса: на расстановке «%s», с началом боя «%s» — петля %.1f с, сразу в полную громкость (%.0f дБ)" % [
+		placement_music, battle_music, loop.get_length() if loop else 0.0, player.volume_db],
+		placement_music == "battle" and battle_music == "boss" and loop != null and loop.loop_mode == AudioStreamWAV.LOOP_FORWARD
+		and is_equal_approx(loop.get_length(), 30.0) and loop.loop_end == int(30.0 * loop.mix_rate)
+		and player.playing and is_zero_approx(player.volume_db))
 	# Бастион бьёт только вперёд: враги левее (у цитадели, в тылу) — не цель, разворота нет
 	var bastion = scene._get_player_building_at(Vector2i(1, 0))
 	var enemies: Array = root.get_node("SoldierRegistry").get_alive_soldiers_of_team(1).duplicate()
@@ -144,6 +158,29 @@ func _main() -> void:
 		hp_in_battle >= 1.0 and siege_lost and scene.get("is_placement_phase") and scene.get("test_panel") != null
 		and squad3 != null and squad3.data.squad_level == 3 and bm.citadel_hp == bm.CITADEL_MAX_HP
 		and not bm.battle_in_progress and rm.test_mode)
+
+	# 6b. Магазин из панели (21.11.2026): окно поверх поля, монет хватает, набор новый, покупка — в руку, «В БОЙ» — назад к полю
+	var node_before: int = rm.current_node_id
+	var hand_before: int = bm.pending_cards.size()
+	scene.get("test_panel").shop_pressed.emit()
+	await _frames(4)
+	var shop = scene.get("shop")
+	var offers_ok: bool = shop != null and root.get_node("ShopManager").current_offers.size() > 0
+	var req: int = root.get_node("EconomyManager").requisition
+	var bought = null
+	if offers_ok:   # покупка — как кликом по слоту (карта уходит в руку магазина)
+		shop.call("_on_purchase_requested", 0)
+		bought = true if shop.get("purchased_cards").size() == hand_before + 1 else null
+	if shop != null:
+		shop.call("_on_battle_pressed")   # без армии — предупреждение, со второго нажатия уход
+		if scene.get("shop") != null:
+			shop.call("_on_battle_pressed")
+	await _frames(4)
+	_check("магазин из панели: окно открыто, монет ≥ %d (%d), покупка ушла в руку (%d → %d), закрыт — поле и панель на месте, шаг цепочки не сдвинут" % [
+		scene.TEST_SHOP_REQUISITION, req, hand_before, bm.pending_cards.size()],
+		offers_ok and req >= scene.TEST_SHOP_REQUISITION and bought != null and bm.pending_cards.size() == hand_before + 1
+		and scene.get("shop") == null and not scene.get("shop_phase") and scene.get("test_panel").is_visible_in_tree()
+		and scene.bench.bench_cards.size() == bm.pending_cards.size() and rm.current_node_id == node_before)
 
 	# 7. Очистить поле
 	scene.get("test_panel").clear_pressed.emit()

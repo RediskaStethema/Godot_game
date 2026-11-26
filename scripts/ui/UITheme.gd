@@ -327,16 +327,22 @@ static func set_coin_icon(b: Button, on: bool = true, width: int = COIN_ICON_SIZ
 	set_button_icon(b, "hud", "requisition", width)
 	b.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
-# Курсоры пакета интерфейса (assets/ui/cursor, горячие точки — hotspots.txt художника): стрелка-копьё,
-# латная перчатка над картой руки (CURSOR_DRAG — BenchCard), прицел орудия (CURSOR_CROSS — ArtilleryReticle).
-# Ставятся один раз на всю игру; зовут главные сцены в _ready. Нет файла — системный
+# Курсоры (assets/ui/cursor): стрелка-копьё, латная перчатка с указательным пальцем — выбор (жетоны, карты выбора; Control.
+# CURSOR_POINTING_HAND), латный кулак над картой руки (CURSOR_DRAG — BenchCard), прицел орудия (CURSOR_CROSS —
+# ArtilleryReticle). Ставятся один раз на всю игру; зовут главные сцены в _ready. Нет файла — системный.
+# Решение пользователя 24.11.2026 («перерисовать курсор в новой стилистике игры»): пиксель-арт кодом, 26×26 px (`tools/cursors_pixel.py`,
+# прежние смазанные 32 px пакета ui_n — assets/source_sheets/cursor_orig_2026-11-24); горячие точки — в px файла
 const CURSORS = [
-	["cursor_default", Input.CURSOR_ARROW, Vector2(3, 3)],
-	["cursor_grab", Input.CURSOR_DRAG, Vector2(16, 3)],
-	["cursor_target", Input.CURSOR_CROSS, Vector2(16, 16)],
+	["cursor_default", Input.CURSOR_ARROW, Vector2(2, 2)],
+	["cursor_grab", Input.CURSOR_DRAG, Vector2(13, 5)],
+	["cursor_target", Input.CURSOR_CROSS, Vector2(13, 13)],
+	# «Выбор» — жетоны карусели и карты выбора (решение пользователя 23.11.2026: «при выборе курсор должен быть стилизованным,
+	# а не обычным»): с 24.11.2026 перчатка с указательным пальцем (раньше — тот же сжатый кулак, что и при перетаскивании)
+	["cursor_point", Input.CURSOR_POINTING_HAND, Vector2(9, 2)],
 ]
-# Курсор крупнее файла (решение пользователя 08.11.2026: «на 30% побольше»): 32 → 42 px, точка нажатия — так же
-const CURSOR_SCALE: float = 1.3
+# Курсор крупнее файла: 08.11.2026 «на 30% побольше» (32 → 42 px), 23.11.2026 ещё на 25% (→ 52 px, ×1.625 кубической
+# интерполяцией — курсор выходил смазанным); с 24.11.2026 26-пиксельный пиксель-арт ровно ×2 без сглаживания — те же 52 px
+const CURSOR_SCALE: float = 2.0
 static var _cursors_applied: bool = false
 static func apply_cursors() -> void:
 	if _cursors_applied:
@@ -348,7 +354,7 @@ static func apply_cursors() -> void:
 			continue
 		var img := tex.get_image()
 		img.clear_mipmaps()
-		img.resize(roundi(img.get_width() * CURSOR_SCALE), roundi(img.get_height() * CURSOR_SCALE), Image.INTERPOLATE_CUBIC)
+		img.resize(roundi(img.get_width() * CURSOR_SCALE), roundi(img.get_height() * CURSOR_SCALE), Image.INTERPOLATE_NEAREST)
 		Input.set_custom_mouse_cursor(ImageTexture.create_from_image(img), c[1], c[2] * CURSOR_SCALE)
 
 # Замок «закрыто» (hud/lock) в правом нижнем углу значка — закрытые мета-прогрессией ордены / боги / уровни;

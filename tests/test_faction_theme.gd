@@ -131,7 +131,7 @@ func _main() -> void:
 	var no_blast_vfx = not load("res://scripts/battle/Vfx.gd").EFFECTS.has("tile_blast")
 	var chaos_citadel: Dictionary = chaos.get("citadel", {})
 	_check("Хаос: %d плит на месте, цитадель — крепость из листа, пол анимирован, кристаллов / знамён-плит / окопов / извержений нет, глаза — %d кадров, туман на %d клетках, взрыва клетки при ударе нет, реки нет" % [unique.size(), eyes.size(), mist_cells],
-		unique.size() == 46 and eyes.size() == 10 and mist_cells > 0 and ResourceLoader.exists(chaos_citadel.get("sheet", "")) and missing.is_empty() and battle.renderer._animated \
+		unique.size() == 53 and eyes.size() == 10 and mist_cells > 0 and ResourceLoader.exists(chaos_citadel.get("sheet", "")) and missing.is_empty() and battle.renderer._animated \
 		and not chaos.has("river") and battle.renderer._layout["rivers"].is_empty() \
 		and removed.is_empty() and no_blast_vfx)
 	# Стена края поля кодом (FieldWall, 10.11.2026, образец «Мимо сетки…»): у Хаоса — две стороны (дальняя раньше
@@ -154,9 +154,10 @@ func _main() -> void:
 	_check("стена Хаоса спрайтами: атлас, %d столбов с фонарём = пятен света, %d угла; жаровня — %d кадров" % [lantern_posts, corner_posts, brazier.get("frames", 1)],
 		sides[0].parts.has("atlas") and lantern_posts == lanterns.size() and corner_posts == 4
 		and brazier.get("frames", 1) == 10 and ResourceLoader.exists(brazier["texture"]))
-	_check("стена края: у Космодесанта кодом — %d стороны (тень и грань платформы есть), у Хаоса — 2 стороны (%d звеньев), фонарей %d и все светят на земле" % [sm_walls.size(), segs_total, lanterns.size()],
+	_check("стена края: у Космодесанта кодом — %d стороны (тень есть; грани платформы нет — за стеной земля FieldSurround, 23.11.2026), у Хаоса — 2 стороны (%d звеньев), фонарей %d и все светят на земле" % [sm_walls.size(), segs_total, lanterns.size()],
 		sm_walls.size() == 2 and sides.size() == 2 and sides[0].position.y < sides[1].position.y and segs_total >= 40
-		and lanterns.size() > 5 and glow_lanterns == lanterns.size() and battle.renderer._shade != null and battle.renderer._base != null)
+		and lanterns.size() > 5 and glow_lanterns == lanterns.size() and battle.renderer._shade != null and battle.renderer._base == null \
+		and battle.renderer.get_children().any(func(n): return n.get_script() != null and n.get_script().get_global_name() == "FieldSurround"))
 	holder.queue_free()
 
 	# 3б. Цитадель Космодесанта — лист пакета citadel_sm_v3 (10.11.2026): все ряды по 12 кадров, снаряд — на кадре вспышки из ствола

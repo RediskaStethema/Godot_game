@@ -575,6 +575,18 @@ var _flash_left: float = 0.0   # сек до конца вспышки попа�
 var step_lift: float = 0.0   # 0 — ступня на земле, 1 — середина шага (тень SoldierShadows бледнее и уже)
 var _walk_cycle_time: float = 0.0   # длина цикла бега листа, сек (0 — бега нет); темп бега — walk_anim_scale
 
+const ParallelLoad = preload("res://scripts/utils/ParallelLoad.gd")
+
+# Кадры всех юнитов, что сейчас выйдут на поле, — разом, до расстановки (BattleScene)
+static func preload_frames(sprite_paths: Array) -> void:
+	var files := {}   # файл листа → папка юнита
+	for sprite_path: String in sprite_paths:
+		if not _frames_cache.has(sprite_path):
+			files[sprite_path + "/frames.tres"] = sprite_path
+	var loaded := ParallelLoad.load_all(files.keys())
+	for path in loaded:
+		_frames_cache[files[path]] = loaded[path]
+
 static func _get_frames(sprite_path: String) -> SpriteFrames:
 	if _frames_cache.has(sprite_path):
 		return _frames_cache[sprite_path]
@@ -2091,6 +2103,8 @@ func apply_status(effect: String, power: float, duration: float, stackable: bool
 	if e.is_empty():
 		if effect == StatusEffects.BURNING or effect == StatusEffects.POISONED:
 			AudioManager.play("burning" if effect == StatusEffects.BURNING else "poison")
+		elif effect == StatusEffects.SLOWED:
+			AudioManager.play("slow")
 		e = {"stacks": 1, "power": power, "time": duration, "duration": duration,
 			"dot_timer": StatusEffects.DOT_TICK, "spread_timer": StatusEffects.BURN_SPREAD_EVERY}
 		status_effects[effect] = e

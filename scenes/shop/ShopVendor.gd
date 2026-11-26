@@ -1,13 +1,13 @@
 class_name ShopVendor
 extends Control
 
-# Продавец магазина (решение пользователя 11.11.2026): справа от карт стоит техножрец Адептус Механикус, у Хаоса —
-# тёмный механикус. Отвечает на действия игрока репликами в комиксном облаке и жестами (react), над ним на цепях
+# Продавец магазина (решение пользователя 11.11.2026): справа от карт стоит торговец; с 21.11.2026 (новый лор) — у Криспинцев алхимик
+# Вагнер из «Фауста» (Послы Ретортариев, колба с гомункулом), у Кровоподписантов козлоногий мелочник («Чёрный Козёл», «Мёртвые души»). Отвечает на действия игрока репликами в комиксном облаке и жестами (react), над ним на цепях
 # висит вывеска «Обновить» — кнопка обновления набора ShopScene (attach_reroll), от обновления раскачивается.
 # Арт — лист художника assets/ui/shop/vendor/<раса>/frames.tres (ТЗ — ART_TZ_SHOP_VENDOR_2026-11-11.txt): ряды
 # idle (цикл), greet / buy / reroll / no_money / sell / hand_full / catch_up (разовые, нет ряда — idle с жестом
 # кодом; жесту без ряда — похожий, ANIM_FALLBACK), metadata/figure_height — рост фигуры в кадре, metadata/lens — линза
-# в кадре (к ней хвост облака). Обе расы — пакет v2 12.11.2026 (исходник assets/source_sheets/shop_vendor_v2_2026-11-12). Листа нет — заглушка кодом (VendorFigure._draw_placeholder).
+# в кадре (к ней хвост облака). Обе расы — пакет v3 21.11.2026 (исходник assets/source_sheets/shop_vendor_v3_2026-11-21, прежний v2 — _backup_before_vendor_v3_2026-11-21). Листа нет — заглушка кодом (VendorFigure._draw_placeholder).
 # Только вид: на магазин не влияет; реплики — своя случайность (не RunManager.rng — seed забега не сдвигается).
 
 const FRAMES_DIR := "res://assets/ui/shop/vendor/"
@@ -22,6 +22,7 @@ const SIGN_SWAY_IDLE := 0.012       # рад: вывеска чуть качае
 const SIGN_SWING := 0.09            # рад: толчок от обновления
 const SIGN_DAMP := 1.6              # затухание толчка, 1/с
 const BUBBLE_MAX_WIDTH := 230.0
+const BUBBLE_EDGE_GAP := 12.0       # отступ облака от правого края колонки продавца (она стоит у края экрана)
 const BUBBLE_TIME := 2.4            # сек на экране + BUBBLE_PER_CHAR за букву
 const BUBBLE_PER_CHAR := 0.03
 const BUBBLE_FADE := 0.3
@@ -31,7 +32,7 @@ const EVENTS := ["greet", "buy", "reroll", "no_money", "sell", "hand_full", "cat
 # Жест без своего ряда в листе — похожий ряд (пакет 12.11.2026: только idle / buy / no_money)
 const ANIM_FALLBACK := {"greet": "buy", "sell": "buy", "reroll": "buy", "catch_up": "buy", "hand_full": "no_money"}
 
-# Реплики по расе игрока: техножрец (Космодесант) и тёмный механикус (Хаос)
+# Реплики по расе игрока: алхимик Вагнер (Космодесант) и козлоногий мелочник (Хаос)
 const LINES := {
 	"space_marines": {
 		"greet": ["Приветствую, латник Криспина. Гомункул в колбе благословляет обмен.",
@@ -47,15 +48,15 @@ const LINES := {
 		"catch_up": ["Помощь Ретортариев. Безвозмездно — на этот раз.", "Подкрепление выдано. Не потеряй."],
 	},
 	"chaos": {
-		"greet": ["А, подписавший договор. Мои кузни открыты.", "Добро пожаловать. Цена — кровь... и монеты.",
-			"Демон в машине шепчет: покупай."],
-		"buy": ["Договор скреплён. Варп доволен.", "Заражённое железо служит тебе.", "Бери. Оно уже голодно."],
-		"no_money": ["Нечем платить? Варп не терпит долгов.", "Пустой кошель. Нет платы — нет товара.",
-			"Нет. Даже демоны не работают даром."],
+		"greet": ["А, подписавший! Подходи, подходи — товар живой, цена мёртвая.", "Тише, тише... у меня есть то, что тебе нужно. Почти.",
+			"Мешок тяжёл, да душа лёгка. Выбирай, милый."],
+		"buy": ["Вот и славно. Подпись твоя, товар мой... то есть наоборот.", "Бери-бери. Только не оглядывайся.", "Сделка. Колокольчик не соврёт."],
+		"no_money": ["Нечем платить? А душа у тебя ещё своя?", "Пустой кошель. Нет монет — нет товара, милый.",
+			"Нет-нет. Даже козлу в долг не дают."],
 		"hand_full": ["Тебе больше не унести. Продай лишнее.", "Руки полны — освободи их сделкой."],
-		"reroll": ["Смотри, что принёс Варп.", "Перековываю товар... иное, тёмное.", "Демоны шепчут новые цены."],
-		"sell": ["Сгодится на переплавку в демонов.", "Отдай. Кузня проглотит.", "Принято. Варп заберёт остаток."],
-		"catch_up": ["Дар Внешних. Не благодари.", "Вот тебе мясо для войны."],
+		"reroll": ["Потряхиваю мешок... глянь, что выпало.", "А вот это — только что с погоста.", "Новый товар, свежий, ещё тёплый."],
+		"sell": ["Мёртвое — в мешок. Мёртвое мне не в тягость.", "Отдай. Мешок всё проглотит.", "Принято. Спишем, как водится."],
+		"catch_up": ["Подарок Внешних. Не благодари.", "Вот тебе подмога. Мешок у меня глубокий."],
 	},
 }
 
@@ -212,8 +213,12 @@ func _place_bubble() -> void:
 		bubble.size.x = BUBBLE_MAX_WIDTH + 24.0
 	var head := head_point()
 	var pos := Vector2(head.x - bubble.size.x + 40.0, head.y - bubble.size.y - 34.0)
-	pos.x = minf(pos.x, size.x - bubble.size.x)   # не за правый край экрана
+	pos.x = clampf(pos.x, 0.0, maxf(size.x - bubble.size.x - BUBBLE_EDGE_GAP, 0.0))   # не за правый и левый край экрана, справа — с отступом (рамка 3 px, облако касалось края)
 	pos.y = maxf(pos.y, sign_node.position.y + HangingSign.HEIGHT + 6.0)
+	# по границе экрана, а не колонки: колонка продавца стоит у края, облако касалось его и правая рамка обрезалась
+	var over: float = global_position.x + pos.x + bubble.size.x - (get_viewport_rect().size.x - BUBBLE_EDGE_GAP)
+	if over > 0.0:
+		pos.x -= over
 	bubble.position = pos
 	_tail.from_rect = Rect2(bubble.position, bubble.size)
 	_tail.to_point = head + Vector2(-8.0, -18.0)
@@ -233,7 +238,8 @@ func react(event: String) -> void:
 	if event == "reroll":
 		sign_node.swing()
 
-func say(text: String) -> void:
+# hold >= 0 — облако висит hold сек после печати (обучение: реплика ждёт клика), иначе — по длине текста
+func say(text: String, hold: float = -1.0) -> void:
 	last_line = text
 	_bubble_label.text = text
 	_bubble_label.custom_minimum_size = Vector2.ZERO
@@ -255,12 +261,18 @@ func say(text: String) -> void:
 	_bubble_tween = create_tween()
 	_bubble_tween.tween_property(bubble, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_bubble_tween.parallel().tween_property(_bubble_label, "visible_ratio", 1.0, text.length() / TYPE_SPEED)
-	_bubble_tween.tween_interval(BUBBLE_TIME + text.length() * BUBBLE_PER_CHAR)
+	_bubble_tween.tween_interval(hold if hold >= 0.0 else BUBBLE_TIME + text.length() * BUBBLE_PER_CHAR)
 	_bubble_tween.tween_property(bubble, "modulate:a", 0.0, BUBBLE_FADE)
 	_bubble_tween.parallel().tween_property(_tail, "modulate:a", 0.0, BUBBLE_FADE)
 	_bubble_tween.tween_callback(func():
 		bubble.hide()
 		_tail.hide())
+
+func hide_bubble() -> void:
+	if _bubble_tween:
+		_bubble_tween.kill()
+	bubble.hide()
+	_tail.hide()
 
 func bubble_text() -> String:
 	return _bubble_label.text if bubble.visible else ""
@@ -331,6 +343,7 @@ class VendorFigure extends Control:
 	var _react_left := 0.0
 	var _eye := Vector2.ZERO          # куда смотрит линза заглушки (за курсором), −1..1
 	var _shadows: Array[AnimatedSprite2D] = []   # падающая тень силуэтом на интерфейс (свет сверху-слева)
+	var flipped: bool = false         # смотрит вправо (обучение: Вагнер слева смотрит на карты); лист нарисован лицом влево
 	var _k := 1.0                     # масштаб кадра листа на экране
 	var _frame_size := Vector2.ZERO
 
@@ -373,9 +386,12 @@ class VendorFigure extends Control:
 			sprite.self_modulate = env.get("tint", Color.WHITE)
 			Soldier.apply_style(sprite.material, "unit")   # светотень ступенями, как у бойцов
 			add_child(sprite)
-			# Перетекание кадров: 7–8 кадров на ряд — без него поза меняется рывком (решение пользователя 12.11.2026,
-			# «слишком дёрганый»). Фигура неподвижна по холсту — наложение не мелькает, как у мелких бойцов
-			FrameBlend.attach(sprite)
+			# Перетекания кадров (FrameBlend) у продавца нет (23.11.2026, «мигает»): наложение следующего кадра с нарастающей
+			# прозрачностью на полупрозрачных краях и контуре складывало два слоя — край пульсировал на каждой смене кадра,
+			# и в стойке, и в жестах (покупка, продажа, обновление). Кадры теперь частые и близкие — рывка нет
+			# Тени берут кадр по сигналу, а не в _process следующего кадра: без отставания на кадр
+			sprite.frame_changed.connect(_place_sprites)
+			sprite.animation_changed.connect(_place_sprites)
 			sprite.play("idle")
 		resized.connect(_fit_sprite)
 		_fit_sprite()
@@ -396,12 +412,19 @@ class VendorFigure extends Control:
 		queue_redraw()
 
 	# Кадр стоит ногами на низ фигуры, тени — тем же кадром со сдвигом
+	func set_flipped(on: bool) -> void:
+		flipped = on
+		if sprite != null:
+			_place_sprites()
+
 	func _place_sprites() -> void:
+		sprite.flip_h = flipped
 		sprite.scale = Vector2(_k, _k)
 		sprite.position = Vector2((size.x - _frame_size.x * _k) / 2.0, size.y - _frame_size.y * _k)
 		for i in _shadows.size():
 			var sh := _shadows[i]
 			sh.scale = sprite.scale
+			sh.flip_h = flipped
 			sh.position = sprite.position + SHADOW_LAYERS[i][0]
 			if sh.animation != sprite.animation:
 				sh.animation = sprite.animation
@@ -410,7 +433,10 @@ class VendorFigure extends Control:
 	# Голова в координатах фигуры (облако реплики — к ней)
 	func head_point() -> Vector2:
 		if sprite and sprite.sprite_frames.has_meta("lens"):   # линза в кадре листа (metadata/lens)
-			return sprite.position + Vector2(sprite.sprite_frames.get_meta("lens")) * sprite.scale
+			var lens: Vector2 = Vector2(sprite.sprite_frames.get_meta("lens"))
+			if flipped:
+				lens.x = _frame_size.x - lens.x
+			return sprite.position + lens * sprite.scale
 		return Vector2(size.x * 0.5, size.y * 0.16)
 
 	func react(event: String) -> void:

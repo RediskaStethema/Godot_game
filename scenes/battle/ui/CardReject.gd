@@ -17,6 +17,7 @@ var _t := 0.0
 static func flash(card) -> void:
 	if not is_instance_valid(card):
 		return
+	AudioManager.play("card_reject")   # «заклинание не вышло»: звук вместе с красной вспышкой
 	var f := CardReject.new()
 	f.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if _add == null:

@@ -16,12 +16,11 @@ const COLOR_NORMAL   = Color(0.0, 0.0, 0.0, 0.14)
 const COLOR_HOVER    = Color(UITheme.GOLD_DIM, 0.26)
 const COLOR_OCCUPIED = Color(0.0, 0.0, 0.0, 0.14)   # как пустая: занятость видна по бойцам
 const GRID_DASH: float = 6.0
-const COLOR_SAME_SQUAD = Color(0.98, 0.72, 0.29, 0.45)  # отряд карты под курсором (скамейка)
+const COLOR_SAME_SQUAD = Color(0.98, 0.72, 0.29, 0.45)  # клетка обучения (tutorial_tile)
 const LINE_SAME_SQUAD  = Color(1.0, 0.82, 0.45, 1.0)
 const COLOR_EFFECT = Color(0.35, 0.72, 0.70, 0.24)     # зона действия здания (Казармы — соседи)
 const LINE_EFFECT  = Color(0.45, 0.82, 0.78, 0.85)
 const LINE_PLAYER    = Color(UITheme.GOLD_DIM, 0.55)
-const BORDER_PLAYER  = Color(UITheme.GOLD_DIM, 0.85)
 # --- Закрытые клетки рамки королевства ---
 const LINE_LOCKED    = Color(UITheme.PLAYER_SIDE, 0.12)
 # Можно купить (решение пользователя 24.10.2026: была плоская бледно-зелёная заливка — выбивалась из стиля):
@@ -35,7 +34,6 @@ const BUYABLE_DASH: float = 7.0
 const PRICE_FONT_SIZE: int = 15
 const PRICE_ICON: float = 14.0       # значок Req на плашке цены, px мира
 const PRICE_PAD = Vector2(5, 3)
-const PRICE_PLATE = Color(0.03, 0.035, 0.05, 0.85)
 
 # --- Платформа ---
 const FLOOR_PAD_TILES: int = 5          # поле шире раскладки на столько тайлов (камера в бою отъезжает)
@@ -63,8 +61,8 @@ var grid_overlay: bool = true   # подсветка клеток королев
 var hovered_tile: Vector2i = IsoGrid.NO_TILE
 var occupied_tiles_player: Dictionary = {}
 var occupied_tiles_enemy: Dictionary = {}
-# Клетки отрядов карты под курсором на скамейке (BattleScene._on_bench_card_hovered)
-var highlighted_tiles: Array[Vector2i] = []
+const NO_TILE := Vector2i(-99, -99)
+var tutorial_tile: Vector2i = NO_TILE   # клетка обучения (Tutorial): пульсирует, пока игрок не поставит карту
 # Зона действия здания под курсором / перетаскиваемой карты здания (Building.get_effect_tiles)
 var effect_tiles: Array[Vector2i] = []
 # Клетки, которые сейчас можно купить, и их цена (пусто — расширение недоступно)
@@ -147,22 +145,38 @@ func setup(iso_grid: IsoGrid) -> void:
 	_lights = []
 	_fires = []
 	_active = self
-	if theme.has("platform"):
-		_base = Node2D.new()
-		_base.show_behind_parent = true
-		_base.draw.connect(_draw_platform_side)
-		add_child(_base)
-	var void_fx := VoidFx.new()   # огни и дым за краем помоста (18.11.2026)
-	add_child(void_fx)
-	void_fx.setup(grid, FLOOR_PAD_TILES, map_seed() + 977)
+	var lift: float = theme.get("floor_brightness", 1.0)   # тема: грунт светлее, объекты на нём — нет
+	var god_tint: Color = FactionTheme.floor_tint()   # оттенок текстур по богу забега (21.11.2026)
+	var floor_mod := Color(lift * god_tint.r, lift * god_tint.g, lift * god_tint.b)
+	if theme.get("surround", false):
+		# Земля до краёв экрана (решение пользователя 23.11.2026): вместо помоста над пустотой — FieldSurround
+		var surround := FieldSurround.new()
+		add_child(surround)
+		surround.setup(grid, theme, FLOOR_PAD_TILES, map_seed() + 977, floor_mod,
+			FLOOR_CALM.merged(theme.get("floor_calm", {}), true), _floor_calm_material(theme))
+	else:
+		if theme.has("platform"):
+			_base = Node2D.new()
+			_base.show_behind_parent = true
+			_base.draw.connect(_draw_platform_side)
+			add_child(_base)
+		var void_fx := VoidFx.new()   # огни и дым за краем помоста (18.11.2026)
+		add_child(void_fx)
+		void_fx.setup(grid, FLOOR_PAD_TILES, map_seed() + 977)
 	_floor = Node2D.new()
 	_floor.show_behind_parent = true
 	_floor.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # пиксель-арт без размытия
-	var lift: float = theme.get("floor_brightness", 1.0)   # тема: грунт светлее, объекты на нём — нет
-	_floor.modulate = Color(lift, lift, lift)
+	_floor.modulate = floor_mod
 	_floor.draw.connect(_draw_floor)
 	_floor.material = _floor_calm_material(theme)
 	add_child(_floor)
+	# Деревья внутри стены — отдельным слоем с гладким фильтром: масштаб 1.1 при NEAREST дублировал каждую 10-ю строку
+	# пикселей — горизонтальные полосы на стволах (23.11.2026). Материал и оттенок — от пола (floor_calm, floor_brightness)
+	_inner_layer = Node2D.new()
+	_inner_layer.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_inner_layer.use_parent_material = true
+	_inner_layer.draw.connect(_draw_inner_props)
+	_floor.add_child(_inner_layer)
 	if theme.has("platform"):
 		_shade = Node2D.new()
 		_shade.draw.connect(_draw_wall_shade)
@@ -258,6 +272,10 @@ func _theme_has_frames() -> bool:
 	if theme.has("flags"):
 		lists.append(theme["flags"]["tiles"])
 	lists.append(theme.get("decorations", []))
+	var sur = theme.get("surround")   # предметы внутри стены (FieldSurround "inside") с кадрами
+	if sur is Dictionary:
+		for e in sur.get("inside", []):
+			lists.append([sur["kinds"][e["kind"]]])
 	var lm: Dictionary = theme.get("landmarks", {})   # анимированные ориентиры: костры, знамёна
 	lists.append(lm.get("banners", []) + ([lm["campfire"]] if lm.has("campfire") else []))
 	for tiles in lists:
@@ -516,6 +534,7 @@ func _draw_floor() -> void:
 		_layout["plan"] = _floor_plan()
 	# План (что рисовать на каждой клетке) считается раз на раскладку: пол перерисовывается ANIM_REDRAW_FPS
 	# раз/с ради анимированных плит, и подбор плиты и декора на каждой клетке был основной ценой (21.10.2026)
+	_inner_items.clear()
 	for step in _layout["plan"]:
 		var c: Vector2i = step[0]
 		var top: Vector2 = step[1]
@@ -530,12 +549,24 @@ func _draw_floor() -> void:
 				_draw_river_tile(c, top, step[3])
 		var deco: Array = step[6]
 		if not deco.is_empty():
-			TerrainTiles.draw_prop(_floor, deco[0], deco[1], Color(FLOOR_TINT.r * k, FLOOR_TINT.g * k, FLOOR_TINT.b * k, FLOOR_TINT.a),
-				deco[2], _cell_time(c))
+			var deco_color := Color(FLOOR_TINT.r * k, FLOOR_TINT.g * k, FLOOR_TINT.b * k, FLOOR_TINT.a)
+			if _inner_props.has(c) and deco[0] == _inner_props[c]:
+				_inner_items.append([deco, deco_color])
+			else:
+				TerrainTiles.draw_prop(_floor, deco[0], deco[1], deco_color, deco[2], _cell_time(c))
+	_inner_layer.queue_redraw()
+
+var _inner_layer: Node2D
+var _inner_items: Array = []   # [[объект, точка, отражение], цвет] — деревья внутри стены, порядок плана (дальние раньше)
+
+func _draw_inner_props() -> void:
+	for it in _inner_items:
+		var d: Array = it[0]
+		TerrainTiles.draw_prop(_inner_layer, d[0], d[1], it[1], d[2], 0.0)
 
 # Помост (решение пользователя 18.11.2026): плиты поля боя чуть светлее, земля вокруг — заметно темнее
 func _platform_light(_c: Vector2i) -> float:
-	if not theme.has("platform"):
+	if not theme.has("platform") or theme.has("surround"):   # с землёй за стеной помоста нет — плиты не ярче внешнего грунта (23.11.2026)
 		return 1.0
 	return PLATFORM_TOP_LIGHT   # весь пол — верх помоста; темнее — только пустота за его краем
 
@@ -553,13 +584,14 @@ func _floor_plan() -> Array:
 	var plan: Array = []
 	var rivers: Dictionary = _layout["rivers"]
 	var terrain: Dictionary = _layout["terrain"]
+	_inner_props = _inner_prop_cells(rivers, terrain)
 	for c in _layout["cells"]:
 		var top = grid.lattice_to_screen(c.x, c.y)
 		var step: Array
 		if grid.is_valid_tile(c):
 			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(theme["kingdom"], c), Color.WHITE, false]
 		elif _is_floor_edge(c) and theme.has("field_wall"):   # кольцо — под стеной кодом: грунт
-			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(theme.get("ground", theme["floor"]), c), FLOOR_TINT, false]
+			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(theme.get("ring", theme.get("ground", theme["floor"])), c), FLOOR_TINT, false]
 		elif _is_floor_edge(c) and theme.has("edge"):
 			# Края с постоянным u идут вдоль оси v, с постоянным v — вдоль u
 			var along_v = c.x == -FLOOR_PAD_TILES or c.x == grid.get_layout_cols() + FLOOR_PAD_TILES - 1
@@ -574,7 +606,76 @@ func _floor_plan() -> Array:
 			step = [c, top, PLAN_TILE, TerrainTiles.pick_any(_plain_tiles(theme["floor"], c), c), FLOOR_TINT, false]
 		step.append(_cell_decoration(c, top, rivers, terrain))
 		plan.append(step)
+	var extension := _river_extension(rivers)
+	for c in extension:   # русло за стеной — до края экрана (под стеной оно уже лежит, поверх грунта FieldSurround)
+		plan.append([c, grid.lattice_to_screen(c.x, c.y), PLAN_RIVER, extension[c], FLOOR_TINT, false, []])
 	return plan
+
+# Предметы внутри стены (решение пользователя 23.11.2026: «добавь пару деревьев внутрь стены / кровоточащие деревья внутрь поля»;
+# тема "surround" → "inside": [{"kind", "count"}], виды — "kinds"): клетки боковых полос вне чистой зоны боя (`_in_clear_zone`),
+# не у стены (`_on_wall_line`, кольцо), не на реке, не у цитадели и в зоне врага, не на ориентирах и местности с объектами;
+# порядок — по хэшу клетки (карта одна во всех забегах), друг от друга не ближе INNER_GAP клеток
+const INNER_GAP: int = 4
+var _inner_props: Dictionary = {}   # клетка → предмет (словарь для TerrainTiles.draw_prop)
+
+func _inner_prop_cells(rivers: Dictionary, terrain: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	var cfg = theme.get("surround")
+	if not (cfg is Dictionary) or not cfg.has("inside"):
+		return out
+	var cols := grid.get_layout_cols()
+	var rows := grid.get_layout_rows()
+	var cand: Array[Vector2i] = []
+	for c in _layout["cells"]:
+		if _is_floor_edge(c) or _on_wall_line(c) or _in_clear_zone(c) or _is_battle_strip(c) or rivers.has(c) 				or grid.is_in_bounds(c) or _near_citadel(c) or _is_enemy_cell(c) or _layout["landmarks"].has(c):
+			continue
+		if c.y > -3 and c.y < rows + 2:   # только боковые полосы за чистой зоной
+			continue
+		if c.x < -FLOOR_PAD_TILES + 2 or c.x > cols + FLOOR_PAD_TILES - 3:
+			continue
+		if terrain.has(c) and terrain[c][0] is Dictionary:
+			var tile: Dictionary = terrain[c][0]
+			if tile.has("prop") or tile.get("no_decor", false) or tile.get("flag", false) or tile.has("frames"):
+				continue
+		cand.append(c)
+	cand.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return TerrainTiles.hash_cell(a, 91) < TerrainTiles.hash_cell(b, 91))
+	for entry in cfg["inside"]:
+		var prop: Dictionary = cfg["kinds"][entry["kind"]].duplicate()
+		prop["scale"] = prop.get("scale", 1.0) * float(cfg.get("scale", 1.0))
+		var left := int(entry.get("count", 1))
+		for c in cand:
+			if left <= 0:
+				break
+			var close := false
+			for o in out:
+				if maxi(absi(c.x - o.x), absi(c.y - o.y)) < INNER_GAP:
+					close = true
+					break
+			if close:
+				continue
+			out[c] = prop
+			left -= 1
+	return out
+
+# Русло за стеной (решение пользователя 23.11.2026: «продли реку до конца экрана, чтобы не выглядела обрезано»): клетки той же
+# строки дальше обоих концов реки, от кольца под стеной на RIVER_EXTEND клеток; только вид, в раскладку рек (`_river_cells`) не входят
+const RIVER_EXTEND: int = 28
+func _river_extension(rivers: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	if rivers.is_empty() or not theme.get("surround", false):
+		return out
+	var lo := 1 << 30
+	var hi := -(1 << 30)
+	var row := 0
+	for c in rivers:
+		lo = mini(lo, c.x)
+		hi = maxi(hi, c.x)
+		row = c.y
+	for k in range(RIVER_EXTEND, 0, -1):
+		out[Vector2i(lo - k, row)] = "u"
+	for k in range(1, RIVER_EXTEND + 1):
+		out[Vector2i(hi + k, row)] = "u"
+	return out
 
 # Ориентиры темы ("landmarks": {"campfire", "banners", "random_banners", "war_banners", "war_banner_count"},
 # все ключи необязательны): клетка → объект.
@@ -849,6 +950,9 @@ func _cheb(d: Vector2i) -> int:
 func _cell_decoration(c: Vector2i, top: Vector2, rivers: Dictionary, terrain: Dictionary) -> Array:
 	if _layout.get("landmarks", {}).has(c):
 		return [_layout["landmarks"][c], top, false]
+	if _inner_props.has(c):   # дерево внутри стены (тема "surround" → "inside")
+		return [_inner_props[c], top + Vector2((TerrainTiles.hash_cell(c, 21) % 21) - 10, (TerrainTiles.hash_cell(c, 29) % 9) - 4),
+			TerrainTiles.hash_cell(c, 37) % 2 == 1]
 	var deco = decoration_for(c, rivers, terrain)
 	if deco == null:
 		return []
@@ -888,8 +992,6 @@ func _draw_kingdom() -> void:
 		var color = COLOR_NORMAL
 		if tile == hovered_tile:
 			color = COLOR_HOVER
-		elif highlighted_tiles.has(tile):
-			color = COLOR_SAME_SQUAD
 		elif occupied_tiles_player.has(tile):
 			color = COLOR_OCCUPIED
 		var c: Vector2 = grid.tile_to_screen(tile, false)
@@ -901,9 +1003,11 @@ func _draw_kingdom() -> void:
 		draw_dashed_line(c + Vector2(-hw, 0), top, LINE_PLAYER, 1.0, GRID_DASH, true, true)
 		draw_dashed_line(top, c + Vector2(hw, 0), LINE_PLAYER, 1.0, GRID_DASH, true, true)
 	_draw_kingdom_border(LINE_PLAYER, 1.0)
-	# Контур подсвеченных клеток — поверх общей рамки, чтобы читался и на краю королевства
-	for tile in highlighted_tiles:
-		_draw_diamond(grid.tile_to_screen(tile, false), Color(0, 0, 0, 0), LINE_SAME_SQUAD, 3.0)
+	# Обучение: клетка, куда ставить карту, — пульсирующий янтарь
+	if tutorial_tile != NO_TILE and grid.is_valid_tile(tutorial_tile):
+		var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * 4.0)
+		_draw_diamond(grid.tile_to_screen(tutorial_tile, false), Color(COLOR_SAME_SQUAD, 0.25 + 0.35 * pulse),
+			Color(LINE_SAME_SQUAD, 0.6 + 0.4 * pulse), 3.5)
 	# Зона действия здания — только открытые клетки королевства
 	for tile in effect_tiles:
 		if grid.is_valid_tile(tile):
@@ -1000,10 +1104,6 @@ func set_effect_tiles(tiles: Array[Vector2i]) -> void:
 	if tiles == effect_tiles:
 		return
 	effect_tiles = tiles
-	queue_redraw()
-
-func set_highlighted(tiles: Array[Vector2i]) -> void:
-	highlighted_tiles = tiles
 	queue_redraw()
 
 func update_hover(tile: Vector2i) -> void:

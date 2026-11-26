@@ -18,6 +18,7 @@ extends Node2D
 const INSET: float = 0.15        # клетки: стена отступает от внешнего края пола внутрь — узкий карниз платформы
 const SEG_LEN: float = 1.0       # клетки: звено = промежуток между столбами
 const HEIGHT: float = 44.0       # px
+const LANTERN_DIM_KEEP: float = 0.5   # доля света фонаря, не затемняемая ключом темы "dim"
 const POST_HEIGHT: float = 58.0  # px: столб выше стены
 const POST_HALF: float = 4.5     # px: полуширина столба
 const THICK: float = 14.0        # px: толщина (верхняя грань)
@@ -106,10 +107,16 @@ const SORT_NEAR: float = 100000.0   # ближняя — после всех
 static func build(container: Node, g: IsoGrid, cfg: Dictionary) -> FieldWall:
 	var w := FieldWall.new()
 	container.add_child(w)
+	if cfg.has("texture"):   # кладка из текстуры (Космодесант, 23.11.2026): грань стены — с текстурой вместо швов кодом
+		cfg = cfg.duplicate()
+		cfg["_tex"] = FactionTheme.load_texture(cfg["texture"])
 	for near in [false, true]:
 		var side := Segment.new()
 		side.cfg = cfg
 		side.near = near
+		if cfg.has("_tex") and cfg["_tex"] != null:
+			side.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+			side.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		side.position = Vector2(0.0, SORT_NEAR if near else SORT_FAR)
 		if cfg.has("sprites"):
 			side.parts = _sprite_parts(cfg["sprites"])
@@ -237,7 +244,12 @@ class Segment extends Node2D:
 				anchor = sp["post_base"]
 			var ks: float = k if it[1] == "span" else float(sp.get("post_scale", k))   # столбы — свой масштаб
 			draw_set_transform(it[3] - position, 0.0, Vector2(-ks if it[4] else ks, ks))
-			draw_texture_rect_region(atlas, Rect2(-anchor, region.size), region)
+			# затемнение стены (ключ темы "dim", решение пользователя 23.11.2026: «слишком яркая») — пролёты и столбы на
+			# dim, фонарь на полпути к белому: огонь не гаснет вместе с камнем
+			var d: float = float(cfg.get("dim", 1.0))
+			if it[1] == "lantern":
+				d = lerpf(d, 1.0, LANTERN_DIM_KEEP)
+			draw_texture_rect_region(atlas, Rect2(-anchor, region.size), region, Color(d, d, d, 1.0))
 		draw_set_transform(Vector2.ZERO)
 	var near := false
 	var a: Vector2
@@ -246,6 +258,10 @@ class Segment extends Node2D:
 	var _pts := PackedVector2Array()
 	var _cols := PackedColorArray()
 	var _idx := PackedInt32Array()
+	var _tpts := PackedVector2Array()   # грани с текстурой кладки: точки, цвета-множители, UV, индексы
+	var _tcols := PackedColorArray()
+	var _tuv := PackedVector2Array()
+	var _tidx := PackedInt32Array()
 
 	func _poly(p: PackedVector2Array, col: Color) -> void:   # выпуклый многоугольник — веером
 		var base := _pts.size()
@@ -279,8 +295,31 @@ class Segment extends Node2D:
 				b = sg[1]
 				lantern = sg[2]
 				_build()
+		if not _tidx.is_empty():   # грань с кладкой — под столбами, зубцами, бойницами и фонарями
+			RenderingServer.canvas_item_add_triangle_array(get_canvas_item(), _tidx, _tpts, _tcols, _tuv,
+				PackedInt32Array(), PackedFloat32Array(), (cfg["_tex"] as Texture2D).get_rid())
 		if not _idx.is_empty():
 			RenderingServer.canvas_item_add_triangle_array(get_canvas_item(), _idx, _pts, _cols)
+
+	# Грань с текстурой кладки: вдоль стены текстура повторяется (u — путь вдоль стены в px, непрерывно между звеньями),
+	# вверх — верхние HEIGHT px текстуры (v от 0 на гребне до HEIGHT / высота на земле); цвет вершин — множитель стороны,
+	# у земли темнее (как градиент грани кодом)
+	func _textured_face(la: Vector2, lb: Vector2, up: Vector2, k: float) -> void:
+		var tex: Texture2D = cfg["_tex"]
+		var tw := float(tex.get_width())
+		var th := float(tex.get_height())
+		var along := (lb - la).normalized()
+		var vb := FieldWall.HEIGHT / th
+		var ua := (la + position).dot(along) / tw
+		var ub := (lb + position).dot(along) / tw
+		var top := Color(k, k, k)
+		var foot := Color(k * 0.55, k * 0.53, k * 0.57)
+		var base := _tpts.size()
+		for p in [[la, ua, vb, foot], [lb, ub, vb, foot], [lb + up, ub, 0.0, top], [la + up, ua, 0.0, top]]:
+			_tpts.append(p[0])
+			_tuv.append(Vector2(p[1], p[2]))
+			_tcols.append(p[3])
+		_tidx.append_array([base, base + 1, base + 2, base, base + 2, base + 3])
 
 	func _build() -> void:
 		var stone: Color = cfg["stone"]
@@ -296,13 +335,17 @@ class Segment extends Node2D:
 		n = Vector2(n.x, n.y * 0.5).normalized() * FieldWall.THICK * 0.5
 		# Грань: к земле темнее (тень у основания), к верху — как камень
 		var foot := face.lerp(dark, 0.6)
-		_grad(PackedVector2Array([la, lb, lb + up, la + up]), [foot, foot, face, face])
+		var textured := cfg.has("_tex") and cfg["_tex"] != null
+		if textured:
+			_textured_face(la, lb, up, k)
+		else:
+			_grad(PackedVector2Array([la, lb, lb + up, la + up]), [foot, foot, face, face])
 		_poly(PackedVector2Array([la + up - n, lb + up - n, lb + up + n, la + up + n]), top_col)
 		_line(la + up, lb + up, dark, 1.0)
 		_line(la, lb, dark, 1.5)
-		# Кладка: два шва и стыки камней вразбежку
+		# Кладка: два шва и стыки камней вразбежку (с текстурой кладка — в ней самой)
 		var seam := dark.lerp(face, 0.3)
-		for row in 3:
+		for row in (0 if textured else 3):
 			var y0 := float(row) / 3.0
 			var y1 := float(row + 1) / 3.0
 			if row > 0:

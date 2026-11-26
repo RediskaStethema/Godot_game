@@ -33,6 +33,7 @@ func _ready() -> void:
 	EconomyManager.requisition_changed.connect(_on_resources_changed)
 	BattleManager.citadel_hp_changed.connect(_on_resources_changed)
 	_refresh_hud()
+	Tutorial.show_event_intro(self)   # обучение: наставники объясняют, что такое событие
 	SaveManager.save_run()   # вылет на событии — «Продолжить» вернёт сюда же
 	if RunManager.current_completed or _event.is_empty():
 		_finish("")

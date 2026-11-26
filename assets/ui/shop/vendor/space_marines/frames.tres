@@ -1,6 +1,29 @@
-[gd_resource type="SpriteFrames" load_steps=18 format=3]
+[gd_resource type="SpriteFrames" load_steps=41 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/0.png" id="idle_0"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/1.png" id="idle_1"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/2.png" id="idle_2"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/3.png" id="idle_3"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/4.png" id="idle_4"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/5.png" id="idle_5"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/6.png" id="idle_6"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/7.png" id="idle_7"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/8.png" id="idle_8"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/9.png" id="idle_9"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/10.png" id="idle_10"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/11.png" id="idle_11"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/12.png" id="idle_12"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/13.png" id="idle_13"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/14.png" id="idle_14"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/15.png" id="idle_15"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/16.png" id="idle_16"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/17.png" id="idle_17"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/18.png" id="idle_18"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/19.png" id="idle_19"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/20.png" id="idle_20"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/21.png" id="idle_21"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/22.png" id="idle_22"]
+[ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/idle/23.png" id="idle_23"]
 [ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/buy/0.png" id="buy_0"]
 [ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/buy/1.png" id="buy_1"]
 [ext_resource type="Texture2D" path="res://assets/ui/shop/vendor/space_marines/buy/2.png" id="buy_2"]
@@ -20,15 +43,84 @@
 
 [resource]
 metadata/figure_height = 600.0
-metadata/lens = Vector2(246, 257)
+metadata/lens = Vector2(277, 252)
 animations = [{
 "frames": [{
 "duration": 1.0,
 "texture": ExtResource("idle_0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_11")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_12")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_13")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_14")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_15")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_16")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_17")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_18")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_19")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_20")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_21")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_22")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_23")
 }],
-"loop": false,
+"loop": true,
 "name": &"idle",
-"speed": 1.0
+"speed": 8.0
 }, {
 "frames": [{
 "duration": 1.0,

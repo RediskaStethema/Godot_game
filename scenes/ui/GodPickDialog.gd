@@ -62,6 +62,8 @@ func _make_card(god: String, current: bool) -> Button:
 		box.add_child(emblem)
 	var name_label = UITheme.make_label(ChaosGods.god_name(god), "HeaderLabel")
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # «Король Второго Акта» (201 px) раздувал карточку 170 px
+	name_label.custom_minimum_size = Vector2(CARD_SIZE.x - CARD_PADDING * 2.0, 0)
 	box.add_child(name_label)
 	var hint = UITheme.make_label("Бог отряда сейчас" if current else HINTS[god], "DimLabel" if current else "SmallLabel")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

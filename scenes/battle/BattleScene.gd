@@ -124,9 +124,13 @@ func _ready() -> void:
 	if RunManager.player_faction != "chaos":
 		DropPod.warm()   # кадры капсулы — в фоне, к первой выложенной карте отряда
 	if not shop_phase:   # музыку магазина ставит ShopScene
-		AudioManager.play_music("boss" if battle_type == RunMapNode.BOSS else "battle")
+		AudioManager.play_music("battle")   # музыка босса — с началом схватки (_on_start_pressed)
 	UITheme.apply_cursors()
 	battle_wave = RunManager.get_battle_wave()
+	# Обучение — до поля: учебный бой подменяет врага при расстановке (_place_enemy_squads)
+	if Tutorial.is_active():
+		tutorial = Tutorial.new()
+		tutorial.setup(self, battle_wave)
 	_card_handlers = {
 		"squad": _play_squad_card,
 		"upgrade": _play_upgrade_card,
@@ -146,12 +150,67 @@ func _ready() -> void:
 		if not RunManager.test_mode and not BattleManager.battle_in_progress and DisplayServer.get_name() != "headless":
 			BattleLanding.play(self, camera,
 				Palette.LANDING_CLOUD_CHAOS if RunManager.player_faction == "chaos" else Palette.LANDING_CLOUD)
+			_citadel_appear(CITADEL_APPEAR_DELAY)   # цитадель появляется, когда облака расходятся
 	if shop_phase:
 		_open_shop()
+		var tut_event := "pick"
+		if RunManager.is_start_pick_active():
+			tut_event = "pick_start"
+		elif RunManager.is_shop_node_active():
+			tut_event = "shop_open"   # первый магазин обучения: монеты и покупка орудия
+		_tutorial_notify(tut_event)
 	# Загрузили сохранение посреди боя: армия уже стоит как была — сразу в бой
 	elif BattleManager.battle_in_progress:
 		_show_message("Бой продолжается")
 		_on_start_pressed.call_deferred()
+	else:
+		_tutorial_notify("placement")
+
+# Появление цитадели (решение пользователя 25.11.2026: эффект только на первом поле забега, после посадки сквозь облака):
+# цитадель скрыта, через delay вокруг площадки идёт эффект (BuildingFx.citadel_spawn), на кадре 4 цитадель проявляется и
+# встаёт на место (поднимается на CITADEL_RISE_PX). Только вид, бой и расстановка не ждут
+const CITADEL_APPEAR_DELAY: float = 1.1    # с после посадки — облака уже расходятся
+const CITADEL_REVEAL_AT: float = 0.35      # с после начала эффекта (кадр 4 из 16 при 12 к/с)
+const CITADEL_REVEAL_TIME: float = 0.8
+const CITADEL_RISE_PX: float = 12.0
+func _citadel_appear(delay: float) -> void:
+	var cit: Node2D = BattleManager.citadel
+	if cit == null or not is_instance_valid(cit):
+		return
+	var home := cit.position
+	cit.modulate.a = 0.0
+	cit.position = home + Vector2(0.0, CITADEL_RISE_PX)
+	var reveal := func():
+		if not is_instance_valid(cit):
+			return
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(cit, "modulate:a", 1.0, CITADEL_REVEAL_TIME)
+		tw.tween_property(cit, "position", home, CITADEL_REVEAL_TIME).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	var start := func():
+		if not is_instance_valid(cit):
+			return
+		BuildingFx.citadel_spawn(cit.global_position)
+		get_tree().create_timer(CITADEL_REVEAL_AT, false).timeout.connect(reveal)
+	if delay <= 0.0:
+		start.call()
+	else:
+		get_tree().create_timer(delay, false).timeout.connect(start)
+
+# Обучение «Козёл учит» (Tutorial): подсказка продавца по событию, если оно идёт
+var tutorial: Tutorial = null
+
+func _tutorial_notify(event: String, ctx: Variant = null) -> void:
+	if tutorial != null and is_instance_valid(tutorial):
+		tutorial.wave = battle_wave
+		tutorial.notify(event, ctx)
+
+func _tutorial_live() -> bool:
+	return tutorial != null and is_instance_valid(tutorial)
+
+# Шаг обучения завершён: бой снова можно запускать, в руке две карты — начнётся сам
+func tutorial_release() -> void:
+	if is_placement_phase and not shop_phase:
+		_auto_start_if_hand_low()
 
 func _build_ui() -> void:
 	var bg_layer = CanvasLayer.new()
@@ -191,10 +250,13 @@ func _build_ui() -> void:
 	inspector.bottom_limit = func() -> float:
 		return get_viewport().get_visible_rect().size.y - (UITheme.BENCH_PEEK if is_placement_phase else 0.0)
 	$UI.add_child(inspector)
+	inspector.squad_info_opened.connect(func(_squad): _tutorial_notify("squad_info"))
 	if RunManager.test_mode:
 		_build_test_panel()
 	pause_menu = PauseMenu.new()
 	add_child(pause_menu)
+	hud.pause_toggled.connect(pause_menu.toggle_quick_pause)   # кнопка паузы в шапке — то же, что пробел
+	pause_menu.quick_pause_changed.connect(hud.set_paused)
 	# Камера мышью — отдельным узлом, работает и на паузе (пробел — осмотреть поле)
 	var camera_input := CameraInput.new()
 	camera_input.handler = _handle_camera_input
@@ -251,6 +313,7 @@ func _build_field() -> void:
 	get_viewport().size_changed.connect(_fit_camera.bind(false))
 
 func _populate_field() -> void:
+	Soldier.preload_frames(BattleManager.player_units.map(func(d): return d.sprite_path))
 	_spawn_citadel()
 	_place_enemy_squads()
 	_place_player_buildings()
@@ -502,6 +565,12 @@ func _place_enemy_squads() -> void:
 	# Тестовый режим: босс из панели — любой из 9 примархов, и чужой расы (посмотреть всех)
 	if RunManager.test_mode and RunManager.test_boss != "" and battle_type == RunMapNode.BOSS and not specs.is_empty():
 		specs[0]["unit"] = RunManager.test_boss
+	if _tutorial_live():
+		tutorial.wave = battle_wave
+		if tutorial.is_training_battle():   # учебный бой: один слабый отряд — игрок побеждает
+			specs = tutorial.training_specs(specs)
+		elif tutorial.is_trial_battle() or tutorial.is_boss_battle():   # волна 5 — простые враги для орудия, волна 6 — слабый примарх
+			specs = tutorial.scripted_specs(tiles.size())
 	enemy_elites_at_start = 0
 	# Строй врага, как у игрока (построение перед боем): ближний бой — в передние клетки зоны, стрелки — в задние;
 	# внутри групп — порядок волны (EnemyWaves: босс и танки впереди)
@@ -516,6 +585,7 @@ func _place_enemy_squads() -> void:
 		var is_back: bool = enemy_data.attack_range > DEPLOY_BACK_RANGE or enemy_data.heal_per_second > 0.0
 		(back if is_back else front).append([enemy_data, spec["count"]])
 	var placed: Array = front + back
+	Soldier.preload_frames(placed.map(func(p): return p[0].sprite_path))
 	for i in placed.size():
 		var enemy_data: UnitData = placed[i][0]
 		_spawn_squad(enemy_data, GameConstants.TEAM_ENEMY, tiles[i], placed[i][1])
@@ -644,6 +714,8 @@ func _open_shop() -> void:
 	add_child(layer)
 	# Шаг PICK — окно выбора карты (CardPickScene), иначе магазин; оба — embedded и сигнал finished
 	shop = (PICK_SCENE if RunManager.is_pick_node_active() else SHOP_SCENE).instantiate()
+	if RunManager.is_start_pick_active() and Tutorial.scripted_active() and GameSettings.tutorial_stage <= Tutorial.Stage.INTRO:
+		shop.set("hold_deal", true)   # обучение: сперва поле и цитадель, карты — на реплике про шесть карт
 	shop.set("embedded", true)   # до _ready: своей паузы и фона не будет, «В БОЙ» / «ДАЛЕЕ» — сигнал finished
 	layer.add_child(shop)
 	shop.connect("finished", _on_shop_finished)
@@ -672,7 +744,7 @@ func _on_shop_finished() -> void:
 	tw.tween_callback(old.get_parent().queue_free)
 	battle_type = RunManager.get_battle_type()
 	battle_wave = RunManager.get_battle_wave()
-	AudioManager.play_music("boss" if battle_type == RunMapNode.BOSS else "battle")
+	AudioManager.play_music("battle")
 	bench.setup(BattleManager.pending_cards)
 	# Рука боя (скамейка) появляется, когда рука магазина уже уехала вниз (решение пользователя 16.11.2026: пока магазин
 	# закрывался, в руке игрока была видна вторая пачка карт — скамейка раньше времени поверх уезжающей руки магазина)
@@ -687,6 +759,7 @@ func _on_shop_finished() -> void:
 	_update_expansion()
 	_fit_camera(true)
 	SaveManager.save_run()
+	_tutorial_notify("placement")
 
 func _show_bench_after_shop() -> void:
 	if not is_instance_valid(bench) or BattleManager.is_battle_running():
@@ -697,6 +770,7 @@ func _show_bench_after_shop() -> void:
 # (решение пользователя: успеть отложить Req на клетки). Дальше — по кнопке «В магазин»
 func _announce_expansion() -> void:
 	AudioManager.play("expansion")
+	_tutorial_notify("expansion")
 	expansion_banner = ExpansionBanner.new()
 	$UI.add_child(expansion_banner)
 	# Кнопка всегда «ДАЛЕЕ» (решение пользователя 19.11.2026): магазина после каждой волны нет — дальше выбор карты / событие
@@ -744,22 +818,29 @@ func _on_card_dropped(card: CardData, screen_pos: Vector2) -> void:
 	if not handler.is_valid():
 		_show_message("%s: эту карту нельзя сыграть на поле" % card.display_title())
 		return
+	if _tutorial_live() and not tutorial.allow_drop(card, tile):   # обучение: пока есть цель — только она и её клетка
+		return
 	if _hand_floor_applies() and BattleManager.pending_cards.size() <= BattleManager.MIN_HAND_CARDS:
 		_show_message("В руке должны остаться %d карты — «В БОЙ»" % BattleManager.MIN_HAND_CARDS)
 		return
 	if handler.call(card, tile):
 		AudioManager.play("place")
 		_consume_bench_card(card)
+		_tutorial_notify("card_played", card)
 		_auto_start_if_hand_low()
 
 # Правило минимальной руки (решение пользователя 17.11.2026) действует везде, кроме тестового режима и расстановки
 # перед финальным боссом (волна 15 — BOSS): там можно сыграть всё
 func _hand_floor_applies() -> bool:
+	if _tutorial_live() and tutorial.exempts_hand_floor():   # обучение ведёт карту (орудие) на клетку — рука может опустеть
+		return false
 	return not RunManager.test_mode and battle_type != RunMapNode.BOSS
 
 # Сыграна карта, в руке осталось MIN_HAND_CARDS — бой начинается сам (после короткой паузы: карта «приземляется»)
 func _auto_start_if_hand_low() -> void:
 	if not _hand_floor_applies() or _auto_start_pending or BattleManager.pending_cards.size() > BattleManager.MIN_HAND_CARDS:
+		return
+	if _tutorial_live() and (tutorial.holds_start() or tutorial.no_auto_start()):   # обучение: бой — только кнопкой «В БОЙ»
 		return
 	_auto_start_pending = true
 	_show_message("В руке %d карты — бой начинается" % BattleManager.MIN_HAND_CARDS)
@@ -862,6 +943,7 @@ func _play_building_card(card: CardData, tile: Vector2i) -> bool:
 		TileGlow.burst(renderer, own.global_position, "level", own.card.faction)
 		AudioManager.play("building_level_up")
 		_show_message("%s улучшено до уровня %d/%d" % [own.card.display_title(), own.card.building_level, CardData.MAX_BUILDING_LEVEL])
+		_tutorial_notify("building_level")
 		return true
 	if _is_tile_occupied(tile):
 		_show_message("Тайл занят")
@@ -885,6 +967,7 @@ func _play_wall_card(card: CardData) -> bool:
 		BattleManager.kingdom_wall.refresh_stats()
 		BattleManager.kingdom_wall.flash_shield()
 		_show_message("%s улучшена до уровня %d/%d" % [own.display_title(), own.building_level, CardData.MAX_BUILDING_LEVEL])
+		_tutorial_notify("building_level")
 		return true
 	BattleManager.player_buildings[card] = BattleManager.WALL_TILE
 	_build_kingdom_wall(true)
@@ -1019,6 +1102,7 @@ func _merge_squad(card: CardData, squad: Squad) -> bool:
 	else:
 		_show_message("%s вылечен%s (уровень максимальный)" % [squad.data.display_name(), extra])
 	_update_synergy_preview()
+	_tutorial_notify("merge")
 	return true
 
 func _consume_bench_card(card: CardData) -> void:
@@ -1093,8 +1177,7 @@ func _on_bench_card_hovered(card: CardData) -> void:
 	var tiles: Array[Vector2i] = []
 	if is_placement_phase:
 		tiles = get_same_card_tiles(card)
-	renderer.set_highlighted([] as Array[Vector2i])   # плоская заливка клеток убрана (решение пользователя 19.11.2026) — только свечение
-	# Те же клетки светятся как под перетаскиваемой картой (TileGlow «compatible»)
+	# Клетки светятся как под перетаскиваемой картой (TileGlow «compatible»; плоской заливки нет — 19.11.2026)
 	for g in _same_card_glows:
 		if is_instance_valid(g):
 			g.dismiss()
@@ -1130,6 +1213,9 @@ func get_same_card_tiles(card: CardData) -> Array[Vector2i]:
 
 # deploy = false — армия сразу на местах построения, бой без хода (тесты)
 func _on_start_pressed(deploy: bool = true) -> void:
+	if deploy and _tutorial_live() and tutorial.holds_start():
+		_show_message("Наставник просит сначала закончить урок")
+		return
 	for pod in _drop_pods:   # капсула ещё падает / раскрывается — отряд сразу на месте
 		if is_instance_valid(pod):
 			pod.finish()
@@ -1145,6 +1231,8 @@ func _on_start_pressed(deploy: bool = true) -> void:
 	_update_drag_target(null, Vector2i.ZERO)
 	is_placement_phase = false
 	AudioManager.play("battle_start")
+	if battle_type == RunMapNode.BOSS:
+		AudioManager.play_music("boss")
 	_on_bench_card_hovered(null)
 	renderer.set_grid_overlay(false)   # в бою — только поле, здания, цитадель и бойцы
 	fader.enabled = false
@@ -1255,6 +1343,7 @@ func _deploy_arrived(squad: Squad) -> void:
 func _begin_battle() -> void:
 	is_deploying = false
 	hud.set_message("Бой идёт...")
+	_tutorial_notify("battle_start")
 	for squad in SquadRegistry.get_all_alive_squads():
 		squad.start_march()
 
@@ -1371,6 +1460,8 @@ func _on_battle_ended(winner_team: int) -> void:
 	_fly_income_coins(coin_sources, req_before)
 	hud.set_message(result_text)
 	AudioManager.play("victory" if won else "defeat")
+	if won:
+		_tutorial_notify("battle_won")
 	var summary := _battle_summary(alive_at_end)
 	hud.show_result(_result_title(winner_team), result_text + "\n" + summary, won)
 	_play_finale_slowmo()
@@ -1665,6 +1756,7 @@ func _build_test_panel() -> void:
 		_reload_test_placement())
 	test_panel.level_changed.connect(func(level): _show_message("Из панели: отряды ур.%d, здания ур.%d" % [level, mini(1 + level, CardData.MAX_BUILDING_LEVEL)]))
 	test_panel.clear_pressed.connect(_on_test_clear)
+	test_panel.shop_pressed.connect(_open_test_shop)
 
 # Карта из панели — в руку бесплатно (лимит руки тот же)
 func _on_test_card_picked(card_id: String) -> void:
@@ -1679,6 +1771,49 @@ func _on_test_card_picked(card_id: String) -> void:
 	bench.bench_cards.append(card)
 	bench._populate()
 	_show_message("В руке: %s" % card.display_title())
+
+# Магазин из тестового режима (решение пользователя 21.11.2026: «добавь в тестовый режим возможность зайти в магазин»):
+# то же окно поверх поля, что в забеге (ShopScene embedded), но без шага цепочки: набор каждый раз новый, монет
+# TEST_SHOP_REQUISITION (долить до этой суммы), покупки — в руку расстановки, «В БОЙ» — просто закрыть и вернуться к полю
+const TEST_SHOP_REQUISITION: int = 200
+var _test_shop_node := {}   # шаг цепочки до входа: ShopScene.ensure_started его трогает — вернуть как было
+
+func _open_test_shop() -> void:
+	if not RunManager.test_mode or not is_placement_phase or shop_phase or shop != null:
+		return
+	BattleManager.sync_army_from_squads(SquadRegistry.get_alive_squads_of_team(GameConstants.TEAM_PLAYER))
+	if EconomyManager.requisition < TEST_SHOP_REQUISITION:
+		EconomyManager.add_requisition(TEST_SHOP_REQUISITION - EconomyManager.requisition)
+	_test_shop_node = {"id": RunManager.current_node_id, "done": RunManager.current_completed}
+	ShopManager.shop_node_id = -1   # новый набор, а не прежний этого шага
+	shop_phase = true
+	$UI.visible = false
+	bench.visible = false
+	_fit_camera(false)
+	var layer := CanvasLayer.new()
+	layer.name = "ShopLayer"
+	layer.layer = SHOP_LAYER
+	add_child(layer)
+	shop = SHOP_SCENE.instantiate()
+	shop.set("embedded", true)
+	layer.add_child(shop)
+	shop.connect("finished", _close_test_shop)
+
+func _close_test_shop() -> void:
+	if shop == null:
+		return
+	var layer: Node = shop.get_parent()
+	shop = null
+	layer.queue_free()
+	RunManager.current_node_id = int(_test_shop_node.get("id", RunManager.current_node_id))
+	RunManager.current_completed = bool(_test_shop_node.get("done", RunManager.current_completed))
+	ShopManager.shop_node_id = -1
+	shop_phase = false
+	$UI.visible = true
+	bench.setup(BattleManager.pending_cards)   # рука магазина — новый массив (покупки / продажи)
+	bench.visible = true
+	AudioManager.play_music("battle")
+	_fit_camera(true)
 
 # Волна или тип боя сменились — поле как есть, враги — новые (сцена заново)
 func _reload_test_placement() -> void:

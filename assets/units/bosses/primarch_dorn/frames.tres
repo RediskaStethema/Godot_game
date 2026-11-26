@@ -88,7 +88,7 @@
 [resource]
 metadata/hit_frame = 7
 metadata/special_frame = 10
-metadata/figure_height = 151.5
+metadata/figure_height = 156.0
 animations = [{
 "frames": [{
 "duration": 1.0,

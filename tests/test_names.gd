@@ -43,8 +43,9 @@ func _main() -> void:
 	for c in Chapters.CHAPTERS:
 		if not Names.RU.has(c["name"]):
 			missing.append("братство / бог «%s»" % c["name"])
-	for tag in SynergyManager.SYNERGY_DEFINITIONS:
-		for level in SynergyManager.SYNERGY_DEFINITIONS[tag]:
+	var synergies: Dictionary = root.get_node("SynergyManager").SYNERGY_DEFINITIONS   # -s компилируется до автолоадов
+	for tag in synergies:
+		for level in synergies[tag]:
 			if not Names.RU.has(level["name"]):
 				missing.append("синергия «%s»" % level["name"])
 	for id in EnemyWaves.BOSS_TITLES:

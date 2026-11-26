@@ -15,8 +15,11 @@ const EXTENSIONS = ["ogg", "wav", "mp3"]
 const MAX_VARIANTS: int = 8
 const MAX_VOICES: int = 24
 const MUSIC_FADE: float = 1.2
-# Трек не найден — играет запасной (своей музыки боя с боссом нет — боевая, 09.11.2026)
+# Трек не найден — играет запасной (нет музыки главного босса boss.* — боевая; с 26.11.2026 трек есть)
 const MUSIC_FALLBACK = {"boss": "battle"}
+# Трек вступает ударом: прежний гаснет за столько секунд, новый — сразу в полную громкость (бой с главным боссом
+# начинается с сильной доли, 26.11.2026 — плавное вступление её съедало)
+const MUSIC_PUNCH = {"boss": 0.25}
 # Вариант звука и высота — своя случайность: общий randf — случайность боя (урон, цели); звук на каждый
 # выстрел сдвигал бы её (ревью 09.11.2026)
 var _rng := RandomNumberGenerator.new()
@@ -44,6 +47,7 @@ const EVENTS = {
 	# Статусы и способности
 	"burning":      {"volume": -14.0, "max_per_sec": 4,  "pitch": 0.1},
 	"poison":       {"volume": -14.0, "max_per_sec": 4,  "pitch": 0.1},
+	"slow":         {"volume": -14.0, "max_per_sec": 4,  "pitch": 0.08},   # замедление: первый наложенный стак SLOWED (Soldier.apply_status)
 	"battle_cry":   {"volume": -6.0,  "max_per_sec": 2,  "pitch": 0.03},
 	"jump_land":    {"volume": -8.0,  "max_per_sec": 6,  "pitch": 0.08},   # приземление Assault
 	# Шаги (Soldier._process, нога встала): пехота — каждым INFANTRY_EVERY-м шагом, техника — каждым, примарх — с тряской
@@ -67,6 +71,9 @@ const EVENTS = {
 	"no_money":     {"volume": -6.0,  "max_per_sec": 4,  "pitch": 0.0, "ui": true},
 	"reroll":       {"volume": -6.0,  "max_per_sec": 6,  "pitch": 0.0, "ui": true},
 	"place":        {"volume": -8.0,  "max_per_sec": 8,  "pitch": 0.05},
+	"card_draw":    {"volume": -8.0,  "max_per_sec": 12, "pitch": 0.04, "ui": true},   # выкладка и переворот карт выбора (CardPickScene), варианты card_draw_1..3
+	"card_reject":  {"volume": -8.0,  "max_per_sec": 4,  "pitch": 0.0, "ui": true},   # карта не сыграна, вернулась в руку (CardReject.flash)
+	"artillery_ready": {"volume": -8.0, "max_per_sec": 2, "pitch": 0.0},   # орудие игрока перезарядилось (Building.tick)
 	"tile_bought":  {"volume": -6.0,  "max_per_sec": 4,  "pitch": 0.0},
 	"building_level_up": {"volume": -6.0, "max_per_sec": 4, "pitch": 0.0},
 	"wall_hit":     {"volume": -10.0, "max_per_sec": 6,  "pitch": 0.08},   # удар по стене владений (KingdomWall)
@@ -165,8 +172,9 @@ func play_music(track: String) -> void:
 		_music_tween.kill()   # быстрая смена сцены — прошлый переход не спорит с новым
 	var tw := create_tween().set_ignore_time_scale(true)   # по реальному времени, ×2 боя ни при чём
 	_music_tween = tw
+	var punch: bool = MUSIC_PUNCH.has(track)
 	if _music.playing:
-		tw.tween_property(_music, "volume_db", -40.0, MUSIC_FADE / 2.0)
+		tw.tween_property(_music, "volume_db", -40.0, MUSIC_PUNCH.get(track, MUSIC_FADE / 2.0))
 	tw.tween_callback(func():
 		_music.stop()
 		if stream:
@@ -176,9 +184,9 @@ func play_music(track: String) -> void:
 			elif "loop" in stream:
 				stream.loop = true
 			_music.stream = stream
-			_music.volume_db = -40.0
+			_music.volume_db = 0.0 if punch else -40.0
 			_music.play())
-	if stream:
+	if stream and not punch:
 		tw.tween_property(_music, "volume_db", 0.0, MUSIC_FADE / 2.0)
 
 func _find_music(track: String) -> AudioStream:

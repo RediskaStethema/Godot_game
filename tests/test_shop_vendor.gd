@@ -77,7 +77,7 @@ func _main() -> void:
 	# 4. Хаос — тёмный механикус: свои реплики
 	scene = await _open_shop("chaos")
 	vendor = scene.vendor
-	_check("Хаос: продавец «%s», приветствие из реплик тёмного механикус «%s»" % [vendor.faction, vendor.bubble_text()],
+	_check("Хаос: продавец «%s», приветствие из реплик мелочника «%s»" % [vendor.faction, vendor.bubble_text()],
 		vendor.faction == "chaos" and lines["chaos"]["greet"].has(vendor.bubble_text()))
 	scene.queue_free()
 	await _frames(2)
@@ -113,9 +113,9 @@ func _main() -> void:
 	shop.return_button.pressed.emit()
 	await create_timer(shop.SLIDE_TIME + shop.SLIDE_STAGGER * 3.0 + 0.15).timeout
 	var up: bool = not shop.collapsed and shop.get_node("ShopFrame").visible and not shop.return_button.visible 		and shop.mouse_filter == 0 and not shop.army_button.button_pressed
-	_check("стойка — 1 кадр (%d), тело жеста = стойка на %d%%; тени %d, рамки нет %s; «Армия» сворачивает %s и разворачивает %s"
+	_check("стойка — цикл из кадров (%d, 23.11.2026: фонарь мерцает, зародыш моргает), тело жеста = стойка на %d%%; тени %d, рамки нет %s; «Армия» сворачивает %s и разворачивает %s"
 		% [fr.get_frame_count("idle"), 100 * same / maxi(total, 1), shadows, no_frame, down, up],
-		fr.get_frame_count("idle") == 1 and same * 100 >= total * 60 and shadows > 0 and no_frame and down and up)
+		fr.get_frame_count("idle") >= 1 and fr.get_animation_loop("idle") and same * 100 >= total * 60 and shadows > 0 and no_frame and down and up)
 	# 5. «В БОЙ»: пока рука магазина уезжает вниз, рука боя (скамейка) скрыта — второй пачки карт нет (решение пользователя 16.11.2026);
 	# когда магазин убран — скамейка видна
 	var battle = current_scene

@@ -150,6 +150,8 @@ func apply_theme(citadel_theme: Dictionary) -> void:
 	var anchor := Vector2(_sheet.get("anchor", Vector2(frame.x / 2.0, frame.y)))
 	WorldLight.attach(_sprite, anchor, anchor.y)
 	_sprite.play("idle" if BattleManager.citadel_hp > 0.0 else "fall")
+	# Свечение огней кодом (решение пользователя 23.11.2026): точки — ключ темы "lights", нет ключа — автопоиск по кадру
+	BuildingGlow.attach(_sprite, _sheet.get("lights", []))
 	_update_env_ao()
 	queue_redraw()
 

@@ -175,8 +175,12 @@ func _main() -> void:
 	# Подача кодом (BossFx, 09.11.2026): тень и кольцо после показа, метка зоны на время замаха, после удара —
 	# ударная волна и трещины, которые гаснут; шаг трясёт камеру не чаще BOSS_STEP_GAP_MS
 	var layer: Node = load("res://scripts/battle/AuraRing.gd").layer
+	# На слое не только BossFx: у других эффектов "kind" — строка, сравнивать с числом нельзя
+	var fx_kind := func(n) -> int:
+		var k = n.get("kind")
+		return k if typeof(k) == TYPE_INT else -1
 	var fx_of := func(k: int) -> int:
-		return layer.get_children().filter(func(n): return n.get("kind") == k and not n.is_queued_for_deletion()).size()
+		return layer.get_children().filter(func(n): return fx_kind.call(n) == k and not n.is_queued_for_deletion()).size()
 	var angron = _spawn(scene, "daemon_angron", 1, Vector2i(0, 0), 1, Vector2(0, 12000))[0]
 	var prey = _spawn(scene, "tactical_marine", 0, Vector2i(0, 1), 3, Vector2(-160, 12000))
 	var no_ground_hidden: bool = not is_instance_valid(angron._ground)
@@ -196,7 +200,7 @@ func _main() -> void:
 		n += 1
 	var after_hit: bool = angron._telegraph == null and fx_of.call(2) > waves0 and fx_of.call(3) > cracks0
 	for node in layer.get_children():   # время вперёд: волна и трещины догорают
-		if node.get("kind") in [2, 3]:
+		if fx_kind.call(node) in [2, 3]:
 			node._process(5.0)
 	var faded: bool = fx_of.call(2) == 0 and fx_of.call(3) == 0
 	_check("BossFx: тень и кольцо только после показа, метка зоны в замахе, после удара волна и трещины, гаснут",

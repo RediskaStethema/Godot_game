@@ -46,6 +46,12 @@ func setup() -> void:
 	atmo.toggled.connect(GameSettings.set_atmosphere)
 	_add_row("Атмосфера боя").add_child(atmo)
 
+	var tut = CheckButton.new()
+	tut.name = "TutorialToggle"
+	tut.button_pressed = GameSettings.tutorial_enabled
+	tut.toggled.connect(GameSettings.set_tutorial_enabled)
+	_add_row("Обучение (Козёл)").add_child(tut)
+
 	for v in VOLUME_ROWS:
 		var volume = HSlider.new()
 		volume.name = v[0]

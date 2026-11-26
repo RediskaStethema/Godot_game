@@ -261,7 +261,14 @@ func _recycle() -> void:
 	_pool.append([self, Engine.get_process_frames()])
 
 # Все листы — заранее (BattleScene._ready): иначе первый выстрел каждого вида читает лист посреди боя
+const ParallelLoad = preload("res://scripts/utils/ParallelLoad.gd")
+
 static func warm_cache() -> void:
+	var paths: Array = []
+	for kind in EFFECTS:
+		if not _frames_cache.has(kind):
+			paths.append(Vfx.graded_path(EFFECTS[kind]["sheet"]))
+	var _held := ParallelLoad.load_all(paths)   # держит листы, пока они не разобраны по кадрам
 	for kind in EFFECTS:
 		_get_frames(kind)
 	FlameStream.warm_cache()

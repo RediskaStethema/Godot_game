@@ -37,7 +37,16 @@ def motion_mask(frame: np.ndarray, base: np.ndarray) -> np.ndarray:
     return m
 
 
+def opt(name: str, default: float) -> float:
+    """--имя значение (21.11.2026, «продавцы мигают»): --diff / --thresh / --grow / --soft / --settle (кадров в конце ряда плавно к стойке)."""
+    a = sys.argv
+    return float(a[a.index("--" + name) + 1]) if "--" + name in a else default
+
+
 def main() -> None:
+    global DIFF, THRESH, GROW
+    DIFF, THRESH, GROW = opt("diff", DIFF), opt("thresh", THRESH), int(opt("grow", GROW))
+    soft_r, settle = opt("soft", 0.0), int(opt("settle", 0))
     src, dst = Path(sys.argv[1]), Path(sys.argv[2])
     base = load(src / "idle" / "0.png")
     for anim, count in ROWS.items():
@@ -46,8 +55,14 @@ def main() -> None:
         for i in range(count):
             frame = load(src / anim / f"{i}.png")
             m = motion_mask(frame, base)
-            out = base.copy()
-            out[m] = frame[m]
+            if soft_r > 0:   # мягкий край области движения: жёсткий шов шёл рябью от кадра к кадру
+                w = np.array(Image.fromarray((m * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(soft_r))) / 255.0
+                if anim != "idle" and settle > 0 and i >= count - settle:   # хвост ряда плавно к стойке — без прыжка на возврате
+                    w *= (count - 1 - i) / settle
+                out = (base * (1 - w[..., None]) + frame * w[..., None]).round()
+            else:
+                out = base.copy()
+                out[m] = frame[m]
             Image.fromarray(out.astype(np.uint8)).save(dst / anim / f"{i}.png")
             shares.append(f"{100 * m.sum() / max(1, (base[..., 3] > 0).sum()):.0f}%")
         print(anim, "своё в кадре:", " ".join(shares))

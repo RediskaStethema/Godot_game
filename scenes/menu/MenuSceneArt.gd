@@ -26,6 +26,7 @@ const CLOUD_DRIFT = Vector2(18, 90)     # облака: размах px холс
 const CAPITAL_DRIFT = Vector2(11, 62)   # флагман: дрейф по x (px, период с)
 const CAPITAL_BOB = Vector2(4.0, 9.0)   # покачивание по y (px, период с)
 const BRIDGE_DRIFT = Vector2(7, 75)
+const BRIDGE_FADE_LEFT: float = 0.8    # доля ширины моста слева, где он растворяется в облаках (левая треть исчезает совсем)
 # Корабли пакета (ship_N.png и огни ship_N_glow_00..03): положение, масштаб, дрейф по x, покачивание по y
 const SHIPS = [
 	{"id": 1, "pos": Vector2(1150, 80), "scale": 0.65, "drift": Vector2(13, 48), "bob": Vector2(3, 8.0)},
@@ -59,6 +60,7 @@ uniform vec2 canvas = vec2(1774.0, 887.0);
 uniform float from_y = 0.25;
 uniform float to_y = 0.45;
 uniform float strength = 0.95;
+uniform float fade_left = 0.0;
 varying vec2 cpos;
 void vertex() {
 	cpos = origin + VERTEX * k;
@@ -71,6 +73,10 @@ void fragment() {
 	vec4 cl = texture(cloud_tex, cuv);
 	float m = cl.a * smoothstep(from_y, to_y, cuv.y) * strength;
 	c.rgb = mix(c.rgb, cl.rgb, m);
+	if (fade_left > 0.0) {
+		float f = smoothstep(0.15 * fade_left, fade_left, UV.x);
+		c.a *= f * f;
+	}
 	COLOR = c;
 }"""
 const SHIP_GRADE = {"sat": 0.75, "val": 0.9, "tint": Color(1.0, 0.93, 0.92)}
@@ -78,17 +84,6 @@ const SHIP_GRADE = {"sat": 0.75, "val": 0.9, "tint": Color(1.0, 0.93, 0.92)}
 const ASH_AMOUNT: int = 60
 const ASH_FROM_X: float = 0.62                 # пепел рождается правее этой доли холста — над башней
 const ASH_CANVAS_SCALE: float = 1.6
-
-const GRADE_SHADER = """shader_type canvas_item;
-uniform float sat = 1.0;
-uniform float val = 1.0;
-uniform vec3 tint = vec3(1.0);
-void fragment() {
-	vec4 c = COLOR;
-	float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
-	c.rgb = mix(vec3(l), c.rgb, sat) * val * tint;
-	COLOR = c;
-}"""
 
 var _stage: Control = null           # холст CANVAS, масштабируется под окно
 var _clouds: TextureRect = null
@@ -125,9 +120,13 @@ func _ready() -> void:
 	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_stage)
 	_sky = _add_layer(SKY)
+	_add_twinkle()
 	_clouds = _add_layer(CLOUDS)
 	_bridge = _add_layer(BRIDGE)
 	_veil(_bridge, {})
+	if _bridge and _bridge.material:
+		# левый конец моста тонет в облаках, а не висит острием в воздухе (решение пользователя 24.11.2026)
+		_bridge.material.set_shader_parameter("fade_left", BRIDGE_FADE_LEFT)
 	_capital = _add_layer(CAPITAL)
 	if _capital:
 		_veil(_capital, {})
@@ -375,6 +374,74 @@ func _split_clouds() -> void:
 		_stage.move_child(r, _clouds.get_index())
 		_cloud_halves.append(r)
 	_clouds.visible = false
+
+# Мигание звёзд меню (решение пользователя 24.11.2026): яркие пиксели самого ночного неба — звёзды; каждая то притухает
+# (поверх неё тёмная заплатка цвета неба, обычное наложение), то горит как нарисована; фаза и темп у каждой свои.
+# Узел — ребёнок неба: едет с ним (параллакс), лежит под облаками
+class TwinkleStars extends Node2D:
+	const LUM_MIN: float = 0.09      # яркость пикселя, с которой он считается звездой (звёзды неба тусклые: максимум 0.35)
+	const MAX_STARS: int = 140
+	const DIM_DEPTH: float = 0.85    # насколько глубоко звезда притухает (доля заплатки)
+	const SKY_DARK := Color(0.02, 0.02, 0.04)
+	var _stars: Array = []           # [точка, размер, фаза, темп, цвет вспышки]
+	var _t: float = 0.0
+
+	func setup(img: Image) -> void:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 2411
+		var found: Array = []
+		var cols := {}
+		for y in range(0, img.get_height(), 2):   # шаг 2 px — вдвое быстрее, звёзды крупнее двух пикселей
+			for x in range(0, img.get_width(), 2):
+				var c := img.get_pixel(x, y)
+				if c.a > 0.5 and c.get_luminance() > LUM_MIN:
+					found.append(Vector2i(x, y))
+					cols[Vector2i(x, y)] = c
+		for i in range(found.size() - 1, 0, -1):   # перемешать своим rng: раскладка звёзд от seed, общий randi не трогаем
+			var j := rng.randi_range(0, i)
+			var tmp = found[i]
+			found[i] = found[j]
+			found[j] = tmp
+		var taken: Array = []
+		for p: Vector2i in found:
+			if _stars.size() >= MAX_STARS:
+				break
+			var near := false
+			for q: Vector2i in taken:   # одна звезда — не весь её пятно из соседних пикселей
+				if absi(q.x - p.x) < 5 and absi(q.y - p.y) < 5:
+					near = true
+					break
+			if near:
+				continue
+			taken.append(p)
+			_stars.append([Vector2(p), 5.0, rng.randf() * TAU, rng.randf_range(0.8, 2.2), Color(cols[p]).lightened(0.7)])
+
+	func _process(delta: float) -> void:
+		_t += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		for s in _stars:
+			var k: float = 0.5 + 0.5 * sin(_t * s[3] + s[2])
+			k *= k   # дольше горит, быстрее притухает — мигание, а не плавное дыхание
+			var a: float = DIM_DEPTH * (1.0 - k)
+			var sz: float = s[1]
+			draw_rect(Rect2(s[0] - Vector2(sz, sz) / 2.0, Vector2(sz, sz)), Color(SKY_DARK, a))
+			var glint: Color = s[4]
+			draw_rect(Rect2(s[0] - Vector2(1, 1), Vector2(3, 3)), Color(glint, 0.9 * k))   # вспышка в пике — звезда ярче, чем нарисована
+
+func _add_twinkle() -> void:
+	if _sky == null or _sky.texture == null:
+		return
+	var img := _sky.texture.get_image()
+	if img == null:
+		return
+	if img.is_compressed():
+		img.decompress()
+	var tw := TwinkleStars.new()
+	tw.name = "TwinkleStars"
+	_sky.add_child(tw)
+	tw.setup(img)
 
 # Звёзды пролёта (решение пользователя 19.11.2026: «не видно звёзд при полёте»): ночное небо растянуто камерой ×3.8 и звёзд
 # почти не остаётся — поверх него, под облаками, густое поле звёзд на холсте и за его левым краем (сцена уходит вправо)

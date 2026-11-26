@@ -16,7 +16,7 @@ const MAX_BUILDING_MEAN: float = 0.42
 const MAX_BRIGHT_SHARE: float = 0.07
 const MAX_STATIC_SPECKS: int = 300
 # Здания, у которых отдельные части — часть рисунка, а не дым (парящие кристаллы Шпиля, языки пламени алтаря, капли чаши)
-const DETACHED_BY_DESIGN: Array[String] = ["warp_spire", "skull_altar", "blood_chalice"]
+const DETACHED_BY_DESIGN: Array[String] = ["warp_spire", "skull_altar", "blood_chalice", "chaos/artillery"]   # chaos/artillery: языки пламени над жерлом (21.11.2026)
 const ALPHA_MIN: float = 0.5
 const BUILDINGS_DIR := "res://assets/sprites/buildings"
 
@@ -131,7 +131,7 @@ func _main() -> void:
 		if share > worst_bright:
 			worst_bright = share
 			worst_bright_name = r[0]
-		var building_name: String = String(r[0]).split("/")[-2] if String(r[0]).count("/") > 1 else String(r[0]).split("/")[0]
+		var building_name: String = String(r[0]).get_base_dir()   # «chaos/artillery» или «tower» (ряд отброшен)
 		var specks := 0 if DETACHED_BY_DESIGN.has(building_name) else _specks(img)
 		if specks > MAX_STATIC_SPECKS:
 			specks_bad.append("%s (%d px)" % [r[0], specks])

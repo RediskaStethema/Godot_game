@@ -94,6 +94,27 @@ const EFFECTS = {
 	# кодом): высадка — вперёд (spawn), уход — задом наперёд (spawn_reversed); пик разряда — кадры 7–8
 	"teleport":   {"sheet": FX_DIR + "teleport/spritesheet.png", "size": Vector2i(64, 128), "frames": 12, "fps": 16.0,
 		"loop": false, "add": true, "scale": 0.9, "pivot": Vector2(32, 124)},
+	# Разлом варпа Хаоса — появление отряда (EFFECTS_NEEDED 11.1; решение пользователя 25.11.2026: вариант B с анимацией):
+	# два листа по 16 кадров 384×384, точка — центр трещины на земле; back — провал и кромка (под отрядом, обычное смешивание),
+	# front — дуги, усики, искры, дым (поверх, ADD). Мастер Layer + код — tools/chaos_rift_build.py. Масштаб 0.4: кромка ~100 px мира
+	# 25.11.2026 (решение пользователя: «разлом хаоситов крупнее и ярче, более плавная анимация»): 24 кадра при 27 к/с (было 16 при
+	# 18 — та же длительность), масштаб 0.55 (было 0.4: кромка ~140 px мира при size 1)
+	"rift_back":  {"sheet": FX_DIR + "chaos_rift/rift_back.png", "size": Vector2i(384, 384), "frames": 24, "fps": 27.0,
+		"loop": false, "scale": 0.55, "pivot": Vector2(192, 288)},
+	"rift_front": {"sheet": FX_DIR + "chaos_rift/rift_front.png", "size": Vector2i(384, 384), "frames": 24, "fps": 27.0,
+		"add": true, "loop": false, "scale": 0.55, "pivot": Vector2(192, 288)},
+	# Появление цитадели (EFFECTS_NEEDED 12.1; решение пользователя 25.11.2026: «только первое поле забега»; тем же днём «более плавная
+	# анимация», кольцо по основанию цитадели): два листа на расу по 24 кадра 640×400, 18 к/с (было 16 и 12), точка — центр основания площадки; back — кольцо трещин, ударная волна, задний дым (под цитаделью),
+	# front — передняя пыль / языки варпа, крошка, искры (поверх). Вариант Хаоса — `<вид>_chaos` (Vfx.race_kind). Мастера Layer +
+	# код — tools/citadel_spawn_build.py. Масштаб 0.55: кольцо ~180 px мира — по основанию цитадели (было 0.88, ~290 px: втрое шире башни)
+	"citadel_spawn_back":        {"sheet": FX_DIR + "citadel_spawn/space_marines_back.png", "size": Vector2i(640, 400), "frames": 24,
+		"fps": 18.0, "loop": false, "scale": 0.55, "pivot": Vector2(320, 300)},
+	"citadel_spawn_front":       {"sheet": FX_DIR + "citadel_spawn/space_marines_front.png", "size": Vector2i(640, 400), "frames": 24,
+		"fps": 18.0, "loop": false, "scale": 0.55, "pivot": Vector2(320, 300)},
+	"citadel_spawn_back_chaos":  {"sheet": FX_DIR + "citadel_spawn/chaos_back.png", "size": Vector2i(640, 400), "frames": 24,
+		"fps": 18.0, "loop": false, "scale": 0.55, "pivot": Vector2(320, 300)},
+	"citadel_spawn_front_chaos": {"sheet": FX_DIR + "citadel_spawn/chaos_front.png", "size": Vector2i(640, 400), "frames": 24,
+		"fps": 18.0, "loop": false, "scale": 0.55, "pivot": Vector2(320, 300)},
 	# боец встал (Apothecarion)
 	"poof":       {"sheet": PIXEL_DIR + "movement/poof_side.png", "size": Vector2i(32, 32), "frames": 8, "fps": 12.0,
 		"loop": false, "scale": 1.5, "pivot": Vector2(16, 37)},
@@ -237,6 +258,7 @@ const POP_SCALE: float = 0.8
 const FADE_TAIL: float = 0.25
 const LOOP_FADE_IN: float = 0.2
 const FADE_OUT: float = 0.15
+var kind: String = ""   # вид из EFFECTS (тесты, отложенный запуск)
 var _base_alpha := 1.0
 var _base_scale := Vector2.ONE
 var _fade_in := 0.0
@@ -409,6 +431,7 @@ static func attach(owner: Node2D, kind: String, size: float = 1.0) -> Vfx:
 static func _make(kind: String, size: float) -> Vfx:
 	var e: Dictionary = EFFECTS[kind]
 	var v := Vfx.new()
+	v.kind = kind
 	v.sprite_frames = _get_frames(kind)
 	var k: float = _sheet_scale.get(kind, 1.0)
 	# Лист «живописный» (крупнее исходного, tools/vfx_grade.py paint) — сглаженный, не пиксели
@@ -473,18 +496,30 @@ func _apply_fade() -> void:
 
 # Все листы — заранее (BattleScene._ready): иначе первый эффект каждого вида читает лист посреди боя
 static func warm_cache() -> void:
+	var paths: Array = []
+	for kind in EFFECTS:
+		if not _frames_cache.has(kind):
+			var src := _sheet_path(kind)
+			paths.append(graded_path(src))
+			paths.append(src)   # исходный лист нужен для множителя размера перекрашенного
+	var _held := ParallelLoad.load_all(paths)   # держит листы, пока они не разобраны по кадрам
 	for kind in EFFECTS:
 		_get_frames(kind)
 	for blood in BLOOD_COLORS:
 		blood_material(blood)
 	_hits_alive = 0   # вход в бой: счёт эффектов попаданий заново (тесты гоняют бои в одном процессе)
 
+const ParallelLoad = preload("res://scripts/utils/ParallelLoad.gd")
+
+static func _sheet_path(kind: String) -> String:
+	var path: String = EFFECTS[kind]["sheet"]
+	return path if path.begins_with("res://") else SHEETS_DIR + path
+
 static func _get_frames(kind: String) -> SpriteFrames:
 	if _frames_cache.has(kind):
 		return _frames_cache[kind]
 	var e: Dictionary = EFFECTS[kind]
-	var path: String = e["sheet"]
-	var src_path: String = path if path.begins_with("res://") else SHEETS_DIR + path
+	var src_path := _sheet_path(kind)
 	var sheet: Texture2D = load(graded_path(src_path))
 	# Перекрашенный лист бывает крупнее исходного (пак Pixel — ×4, tools/vfx_grade.py paint): кадр, точка и масштаб
 	# в EFFECTS — в пикселях исходного, множитель — отношение ширины листов

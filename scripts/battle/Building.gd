@@ -113,8 +113,12 @@ const LEVEL_RING_GLOW_ALPHA: float = 0.13
 const SPRITES_DIR: String = "res://assets/sprites/buildings/"
 # 07.11.2026 (решение пользователя: «здания всех уровней слишком большие — на 15% меньше»): было 0.8 / 1.25,
 # стало ×0.85; уровни 2 / 3 считаются от масштаба 1-го (level_scale) — уменьшились так же
-const SPRITE_WIDTH: float = 0.68
-const SPRITE_MAX_HEIGHT: float = 1.0625
+# 25.11.2026 (решение пользователя: «уменьши все здания и все уровни зданий на 25%»): 0.68 / 1.0625 → ×0.75 (0.51 / 0.797)
+const SPRITE_WIDTH: float = 0.51
+# Здания Хаоса на 10% меньше (решение пользователя 21.11.2026: «здания слишком выделяются, не на своей клетке — уменьши на 10%»;
+# новые листы 21.11.2026 крупнее прежних). Стена не здание клетки — её рисует KingdomWall
+const CHAOS_SIZE: float = 0.9
+const SPRITE_MAX_HEIGHT: float = 0.796875
 # Основание на листе — самая широкая строка силуэта в нижней BASE_ZONE кадра; в центре клетки — центр
 # ромба основания: выше нижнего пикселя на четверть его ширины (изометрия 2:1). Раньше в центре клетки
 # стоял нижний пиксель кадра — передний угол основания, и здание съезжало на клетку назад
@@ -149,6 +153,9 @@ var _pip_top: float = 0.0
 var _kick: float = 0.0         # отдача неживого выстрела: 1 — только что, гаснет к 0
 var _kick_wait: float = 0.0    # до кадра вспышки, сек
 var _pulse: float = 0.0        # толчок неживого пополнения / щита
+var _mouths: Array[Sprite2D] = []   # накал жерла у каждого ствола (code_flash): растёт к готовности выстрела, вспыхивает после него
+var _heat: float = 0.0         # накал после выстрела: 1 — только что, гаснет к 0
+var _flash_queue: Array = []   # вспышки выстрела кодом, ждут кадра выстрела: {t, at, dir, tint}
 
 func setup(building_card: CardData, grid_tile: Vector2i) -> void:
 	card = building_card
@@ -179,6 +186,11 @@ func _apply_level_scale() -> void:
 	if env.is_empty():
 		sprite.material = Soldier.outline_material(k, OUTLINE_WORLD_PX, Palette.BUILDING_OUTLINE)   # контур как у бойцов
 		return
+	# Поправка к свету местности для отдельных зданий (тема "building_env_by_type", 23.11.2026): общий "building_env" — ещё и у
+	# цитадели, ей темнее нельзя, а часть зданий (яркая оранжевая башня) выбивалась из ряда
+	var tweak: Dictionary = FactionTheme.current().get("building_env_by_type", {}).get(building_type, {})
+	if not tweak.is_empty():
+		env = env.merged(tweak, true)
 	sprite.self_modulate = env.get("tint", Color.WHITE)
 	sprite.material = _environment_material(env, k)
 
@@ -297,6 +309,8 @@ func _load_sprite() -> void:
 	_set_flip(false)
 	_base_scale = minf(IsoGrid.TILE_WIDTH * SPRITE_WIDTH / maxf(frames.get_meta("body_width"), 1.0),
 			IsoGrid.TILE_WIDTH * SPRITE_MAX_HEIGHT / size.y)
+	if card.faction == "chaos":
+		_base_scale *= CHAOS_SIZE
 	_apply_level_scale()
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	sprite.animation_finished.connect(func():
@@ -307,6 +321,8 @@ func _load_sprite() -> void:
 	sprite.play(_level_anim("idle"))
 	# отброшенная тень по земле от основания (WorldLight, 12.11.2026); основание — начало координат спрайта
 	WorldLight.attach(sprite, Vector2.ZERO, frames.get_meta("base_point").y)
+	BuildingGlow.attach(sprite)   # свечение огней, ламп и кристаллов кодом (точки — по кадру стойки)
+	_make_mouth_glow()
 
 # Центр ромба основания в кадре (px): самая широкая строка силуэта внизу кадра, выше нижнего пикселя
 # на четверть её ширины. Пустой кадр — центр низа
@@ -391,7 +407,7 @@ func _apply_motion(delta: float) -> void:
 	var sx := 1.0
 	var sy := 1.0
 	var pos := Vector2.ZERO
-	if BattleManager.is_battle_running() and sprite.animation.begins_with("idle") and _is_static(sprite.animation):
+	if sprite.animation.begins_with("idle") and (_is_static(sprite.animation) or _has_code_flash()):   # дыхание неживой стойки — и на расстановке (21.11.2026); у листов с code_flash кадры стойки неподвижны (разница 0) — плавность даёт код
 		var b := sin(Time.get_ticks_msec() / 1000.0 * TAU / BREATH_PERIOD + float(hash(tile) % 628) / 100.0)
 		sy += BREATH * b
 		sx -= BREATH * 0.5 * b
@@ -399,8 +415,9 @@ func _apply_motion(delta: float) -> void:
 		_kick_wait -= delta
 	elif _kick > 0.0:
 		_kick = maxf(0.0, _kick - delta / KICK_TIME)
-		var e := _kick * _kick
-		pos = -aim.normalized() * KICK_PX * e
+		# отдача пружиной (21.11.2026, «неплавная анимация выстрела»): быстрый откат, мягкий возврат с лёгким перехлёстом
+		var e := _kick * _kick * (1.0 - 0.3 * sin((1.0 - _kick) * TAU))
+		pos = Vector2(0.0, KICK_PX * 1.6 * e) if building_type == "artillery" else -aim.normalized() * KICK_PX * e   # мортира садится вниз
 		sy *= 1.0 - KICK_SQUASH * e
 		sx *= 1.0 + KICK_SQUASH * 0.75 * e
 	if _pulse > 0.0:
@@ -464,13 +481,15 @@ func _shot_delay() -> float:
 	return frames.get_meta("shot_frame") / frames.get_animation_speed(sprite.animation)
 
 # Прозрачность OcclusionFader (self_modulate) — и на спрайт: дочерний узел self_modulate не наследует.
-# Вне схватки стойка — один кадр (hold_idle_outside_battle)
+# Стойка играет и вне схватки (hold_idle_outside_battle, IDLE_ON_PLACEMENT)
 func _process(delta: float) -> void:
 	if sprite:
 		sprite.modulate.a = self_modulate.a
 		hold_idle_outside_battle(sprite)
 		hold_frame_rate(sprite)
 		_apply_motion(delta)
+		_tick_flash_queue(delta)
+		_update_mouth(delta)
 	if _aura_ring != null and not BattleManager.is_battle_running():
 		if is_instance_valid(_aura_ring):
 			_aura_ring.dismiss()
@@ -485,12 +504,15 @@ static func hold_frame_rate(s: AnimatedSprite2D) -> void:
 	if s.speed_scale != k:
 		s.speed_scale = k
 
-# Вне схватки (расстановка, итог) стойка здания — один кадр idle, в бою — анимация (решение пользователя
-# 20.10.2026: покачивание стоек на расстановке мелькало; бойцы анимируются всегда). Уровни — idle_2 / idle_3
+# Стойка здания играет и на расстановке (решение пользователя 21.11.2026: «добавь анимации idle для зданий во время стадии
+# планирования»; прежнее решение 20.10.2026 — вне схватки один кадр, «покачивание мелькало» — снято: корпус кадров листа
+# уже закреплён lock_reg.py, живое — только огни, дым и ткань). IDLE_ON_PLACEMENT false вернёт один кадр вне боя
+const IDLE_ON_PLACEMENT: bool = true
+
 static func hold_idle_outside_battle(s: AnimatedSprite2D) -> void:
 	if not String(s.animation).begins_with("idle"):
 		return
-	var still := not BattleManager.is_battle_running()
+	var still := not IDLE_ON_PLACEMENT and not BattleManager.is_battle_running()
 	if still and (s.is_playing() or s.frame != 0):
 		s.stop()   # stop — кадр 0, анимация та же
 	elif not still and not s.is_playing():
@@ -687,7 +709,10 @@ func get_occlusion_rect() -> Rect2:
 # -------------------------------------------------------
 func tick(delta: float) -> void:
 	if building_type == "artillery":
+		var was_waiting := cooldown_left > Soldier.TIMER_EPSILON
 		cooldown_left = maxf(cooldown_left - delta, 0.0)
+		if was_waiting and cooldown_left <= Soldier.TIMER_EPSILON:
+			AudioManager.play("artillery_ready")   # орудие снова готово (после залпа; в начале боя оно уже готово — тишина)
 		return
 	if stats.get("slow_radius", 0.0) > 0.0:
 		_tick_slow_aura()
@@ -719,6 +744,7 @@ func tick(delta: float) -> void:
 			delay = _shot_delay()
 			show_fn = _shot_flash_started.bind(sprite.animation)   # снаряд — с кадром вспышки в листе
 		launch_dir = _sprite_barrel_dir()   # после play_once: отражение к цели уже выставлено
+		_queue_code_flash(barrels, delay)
 	for barrel_end in barrels:   # залп: урон поровну, сумма — как у одного выстрела; оглушение — у каждого
 		var shot = Projectile.launch(get_parent(), SHOOTERS[building_type], barrel_end, target, aim_offset, delay,
 			false, tint)
@@ -765,6 +791,7 @@ func fire_at(point: Vector2) -> bool:
 		barrels = _sprite_barrels()
 		if play_once("attack"):
 			delay = _shot_delay()
+		_queue_code_flash(barrels, delay, true)
 	var hellfire: bool = card.faction == "chaos"
 	for i in barrels.size():   # залп: ракета из каждого ствола в ту же точку, урон поровну (сумма прежняя)
 		var shot = Projectile.launch(get_parent(), HELLFIRE_PROJECTILE if hellfire else ARTILLERY_PROJECTILE,
@@ -777,11 +804,110 @@ func fire_at(point: Vector2) -> bool:
 			shot.impact_vfx = HELLFIRE_IMPACT_VFX if hellfire else ARTILLERY_IMPACT_VFX
 			shot.heavy = true   # стоп-кадр и вспышка света при разрыве
 		shot.arc_height = ARTILLERY_ARC
+		if _has_code_flash():   # вспышку и накал рисует _tick_flash_queue (на кадре выстрела)
+			continue
 		if delay > Soldier.TIMER_EPSILON and is_inside_tree():   # вспышка — на кадре выстрела листа, когда ствол поднят
 			get_tree().create_timer(delay, false).timeout.connect(_play_fire_animation.bind(barrels[i]))
 		else:
 			_play_fire_animation(barrels[i])
 	return true
+
+# Вспышка выстрела кодом (BuildingFx.muzzle_flash): у листов с metadata/code_flash — кадры ряда выстрела без нарисованной
+# вспышки (tools/building_shot_clean.py), язык пламени, искры, свет и накал рисует код на кадре выстрела (shot_frame)
+func _has_code_flash() -> bool:
+	return sprite != null and bool(sprite.sprite_frames.get_meta("code_flash", false))
+
+func _queue_code_flash(barrels: Array, delay: float, mortar: bool = false) -> void:
+	if not _has_code_flash():
+		return
+	var dir := _sprite_barrel_dir()
+	if dir == Vector2.ZERO:   # нет оси ствола: орудие стреляет вверх по дуге, остальные — на цель
+		dir = Vector2(0.18, -1.0) if mortar else aim.normalized()
+	var tint: Color = sprite.sprite_frames.get_meta("muzzle_color", Color(1.0, 0.6, 0.2))
+	var size := (1.0 + 0.18 * (card.building_level - 1)) * (0.85 if barrels.size() > 1 else 1.0) * (1.15 if mortar else 1.0)
+	for b in barrels:
+		_flash_queue.append({"t": delay, "at": b, "dir": dir, "tint": tint, "size": size, "mortar": mortar})
+
+# Жерло в пикселях кадра (та же метка muzzle, что у вспышки, но без перевода в мир)
+func _muzzle_px() -> Vector2:
+	var size := sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
+	var m: Vector2 = sprite.sprite_frames.get_meta("muzzle", Vector2(0, -size.y * 0.6))
+	if _level_anim("attack") != "attack":
+		m = sprite.sprite_frames.get_meta("level_muzzle", {}).get(card.building_level, m)
+	return Vector2(size.x / 2.0 + m.x, size.y + m.y)
+
+# Накал жерла (21.11.2026, «флегетон мортар плохо анимирован — добавь свечение жерла»): мягкий ADD-шар на метке muzzle;
+# орудие — после выстрела тускло тлеет и по перезарядке разгорается до полной готовности (дышит), стрелок — ровно тлеет;
+# выстрел — вспышка накала (_heat) и шар крупнее
+func _make_mouth_glow() -> void:
+	if not _has_code_flash():
+		return
+	_sync_mouths()
+
+# Накал — у каждого ствола уровня (24.11.2026, «огонёк слишком далеко от дула и только у 1 дула»): число шаров = число стволов
+# ряда (level_barrels), шаров нет — один у muzzle; пересобирается при смене уровня
+func _sync_mouths() -> void:
+	var need := _barrel_px_list().size()
+	if _mouths.size() == need:
+		return
+	for m in _mouths:
+		m.queue_free()
+	_mouths.clear()
+	for i in need:
+		var m := Sprite2D.new()
+		m.texture = BuildingGlow._glow_texture()
+		m.centered = true
+		m.material = Vfx.soft_add_material()
+		sprite.add_child(m)
+		_mouths.append(m)
+
+# Жерла уровня в пикселях кадра (мера _muzzle_px); у залпа — каждый ствол
+func _barrel_px_list() -> Array:
+	var size := sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
+	var pts: Array = sprite.sprite_frames.get_meta("level_barrels", {}).get(card.building_level, [])
+	if pts.is_empty():
+		return [_muzzle_px()]
+	return pts.map(func(m): return Vector2(size.x / 2.0 + m.x - 14.0, size.y + m.y))   # шар в глубине ствола: диск целиком внутри ствола, не торчит за срез (виделся вторым концом)
+
+func _update_mouth(delta: float) -> void:
+	if _mouths.is_empty():
+		return
+	_sync_mouths()
+	_heat = maxf(0.0, _heat - delta / 0.9)
+	var ready := 1.0
+	if building_type == "artillery":
+		var cd: float = maxf(stats.get("cooldown", 1.0), 0.01)
+		ready = 1.0 - clampf(cooldown_left / cd, 0.0, 1.0)
+	elif SHOOTERS.has(building_type):
+		ready = 1.0 - clampf(attack_timer / maxf(1.0 / stats.get("attack_speed", 1.0), 0.01), 0.0, 1.0)
+	var t := Time.get_ticks_msec() / 1000.0
+	var pulse := 0.5 + 0.5 * sin(t * (2.2 + 3.0 * ready) + float(hash(tile) % 100))
+	var size := sprite.sprite_frames.get_frame_texture("idle", 0).get_size()
+	var tint: Color = sprite.sprite_frames.get_meta("muzzle_color", Color(1.0, 0.6, 0.2))
+	var a := 0.22 + 0.4 * ready * (0.75 + 0.25 * pulse) + 0.5 * _heat
+	var pts := _barrel_px_list()
+	var k := 1.0 if pts.size() == 1 else 0.45   # у залпа шары мельче — не сливаются в «второй ствол»
+	for i in mini(pts.size(), _mouths.size()):
+		var p: Vector2 = pts[i]
+		var x := (size.x - p.x) if sprite.flip_h else p.x
+		var mouth := _mouths[i]
+		mouth.position = sprite.offset + Vector2(x, p.y)
+		mouth.modulate = Color(tint.lerp(Color(1.0, 0.9, 0.6), 0.35 * _heat + 0.2 * ready), minf(a * (1.0 if k == 1.0 else 0.7), 1.0))
+		mouth.scale = Vector2.ONE * k * (20.0 + 8.0 * ready + 14.0 * _heat) / 32.0
+
+func _tick_flash_queue(delta: float) -> void:
+	if _flash_queue.is_empty():
+		return
+	var rest: Array = []
+	for f in _flash_queue:
+		f["t"] -= delta
+		if f["t"] > 0.0:
+			rest.append(f)
+			continue
+		BuildingFx.muzzle_flash(get_parent(), f["at"], f["dir"], f["tint"], f["size"])
+		_heat = 1.0
+		Vfx.spawn(get_parent(), "muzzle_smoke", f["at"])
+	_flash_queue = rest
 
 # Только вид: вспышка и дым из ствола, ствол откатывается и возвращается
 func _play_fire_animation(muzzle: Vector2) -> void:

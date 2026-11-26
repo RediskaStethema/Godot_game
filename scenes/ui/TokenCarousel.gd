@@ -3,9 +3,9 @@ extends VBoxContainer
 
 # Карусель жетонов (решение пользователя 13.11.2026, образец `Screenshot 2026-11-13 203111.png`: «выбор расы и ордена
 # подобным колесом, но не карт, а жетонов»): выбранный жетон в центре крупно, соседи по дуге мельче и тусклее,
-# стрелки по бокам; под каруселью — имя и описание выбранного, кнопка «ВЫБРАТЬ».
-# Поворот: стрелки, колесо мыши, ←/→ (жетон в фокусе), клик по боковому жетону; выбор — клик по центральному,
-# Enter / пробел или «ВЫБРАТЬ». Закрытый (open = false) можно повернуть в центр и прочитать, выбрать нельзя.
+# стрелки по бокам; под каруселью — имя и описание выбранного (кнопки «ВЫБРАТЬ» нет — решение пользователя 23.11.2026).
+# Поворот: стрелки, колесо мыши, ←/→ (жетон в фокусе), клик по боковому жетону; выбор — клик по центральному
+# жетону или Enter / пробел. Курсор над жетоном — латная перчатка (UITheme.CURSORS, CURSOR_POINTING_HAND). Закрытый (open = false) можно повернуть в центр и прочитать, выбрать нельзя.
 # Жетон — Button (имя name_prefix + id, disabled у закрытых — как карточки прежних окон), медальон рисуется кодом
 # (_TokenFace): латунный обод с заклёпками, поле в цвет accent, эмблема icon. Только интерфейс.
 #
@@ -32,7 +32,6 @@ var _center: int = 0
 var _stage: Control
 var _title: Label
 var _lines: VBoxContainer
-var _choose_btn: Button
 var _done: bool = false
 
 func setup(items: Array, prefix: String, start: int = 0) -> void:
@@ -73,13 +72,6 @@ func setup(items: Array, prefix: String, start: int = 0) -> void:
 	_lines = VBoxContainer.new()
 	_lines.add_theme_constant_override("separation", 2)
 	info.add_child(_lines)
-	_choose_btn = UITheme.make_button("ВЫБРАТЬ", "", func(): choose_center())
-	_choose_btn.name = "ChooseButton"
-	_choose_btn.focus_mode = Control.FOCUS_NONE   # Enter — на жетоне в фокусе
-	_choose_btn.custom_minimum_size = Vector2(220, 46)
-	_choose_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	add_child(_choose_btn)
-	ButtonVolume.attach(_choose_btn, 6.0)
 	_center = clampi(start, 0, maxi(items.size() - 1, 0))
 	_layout(false)
 	_show_info()
@@ -238,8 +230,8 @@ func _show_info() -> void:
 		l.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		if line.size() > 2 and line[2] != null:
 			l.add_theme_color_override("font_color", line[2])
+		ModalOverlay.outline_label(l)   # строки под каруселью лежат прямо на фоне меню
 		_lines.add_child(l)
-	_choose_btn.disabled = not item["open"]
 
 
 

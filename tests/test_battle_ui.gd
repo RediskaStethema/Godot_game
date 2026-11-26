@@ -206,6 +206,18 @@ func _main() -> void:
 	pm._input(space)
 	_check("пробел при кнопке «×N» в фокусе — пауза, скорость та же; на паузе колесо зумит",
 		paused_by_queue and zoom_on_pause and not paused)
+	# Кнопка паузы в шапке (25.11.2026): в схватке нажимается, ставит и снимает паузу, значок следует за состоянием;
+	# кнопка скорости — без рамки (пустые стили)
+	var pb: Button = scene.hud._pause_button
+	scene.hud._process(0.0)
+	var enabled_in_battle: bool = not pb.disabled and pb.process_mode == Node.PROCESS_MODE_ALWAYS
+	pb.pressed.emit()
+	var paused_by_button: bool = paused and pm.is_quick_paused() and scene.hud._paused
+	pb.pressed.emit()
+	var resumed_by_button: bool = not paused and not pm.is_quick_paused() and not scene.hud._paused
+	var flat: bool = scene.hud._speed_button.get_theme_stylebox("normal") is StyleBoxEmpty 		and scene.hud._speed_button.get_theme_stylebox("hover") is StyleBoxEmpty
+	_check("кнопка паузы: нажимается в схватке, ставит и снимает паузу; кнопка скорости без рамки",
+		enabled_in_battle and paused_by_button and resumed_by_button and flat)
 	# Перетаскивание: отпускание съел UI — первое движение без зажатой кнопки его снимает
 	scene._camera_dragging = true
 	var motion := InputEventMouseMotion.new()

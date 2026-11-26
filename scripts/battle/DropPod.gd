@@ -9,7 +9,7 @@ extends Node2D
 # metadata/anchor). Только вид, только расстановка; «В БОЙ» раньше конца — finish(): отряд сразу виден.
 
 const FRAMES_PATH := "res://assets/effects/drop_pod/frames.tres"
-const WORLD_SCALE: float = 0.225       # кадры ×4 к миру ×0.9 (решение пользователя 12.11.2026: «слишком большая, уменьши на 25%» — было 0.3)
+const WORLD_SCALE: float = 0.27        # кадры ×4 к миру ×1.08 (решение пользователя 23.11.2026: «капсулы слишком маленькие, +20%» — было 0.225; 12.11.2026 было 0.3 → 0.225)
 const VEHICLE_SCALE: float = 1.15      # техника — капсула крупнее
 const FALL_HEIGHT: float = 420.0       # с какой высоты падает, px мира
 const FALL_TIME: float = 0.35
@@ -38,6 +38,12 @@ const DEBRIS_PX := [1.5, 2.5]                # размер камня, px ми�
 const DEBRIS_COLORS := [Color(0.16, 0.15, 0.15), Color(0.27, 0.25, 0.23), Color(0.4, 0.36, 0.31)]
 const AO_HEIGHT: float = 0.18          # затемнение к основанию — доля высоты кадра над точкой клетки
 const AO_BELOW: float = 0.04
+# Стилизация v3 (решение пользователя 23.11.2026: «капсулы выглядят инородно»): палитра расы и светотень ступенями сильнее,
+# чем у зданий (тянут чистую рендер-краску Layer к грунту), воронка-подпалина под капсулой — «приземлена», а не наклеена
+const POD_GAIN: float = 0.82          # общая яркость капсулы (самое светлое в кадре было — решение пользователя 23.11.2026)
+const POD_PAL_MIX: float = 0.4
+const POD_BAND_MIX: float = 0.3
+const POD_SCORCH_R: float = 34.0       # подпалина под капсулой, px мира при WORLD_SCALE
 
 static var _frames: SpriteFrames = null
 
@@ -124,9 +130,23 @@ func _apply_environment() -> void:
 		m.set_shader_parameter("target_hue", armor.get("hue", 0.6))
 		m.set_shader_parameter("sat_mult", armor.get("sat", 1.0))
 		m.set_shader_parameter("val_mult", armor.get("val", 1.0))
+		# Корпус и отделка — цвета братства, как у бойцов (решение пользователя 23.11.2026: «капсула выбивается из
+		# стилистики и должна краситься в цвета ордена»): нейтральная сталь → body, золото и лампы → trim
+		if armor.has("body"):
+			var body: Dictionary = armor["body"]
+			m.set_shader_parameter("body_mix", 1.0)
+			m.set_shader_parameter("body_hsv", Vector3(body.get("hue", 0.0), body.get("sat", 0.0), body.get("val", 1.0)))
+			m.set_shader_parameter("body_cap", float(body.get("cap", 1.0)))
+		if armor.has("trim"):
+			var trim: Dictionary = armor["trim"]
+			m.set_shader_parameter("trim_mix", 1.0)
+			m.set_shader_parameter("trim_hsv", Vector3(trim.get("hue", 0.12), trim.get("sat", 1.0), trim.get("val", 1.0)))
 	Soldier.apply_style(m, "building")   # светотень ступенями и палитра расы, как у зданий
+	m.set_shader_parameter("pal_mix", maxf(POD_PAL_MIX, float(m.get_shader_parameter("pal_mix"))))
+	m.set_shader_parameter("band_mix", maxf(POD_BAND_MIX, float(m.get_shader_parameter("band_mix"))))
 	sprite.material = m
-	sprite.self_modulate = env.get("tint", Color.WHITE)
+	var tint: Color = env.get("tint", Color.WHITE)
+	sprite.self_modulate = Color(tint.r * POD_GAIN, tint.g * POD_GAIN, tint.b * POD_GAIN, tint.a)   # приглушена: была ярче поля
 
 # Тень на земле: растёт и темнеет, пока капсула падает; на земле — полная, в дыме (fade) гаснет
 func _draw() -> void:
@@ -172,6 +192,7 @@ func _touch_down() -> void:
 		cam.shake(SHAKE)
 	IsoGridRenderer.flash_light(global_position, Palette.FIRE, FLASH_RADIUS * _scale_k / WORLD_SCALE, 0.35)
 	DustLayer.puff(global_position, 14.0 * _scale_k / WORLD_SCALE, DUST_RING, 26.0 * _scale_k / WORLD_SCALE)
+	ScarLayer.scorch(global_position, POD_SCORCH_R * _scale_k / WORLD_SCALE)
 
 # Камни: летят по дуге над землёй, упали — лежат и гаснут
 func _tick_debris(delta: float) -> void:

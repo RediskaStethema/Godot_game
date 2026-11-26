@@ -73,6 +73,7 @@ static func is_available(faction: String) -> bool:
 # знамёна — немного и только на стороне игрока
 const SM_TILES = "res://assets/sprites/tiles/space_marines/"
 const SM_TERRAIN = [{"texture": SM_TILES + "terrain.png", "top": 10}]      # каменная осыпь
+const SM_RING = [{"texture": SM_TILES + "terrain_flat.png", "top": 10}]    # то же без боковой грани — кольцо под стеной (tools/tile_flat.py)
 const SM_DEBRIS_WALL = [{"texture": SM_TILES + "wall.png", "top": 67, "axis": "u"}]   # стена с обломками
 # Ядовитый ручей — прямое бесшовное русло (решение пользователя 09.11.2026, Screenshot 2026-11-09 093925.png: «река
 # течёт перпендикулярно и каменные перемычки» — плита и её отражение чередовались, на стыках сходились концы русла
@@ -200,6 +201,7 @@ const CH_PROPS = "res://assets/sprites/props/chaos/"
 # окопы, знамёна, обелиски), цитадель и объекты крепости приведены к тону и яркости красного грунта
 # tools/palette_match.py (кадры одной анимации — с --group); оригиналы — листы в assets/
 const CH_TERRAIN = [{"texture": CH_TILES + "red_terrain.png", "top": 10}]      # красная осыпь
+const CH_RING = [{"texture": CH_TILES + "red_terrain_flat.png", "top": 10}]    # то же без боковой грани — кольцо под стеной
 const CH_DEBRIS_WALL = [{"texture": CH_TILES + "red_wall.png", "top": 67, "axis": "u"}]
 # Реки на поле Хаоса нет (решение пользователя 17.10.2026; плиты red_river_* остались в папке темы)
 const CH_RUINS = [{"texture": CH_TILES + "red_ruins_bunker.png", "top": 48, "ruin": true}]
@@ -324,6 +326,54 @@ const CH_FEATURES = [
 	{"tiles": CH_BLAST, "scatter": 0.03},   # грунт (было извержение; последней — раскладка остальных не менялась)
 ]
 
+# Земля и декор за стеной поля (решение пользователя 23.11.2026: «поле висит в пустоте»; грунт и предметы нарисованы в Layer,
+# собраны tools/surround_build.py → assets/sprites/surround/<раса>; грунт подогнан под цвет внутреннего, правка того же дня).
+# "ground" — бесшовный грунт, рисуется в "ground_scale" раз крупнее; "kinds" — предметы по имени {"texture", необязательные
+# "frames" / "fps" — лента кадров в ряд}; "groves" — рощи / заросли за стеной (FieldSurround): count штук рядом с полем, в каждой
+# size [от, до] предметов в радиусе radius клеток, "mix" — веса видов, "min" / "max" — сколько предметов вида в одной роще;
+# "scatter" — редкие одиночные предметы между рощами (chance % клеток, веса видов); "inside" — предметы ВНУТРИ стены, в боковых
+# полосах вне боевой полосы, ориентиров и реки (IsoGridRenderer._inner_prop_cells): [{"kind", "count"}]; "scale" — общий масштаб
+const SURROUND_DIR = "res://assets/sprites/surround/"
+const SURROUND_SCALE: float = 1.1
+const SURROUND_CHAOS = {
+	"ground": SURROUND_DIR + "chaos/ground.png", "ground_scale": 1.3, "scale": SURROUND_SCALE,
+	"kinds": {
+		"bleed": {"texture": SURROUND_DIR + "chaos/prop_00.png"},   # дерево с жилами: кровь стекает
+		"thorn": {"texture": SURROUND_DIR + "chaos/prop_01.png"},                                  # колючее дерево
+		"spire": {"texture": SURROUND_DIR + "chaos/prop_02.png"},                                  # скала-шпиль
+		"boulder": {"texture": SURROUND_DIR + "chaos/prop_03.png"},                                # валун
+		"bones": {"texture": SURROUND_DIR + "chaos/prop_04.png"},    # кости, один глаз тлеет
+		"bush": {"texture": SURROUND_DIR + "chaos/prop_05.png"},                                   # куст
+	},
+	"groves": [{"count": 6, "size": [9, 14], "radius": 2.4, "mix": {"bush": 8.0, "thorn": 3.0, "bleed": 1.0},
+		"min": {"bleed": 1}, "max": {"bleed": 2}}],                                                   # заросли: кусты с деревьями, 1–2 кровоточащих
+	"scatter": {"chance": 5, "mix": {"boulder": 3.0, "spire": 2.0, "bones": 1.0, "bush": 2.0, "thorn": 1.0, "bleed": 0.3}},
+	"inside": [{"kind": "bleed", "count": 2}],
+}
+const SURROUND_MARINES = {
+	"ground": SURROUND_DIR + "space_marines/ground.png", "ground_scale": 1.3, "scale": SURROUND_SCALE,
+	"kinds": {
+		"hollow": {"texture": SURROUND_DIR + "space_marines/prop_00.png"},   # дерево, свет в дупле
+		"tree": {"texture": SURROUND_DIR + "space_marines/prop_01.png"},                                   # голое дерево
+		"boulders": {"texture": SURROUND_DIR + "space_marines/prop_02.png"},                               # валуны
+		"pillar": {"texture": SURROUND_DIR + "space_marines/prop_03.png"},                                 # колонна
+		"ruins": {"texture": SURROUND_DIR + "space_marines/prop_04.png"},                                  # руины
+		"thornbush": {"texture": SURROUND_DIR + "space_marines/prop_05.png"},  # терновник качается
+	},
+	"groves": [{"count": 6, "size": [9, 14], "radius": 2.6, "mix": {"tree": 9.0, "thornbush": 1.5, "hollow": 1.0},
+		"max": {"hollow": 1}}],                                                                         # леса из голых деревьев, дуплистое — одно
+	"scatter": {"chance": 5, "mix": {"boulders": 3.0, "pillar": 1.0, "ruins": 1.0, "thornbush": 2.0, "tree": 1.0, "hollow": 0.3}},
+	"inside": [{"kind": "tree", "count": 1}, {"kind": "hollow", "count": 1}],
+}
+
+# Точки света цитадели (px кадра стойки; вид: t — факел, c — свеча, w — окно; BuildingGlow.KINDS), расставлены по кадру
+# 23.11.2026: автопоиск находил у бастиона одну жаровню, у крепости 4 огня из дюжины
+const SM_CITADEL_LIGHTS := [["t", 96, 19], ["t", 110, 19], ["t", 102, 27], ["t", 79, 163], ["t", 126, 163],
+	["w", 103, 60], ["w", 103, 77], ["w", 87, 100], ["w", 103, 100], ["w", 119, 100], ["w", 80, 124], ["w", 127, 124]]
+const CH_CITADEL_LIGHTS := [["t", 69, 86], ["t", 206, 76], ["t", 122, 184], ["t", 199, 182], ["t", 249, 163],
+	["c", 108, 80], ["c", 98, 101], ["c", 76, 137], ["c", 46, 163], ["c", 67, 197], ["c", 191, 95], ["c", 144, 212],
+	["c", 191, 210], ["c", 227, 182], ["c", 214, 130], ["w", 54, 147], ["w", 104, 173], ["w", 181, 167]]
+
 const THEMES = {
 	"space_marines": {
 		"floor": SM_RUINS + SM_CRATER + SM_SMALL_CRATERS,
@@ -348,12 +398,23 @@ const THEMES = {
 		# Стена края кодом, как у Хаоса (решение пользователя 12.11.2026, `Screenshot 2026-11-10 130254.png`: плиты "edge"
 		# «выбиваются из общего стиля» — светлее, холоднее, плоские и мелкий повтор): камень в тон стены владений,
 		# латунные навершия, фонари огнём; плиты "edge" остаются запасом (под стеной кодом — грунт)
-		"field_wall": {"stone": Palette.SM_FIELD_WALL, "top": Palette.SM_FIELD_WALL_TOP,
+		"field_wall": {"texture": "res://assets/sprites/walls/space_marines/wall.png",   # кладка из текстуры (Layer, tools/wall_texture_build.py, 23.11.2026)
+			"stone": Palette.SM_FIELD_WALL, "top": Palette.SM_FIELD_WALL_TOP,
 			"dark": Palette.SM_FIELD_WALL_DARK, "spike": Palette.SM_FIELD_SPIKE, "lantern": Palette.SM_LANTERN,
-			"lantern_glow": Palette.SM_LANTERN_GLOW, "lantern_radius": 50.0},
+			"lantern_glow": Palette.SM_LANTERN_GLOW, "lantern_radius": 50.0,
+			"dim": 0.5,   # стена темнее (было 0.7 — «всё ещё слишком светлая») (решение пользователя 23.11.2026: ярче грунта вдвое — 58 против 33 из 255)
+				# Спрайты (Layer, 23.11.2026, решение пользователя: «стена Космодесанта беднее стены Хаоса — доделай через Layer»):
+				# гранитные пролёты с башнями-жаровнями, ворота с цепью, побитый пролёт, столб с фонарём; геометрия — как у Хаоса
+				# (tools/wall_sprites_build.py: пролёт 180×200, anchor (20, 110), period (108, 54), столб на холсте 96×180)
+				"sprites": {"dir": "res://assets/sprites/props/space_marines/field_wall/", "spans": [0, 1, 2], "scale": 0.75,
+					"anchor": Vector2(20, 110), "period": Vector2(108, 54), "corner": "post_corner.png",
+					"lantern": "post_lantern_strip.png", "lantern_frames": 8, "lantern_fps": 8.0,
+					"post_base": Vector2(33, 179), "post_offset": Vector2(17, 11), "post_scale": 0.55}},
 		# Объём поля: тень стены на земле от её основания (shade_inset = FieldWall.INSET, как у Хаоса; было 1 клетка —
 		# от внутреннего края кольца плит), грань платформы снизу
 		"platform": {"shade": Palette.FIELD_WALL_SHADE, "side": Palette.SM_PLATFORM_SIDE, "shade_inset": 0.15},
+		"ring": SM_RING,   # плиты кольца под стеной без боковой грани (23.11.2026: уступ вдоль стены «выбивался»)
+		"surround": SURROUND_MARINES,   # земля и декор за стеной до краёв экрана (FieldSurround, 23.11.2026), вместо грани помоста и VoidFx
 		# Здания в свет местности (Building.apply_environment, решение пользователя 24.10.2026: были втрое светлее
 		# руин и грунта — «инородно»): оттенок, насыщенность, приглушение светов (огонь не трогается),
 		# затемнение к основанию, мягкая обводка
@@ -363,6 +424,15 @@ const THEMES = {
 		# прибавка яркости и свет по кромкам — ключ "style" ниже
 		"building_env": {"tint": Color(0.88, 0.8, 0.85), "sat": 0.85, "knee": 0.6, "ao": 0.45,
 			"outline_px": 1.3, "outline_alpha": 0.7},
+		# Пробная правка 23.11.2026 (решение пользователя: «пройдись по зданиям», начали с Космодесанта): башня была самой яркой
+		# и оранжевой на поле (95-й процентиль 195/255 при грунте ≈ 54), Апотекарион и Кодекс-бастион — самые светлые из зданий
+		# (сырая яркость 0.37 / 0.32, засвет ≈ 5%); поправка к "building_env" только им — цитадель и остальные не тронуты
+		# (башня: tint 0.88 / 0.8 / 0.85 → 0.76 / 0.68 / 0.74, sat 0.85 → 0.7, knee 0.6 → 0.8; два других — tint ×0.93, knee → 0.75)
+		"building_env_by_type": {
+			"tower": {"tint": Color(0.76, 0.68, 0.74), "sat": 0.7, "knee": 0.8},
+			"apothecarion": {"tint": Color(0.82, 0.74, 0.79), "knee": 0.75},
+			"codex_bastion": {"tint": Color(0.82, 0.74, 0.79), "knee": 0.75},
+		},
 		"style": {"building_gain": 1.0, "building_light": 0.45,
 			# палитра зданий / цитадели в тон бордо-фиолетового поля (решение пользователя 18.11.2026, «единый стиль»):
 			# по умолчанию холодная сталь (07090e … 7d8696) тянула здания к синему на бордовом грунте
@@ -400,7 +470,7 @@ const THEMES = {
 		# с медью, две пушки на крыше. Было → стало: anchor (105, 177) → (104, 171), scale 0.92 → 0.868 (основание новой шире на 6% — на поле
 		# то же место и размер), muzzle (156, 63) → (145, 70) — срез правого ствола, shot_frame 4 → 3 (вспышка на стволах)
 		"citadel": {"sheet": SM_PROPS + "citadel/sheet.png", "frame_size": Vector2i(211, 219),
-			"anchor": Vector2(104, 171), "scale": 0.868, "muzzle": Vector2(145, 70), "shot_frame": 3,
+			"lights": SM_CITADEL_LIGHTS, "anchor": Vector2(104, 171), "scale": 0.868, "muzzle": Vector2(145, 70), "shot_frame": 3,
 			"rows": {"idle": [0, 12, 8.0], "attack": [1, 12, 12.0], "hit": [2, 12, 14.0], "fall": [3, 12, 8.0]}},
 	},
 	"chaos": {
@@ -417,6 +487,7 @@ const THEMES = {
 		"field_wall": {"stone": Palette.CHAOS_FIELD_WALL, "top": Palette.CHAOS_FIELD_WALL_TOP,
 			"dark": Palette.CHAOS_FIELD_WALL_DARK, "spike": Palette.CHAOS_FIELD_SPIKE, "lantern": Palette.CHAOS_LANTERN,
 			"lantern_glow": Palette.CHAOS_LANTERN_GLOW, "lantern_radius": 50.0,
+			"dim": 0.5,   # то же у Хаоса (было 0.65) (38 против 21 из 255)
 			# Спрайты художника (пакет 10.11.2026, assets/source_sheets/field_chaos_2026-11-10; рисованы 2× — scale 0.5):
 			# пролёт 180×200, верхний конец основания anchor (20, 110), шаг цепи «от башни до башни» period (108, 54);
 			# столбы 48×180, основание post_base (24, 179), на стыке — к центру башни post_offset (17, 11)
@@ -425,6 +496,8 @@ const THEMES = {
 				"lantern_frames": 8, "lantern_fps": 8.0, "post_base": Vector2(24, 179), "post_offset": Vector2(17, 11), "post_scale": 0.55}},
 		# Объём поля: тень стены на земле от её основания и грань платформы (IsoGridRenderer, решение пользователя 10.11.2026)
 		"platform": {"shade": Palette.FIELD_WALL_SHADE, "side": Palette.CHAOS_PLATFORM_SIDE, "shade_inset": 0.15},   # = FieldWall.INSET
+		"ring": CH_RING,
+		"surround": SURROUND_CHAOS,   # земля и декор за стеной до краёв экрана (FieldSurround, 23.11.2026)
 		"decorations": CH_DECOR,
 		"clear_strip": true,   # в боевой полосе — только грунт и воронки (IsoGridRenderer._tiles_allowed_at)
 		"decor_chance": 12,   # % клеток вне боевой полосы с декором (как у Космодесанта; было 6 — «слишком пусто», 07.11.2026)
@@ -433,11 +506,24 @@ const THEMES = {
 		# Красное поле: тени — в бордо, света — в малиновый варп (палитра «бордо + варп», 23.10.2026; было — в огонь
 		# 1.08 / 0.96 / 0.86); ассеты поля — tools/chaos_warp_grade.py
 		"grade": {"saturation": 0.86, "shadow_tone": Color(0.028, 0.006, 0.01), "highlights": Color(1.06, 0.92, 1.0)},
-		"building_env": {"tint": Color(0.88, 0.80, 0.80), "sat": 0.78, "knee": 0.3, "ao": 0.4,
+		# Цветокор по богу забега (решение пользователя 21.11.2026: «цветокор подстраивался под бога, которого выбрал игрок»):
+		# поверх "grade" по RunManager.player_chapter (FactionTheme.grade()). Тон сдвинут в тенях и светах, насыщенность глуше
+		# базовой 0.86 (единая гамма с Космодесантом ~0.36–0.45); фон не светлее — только оттенок и насыщенность
+		"god_grades": {
+			"khorne": {"saturation": 0.46, "floor_tint": Color(1.03, 0.94, 0.92), "shadow_tone": Color(0.030, 0.006, 0.006), "highlights": Color(1.08, 0.92, 0.88)},
+			"nurgle": {"saturation": 0.66, "floor_tint": Color(0.90, 1.08, 0.88), "shadow_tone": Color(0.010, 0.020, 0.006), "highlights": Color(0.98, 1.04, 0.86)},
+			"tzeentch": {"saturation": 0.72, "floor_tint": Color(0.88, 0.98, 1.14), "shadow_tone": Color(0.008, 0.012, 0.034), "highlights": Color(0.92, 0.98, 1.08)},
+			"slaanesh": {"saturation": 0.50, "floor_tint": Color(1.04, 0.92, 1.06), "shadow_tone": Color(0.026, 0.008, 0.026), "highlights": Color(1.06, 0.92, 1.04)},
+		},
+		# 21.11.2026 (решение пользователя: «здания слишком контрастны к грунту, не вписываются по цвету в палитру Хаоса,
+		# парят над землёй»): оттенок (0.88, 0.80, 0.80) → (0.82, 0.68, 0.70) — серо-зелёный камень ложится в бордо, насыщенность
+		# 0.78 → 0.68, затемнение у основания ao 0.4 → 0.6 (садит здание на землю); свет сверху и прибавка — ключ "style" ниже
+		"building_env": {"tint": Color(0.82, 0.68, 0.70), "sat": 0.68, "knee": 0.3, "ao": 0.6,
 			"outline_px": 1.3, "outline_alpha": 0.7},   # здания в свет местности — см. тему Космодесанта
 		# палитра расы для зданий, цитадели, капсулы (Soldier.apply_style): бордо, ржавчина, кость
+		# building_gain 1.12 → 1.0, building_light 0.55 → 0.3 (21.11.2026): здания Хаоса светлее грунта и обведены светом сверху — «выделялись»
 		"style": {"palette": [Color("0a0506"), Color("1e0b0d"), Color("3a1614"), Color("5e2a20"), Color("8a5a40"),
-			Color("cdb08a")]},
+			Color("cdb08a")], "building_gain": 1.0, "building_light": 0.3},
 		# общий свет поля (WorldLight): у Хаоса — зарево, тёплый малиновый вместо лунного
 		"light": {"color": Color(1.0, 0.62, 0.52)},
 		"unit_env": {"tint": Color(0.98, 0.92, 0.92), "sat": 0.92, "knee": 0.1, "ao": 0.5,
@@ -465,7 +551,7 @@ const THEMES = {
 		# изо рта вылетает огненный череп. Было → стало: anchor (137, 205) → (138, 201), scale 0.635 → 0.613 (то же место и размер основания),
 		# muzzle (175, 184) → (156, 130) — рот маски, shot_frame 3 → 4 (рот открыт, череп выходит; нарисованный полёт черепа снят — снаряд рисует игра)
 		"citadel": {"sheet": CH_PROPS + "fortress.png", "frame_size": Vector2i(272, 266),
-			"anchor": Vector2(138, 201), "scale": 0.613, "muzzle": Vector2(156, 130), "shot_frame": 4,
+			"lights": CH_CITADEL_LIGHTS, "anchor": Vector2(138, 201), "scale": 0.613, "muzzle": Vector2(156, 130), "shot_frame": 4,
 			"muzzle_fx": {"vfx": "fireball", "size": 0.9, "color": Color(1.0, 0.45, 0.12), "radius": 170.0},   # огонь изо рта маски (20.11.2026)
 			"projectile": "skull_shot", "impact_vfx": ["skull_burst", "explosion"],
 			"rows": {"idle": [0, 12, 8.0], "attack": [1, 12, 12.0], "hit": [2, 12, 14.0], "fall": [3, 12, 8.0]}},
@@ -478,6 +564,20 @@ static func get_theme(faction: String) -> Dictionary:
 # Тема текущего забега
 static func current() -> Dictionary:
 	return get_theme(RunManager.player_faction)
+
+# Цветокор поля: "grade" расы, поверх — "god_grades" бога забега (RunManager.player_chapter), если тема их задаёт
+static func grade() -> Dictionary:
+	var theme := current()
+	var g: Dictionary = theme.get("grade", {}).duplicate()
+	var god: Dictionary = theme.get("god_grades", {}).get(RunManager.player_chapter, {}).duplicate()
+	god.erase("floor_tint")   # это не параметр шейдера цветокора — см. floor_tint()
+	g.merge(god, true)
+	return g
+
+# Оттенок текстур поля (плиты и объекты на них — узел пола IsoGridRenderer) по богу забега; белый — без сдвига
+static func floor_tint() -> Color:
+	var god: Dictionary = current().get("god_grades", {}).get(RunManager.player_chapter, {})
+	return god.get("floor_tint", Color.WHITE)
 
 # Текстура по пути: из ресурсов проекта или файлом (тесты, user://). Кэш обязателен:
 # пол рисуется в _draw — текстура, созданная на вызов, освободилась бы до отрисовки

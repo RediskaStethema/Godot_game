@@ -136,7 +136,12 @@ def save(im, path, tries=20):
 
 
 def main(args):
+    global WORLD_PX
     dry = "--dry" in args
+    if "--world-px" in args:   # свой размер пикселя на запуск (Хаос 21.11.2026: 0.9 вместо 1.3)
+        i = args.index("--world-px")
+        WORLD_PX = float(args[i + 1])
+        args = args[:i] + args[i + 2:]
     for unit in building_dirs([a for a in args if not a.startswith("--")]):
         rel = unit.relative_to(BUILDINGS)
         stash = STASH / rel

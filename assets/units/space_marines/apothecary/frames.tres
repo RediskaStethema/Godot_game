@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" load_steps=60 format=3]
+[gd_resource type="SpriteFrames" load_steps=59 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/units/space_marines/apothecary/idle/0.png" id="idle_0"]
 [ext_resource type="Texture2D" path="res://assets/units/space_marines/apothecary/idle/1.png" id="idle_1"]
@@ -25,7 +25,6 @@
 [ext_resource type="Texture2D" path="res://assets/units/space_marines/apothecary/run/9.png" id="walk_9"]
 [ext_resource type="Texture2D" path="res://assets/units/space_marines/apothecary/run/10.png" id="walk_10"]
 [ext_resource type="Texture2D" path="res://assets/units/space_marines/apothecary/run/11.png" id="walk_11"]
-[ext_resource type="Texture2D" path="res://assets/units/space_marines/apothecary/run/12.png" id="walk_12"]
 [ext_resource type="Texture2D" path="res://assets/units/space_marines/apothecary/attack/0.png" id="attack_0"]
 [ext_resource type="Texture2D" path="res://assets/units/space_marines/apothecary/attack/1.png" id="attack_1"]
 [ext_resource type="Texture2D" path="res://assets/units/space_marines/apothecary/attack/2.png" id="attack_2"]
@@ -144,9 +143,6 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("walk_11")
-}, {
-"duration": 1.0,
-"texture": ExtResource("walk_12")
 }],
 "loop": true,
 "name": &"walk",

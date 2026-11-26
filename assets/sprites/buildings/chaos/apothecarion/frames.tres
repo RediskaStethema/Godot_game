@@ -69,8 +69,8 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/apothecarion/idle_3/23.png" id="idle_3_23"]
 
 [resource]
-metadata/level_shift = {2: Vector2(-10, -4), 3: Vector2(-3, -3)}
-metadata/level_scale = {2: 0.987, 3: 1.060}
+metadata/level_shift = {2: Vector2(-1, -15), 3: Vector2(16, 0)}
+metadata/level_scale = {2: 1.000, 3: 1.044}
 metadata/level_static = []
 animations = [{
 "frames": [{

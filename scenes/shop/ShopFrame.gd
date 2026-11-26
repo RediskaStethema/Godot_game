@@ -3,7 +3,23 @@ extends PanelContainer
 
 # Рамка панели магазина (решение пользователя 12.11.2026, образец download.png): ржавая латунная кромка с
 # заклёпками по углам, внутри — полупрозрачная тьма (Palette.SHOP_VEIL): сквозь магазин видно поле боя.
-# Кодом, пока нет арта (UI_NEEDED.txt); ржавчина — пятна по кромке от своего seed (не RunManager.rng).
+# С 25.11.2026 (решение пользователя: рамка магазина через Layer, UI_NEEDED 10.1, вариант A) кромка — арт `assets/ui/shop/frame.png`
+# 9-slice (ScaledNinePatch, углы с заклёпкой, прозрачная середина), подложка-тьма остаётся плоской; нет файла — прежняя рамка кодом:
+# ржавчина — пятна по кромке от своего seed (не RunManager.rng).
+const ART_PATH := "res://assets/ui/shop/frame.png"
+const ART_MARGIN: float = 24.0   # угловая скоба в px текстуры
+static var _art: ScaledNinePatch = null
+static var _art_tried: bool = false
+
+static func art() -> ScaledNinePatch:
+	if not _art_tried:
+		_art_tried = true
+		if ResourceLoader.exists(ART_PATH):
+			_art = ScaledNinePatch.new()
+			_art.texture = load(ART_PATH)
+			_art.margin = Vector4(ART_MARGIN, ART_MARGIN, ART_MARGIN, ART_MARGIN)
+			_art.art_scale = UITheme.UI_ART_SCALE
+	return _art
 
 const BORDER: int = 3
 const CUT: int = 6               # срез угла
@@ -45,13 +61,21 @@ func _init(bg: Color = Palette.SHOP_VEIL, margin: float = 10.0, with_rivets: boo
 	veil = bg
 	rivets = with_rivets
 	_seed = randi()
-	add_theme_stylebox_override("panel", style(bg, margin))
+	if with_rivets and art() != null:   # арт-рамка: плоская подложка без кромки, кромку рисует _draw
+		var veil_style := UITheme.panel_style(bg, Color(0, 0, 0, 0), 0, 0, margin)
+		veil_style.anti_aliasing = false
+		add_theme_stylebox_override("panel", veil_style)
+	else:
+		add_theme_stylebox_override("panel", style(bg, margin))
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	resized.connect(queue_redraw)
 
 func _draw() -> void:
 	if not framed:
 		_draw_fade()
+		return
+	if rivets and art() != null:
+		art().draw(get_canvas_item(), Rect2(Vector2.ZERO, size))
 		return
 	# Тёмная внутренняя кромка — объём рамки
 	draw_rect(Rect2(Vector2(BORDER, BORDER), size - Vector2(BORDER, BORDER) * 2.0), Palette.SHOP_FRAME_DARK, false, 1.0)

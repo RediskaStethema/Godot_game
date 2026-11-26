@@ -56,13 +56,15 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/fists_bastion/attack_3/4.png" id="attack_3_4"]
 
 [resource]
-metadata/level_muzzle = {2: Vector2(146.1, -292.9), 3: Vector2(152.6, -244.7)}
-metadata/level_barrels = {2: [Vector2(153.3, -293.8), Vector2(86.2, -283.3)], 3: [Vector2(157.9, -246.4), Vector2(120.0, -237.5)]}
-metadata/level_barrel_dir = {1: Vector2(1.0, -0.019), 2: Vector2(0.995, 0.1), 3: Vector2(0.98, -0.2)}
-metadata/level_shift = {2: Vector2(-6, -15), 3: Vector2(-1, -21)}
+metadata/code_flash = true
+metadata/level_muzzle = {2: Vector2(108, -280), 3: Vector2(136, -245)}
+metadata/level_barrels = {1: [Vector2(132, -290), Vector2(45, -274)], 2: [Vector2(108, -280), Vector2(15, -271)], 3: [Vector2(136, -245), Vector2(17, -234)]}
+metadata/level_barrel_dir = {1: Vector2(1.0, -0.02), 2: Vector2(0.97, 0.2), 3: Vector2(0.98, -0.1)}
+metadata/level_shift = {2: Vector2(6, -15), 3: Vector2(-1, -21)}
 metadata/level_scale = {2: 1.008, 3: 1.000}
 metadata/level_static = []
-metadata/muzzle = Vector2(146.4, -305.8)
+metadata/level_lights = {1: [["w", 185, 132], ["t", 240, 248], ["t", 214, 253], ["w", 43, 313], ["w", 339, 312], ["w", 170, 353]], 2: [["w", 184, 137], ["t", 230, 257], ["t", 252, 257], ["w", 341, 305], ["w", 44, 307], ["w", 176, 350]], 3: [["t", 228, 283], ["t", 251, 283], ["w", 47, 338], ["w", 334, 343], ["w", 300, 362], ["w", 150, 376], ["w", 176, 377], ["w", 200, 382]]}
+metadata/muzzle = Vector2(132, -290)
 metadata/shot_frame = 3
 metadata/muzzle_color = Color(1.000, 0.771, 0.032, 1)
 animations = [{
@@ -203,7 +205,7 @@ animations = [{
 }],
 "loop": true,
 "name": &"idle_3",
-"speed": 5.0
+"speed": 8.0
 }, {
 "frames": [{
 "duration": 1.0,

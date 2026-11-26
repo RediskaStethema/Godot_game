@@ -63,7 +63,9 @@ func open_shop() -> void:
 			catch_up_rerolls_left = CATCH_UP_REROLLS
 			_roll_catch_up()
 			catch_up_just_issued = true
+	_inject_tutorial = true   # обучение: в первом магазине первым слотом — орудие (до сигнала — окно покажет его)
 	refresh_shop()
+	_inject_tutorial = false
 
 # Набор выбора карты для текущего шага PICK: есть свой (повторный вход, загрузка) — он же
 func open_pick() -> void:
@@ -74,8 +76,14 @@ func open_pick() -> void:
 	pick_start_taken.clear()
 	pick_taken_index = -1
 	pick_offers.clear()
+	# Обучение (Tutorial): рубашек шесть, но игроку всегда выпадают пехота, Казармы и лекарь (pick_start_take подставляет их
+	# вместо любой открытой рубашки), остальные три — случайные, сгорают
+	if pick_is_start() and Tutorial.scripted_pick_active():
+		_deal_tutorial_start()
+		return
 	var dealt: int = PICK_START_DEALT if pick_is_start() else PICK_DEALT
-	var pool: Array = CardFactory.build_pool().filter(func(c): return MetaProgress.is_card_unlocked(c.id))
+	var hidden: Array = Tutorial.hidden_card_ids()   # обучение: орудия в выборе нет, оно — только в магазине
+	var pool: Array = CardFactory.build_pool().filter(func(c): return MetaProgress.is_card_unlocked(c.id) and not hidden.has(c.id))
 	var rng: RandomNumberGenerator = RunManager.rng
 	for i in range(pool.size() - 1, 0, -1):
 		var j = rng.randi_range(0, i)
@@ -89,6 +97,69 @@ func open_pick() -> void:
 		if not seen.has(c.id):
 			seen[c.id] = true
 			pick_offers.append(c)
+	_tutorial_place_target()
+
+# Обучение: обязательная карта (событие / редкая) всегда среди рубашек — вместо случайной, на случайном месте
+func _tutorial_place_target() -> void:
+	var target: CardData = Tutorial.pick_target_card()
+	if target == null or pick_offers.is_empty():
+		return
+	if not pick_offers.any(func(c): return c.id == target.id):
+		pick_offers[RunManager.rng.randi_range(0, pick_offers.size() - 1)] = target
+	if not Tutorial.is_rare_lesson() or pick_offers.filter(func(c): return c.rarity == "rare").size() >= 2:
+		return
+	var second: CardData = Tutorial.second_rare_card(target, pick_offers)   # урок о редкости: редких рубашек — две
+	if second == null or pick_offers.size() < 2:
+		return
+	var at: int = RunManager.rng.randi_range(0, pick_offers.size() - 1)
+	while pick_offers[at].rarity == "rare":
+		at = (at + 1) % pick_offers.size()
+	pick_offers[at] = second
+
+func _deal_tutorial_start() -> void:
+	var standard: Array[CardData] = Tutorial.start_cards()
+	var skip_ids: Dictionary = {}
+	for c in standard:
+		skip_ids[c.id] = true
+	var hidden: Array = Tutorial.hidden_card_ids()   # остальные три можно взять после «Пропустить» — тот же отбор, что в open_pick
+	var pool: Array = CardFactory.build_pool().filter(func(c):
+		return not skip_ids.has(c.id) and MetaProgress.is_card_unlocked(c.id) and not hidden.has(c.id))
+	var rng: RandomNumberGenerator = RunManager.rng
+	for i in range(pool.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = pool[i]
+		pool[i] = pool[j]
+		pool[j] = tmp
+	var all: Array = standard.duplicate()
+	for c in pool:
+		if all.size() >= Tutorial.START_DEALT:
+			break
+		if not skip_ids.has(c.id):
+			skip_ids[c.id] = true
+			all.append(c)
+	for i in range(all.size() - 1, 0, -1):   # места рубашек — вперемешку
+		var j := rng.randi_range(0, i)
+		var tmp = all[i]
+		all[i] = all[j]
+		all[j] = tmp
+	pick_offers.assign(all)
+
+# Учебный выбор: взятая рубашка открывается стандартной картой по порядку (пехота, Казармы, лекарь) — она меняется местом
+# с той рубашкой, где лежала, чтобы окно показало ровно её
+func _tutorial_swap_start(index: int) -> void:
+	var standard: Array[CardData] = Tutorial.start_cards()
+	var want_i := pick_start_taken.size() - 1   # индекс этой взятой карты среди взятых
+	if want_i < 0 or want_i >= standard.size():
+		return
+	var want_id: String = standard[want_i].id
+	if pick_offers[index].id == want_id:
+		return
+	for j in pick_offers.size():
+		if pick_offers[j].id == want_id and not pick_start_taken.has(j):
+			var tmp = pick_offers[index]
+			pick_offers[index] = pick_offers[j]
+			pick_offers[j] = tmp
+			return
 
 # Идёт стартовый выбор забега (3 из 6 вслепую), а не обычный (открыть 2, взять 1)
 func pick_is_start() -> bool:
@@ -101,6 +172,8 @@ func pick_start_take(index: int) -> CardData:
 		return null
 	pick_start_taken.append(index)
 	pick_open.append(index)
+	if Tutorial.scripted_pick_active():
+		_tutorial_swap_start(index)
 	var card: CardData = pick_offers[index]
 	print("ShopManager: стартовый выбор — '%s' (%d из %d)" % [card.title, pick_start_taken.size(), PICK_START_TAKE])
 	return card
@@ -109,6 +182,21 @@ func pick_start_take(index: int) -> CardData:
 func pick_reveal(index: int) -> bool:
 	if pick_done() or index < 0 or index >= pick_offers.size() or pick_open.has(index) or pick_open.size() >= PICK_OPEN:
 		return false
+	var target: CardData = Tutorial.pick_target_card()
+	if target != null and pick_open.is_empty() and pick_offers[index].id != target.id:
+		for j in pick_offers.size():   # обучение: первой всегда открывается обязательная карта — меняем её с этой рубашкой
+			if pick_offers[j].id == target.id:
+				var tmp = pick_offers[index]
+				pick_offers[index] = pick_offers[j]
+				pick_offers[j] = tmp
+				break
+	elif target != null and pick_open.size() == 1 and Tutorial.is_rare_lesson() and pick_offers[index].rarity != "rare":
+		for j in pick_offers.size():   # урок о редкости: второй открытой тоже будет редкая
+			if j != index and not pick_open.has(j) and pick_offers[j].rarity == "rare":
+				var tmp2 = pick_offers[index]
+				pick_offers[index] = pick_offers[j]
+				pick_offers[j] = tmp2
+				break
 	pick_open.append(index)
 	return true
 
@@ -116,8 +204,13 @@ func pick_reveal(index: int) -> bool:
 func pick_take(index: int) -> CardData:
 	if pick_done() or not pick_open.has(index):
 		return null
+	var target: CardData = Tutorial.pick_target_card()
+	if target != null and not Tutorial.pick_accepts(pick_offers[index]):
+		return null   # обучение: взять нужно обязательную карту (CardPickScene подскажет какую)
 	pick_taken_index = index
 	var card: CardData = pick_offers[index]
+	if target != null:
+		Tutorial.mark_pick_taken(card)
 	print("ShopManager: выбор карты — '%s'" % card.title)
 	return card
 
@@ -144,9 +237,12 @@ func reset() -> void:
 	pick_start_taken.clear()
 	pick_taken_index = -1
 
+var _inject_tutorial: bool = false
+
 func refresh_shop() -> void:
 	current_offers.clear()
-	var pool = CardFactory.build_pool().filter(func(c): return MetaProgress.is_card_unlocked(c.id))
+	var hidden: Array = Tutorial.hidden_card_ids()   # обучение: орудия нет ни в одном слоте — кроме подставленного первого
+	var pool = CardFactory.build_pool().filter(func(c): return MetaProgress.is_card_unlocked(c.id) and not hidden.has(c.id))
 	# Перемешивание Фишера–Йетса от RNG забега
 	var rng: RandomNumberGenerator = RunManager.rng
 	for i in range(pool.size() - 1, 0, -1):
@@ -156,6 +252,8 @@ func refresh_shop() -> void:
 		pool[j] = tmp
 	for i in range(min(SHOP_SIZE, pool.size())):
 		current_offers.append(pool[i])
+	if _inject_tutorial:
+		Tutorial.apply_scripted_shop()
 	emit_signal("shop_refreshed", current_offers)
 	print("ShopManager: магазин обновлён, %d предложений" % current_offers.size())
 

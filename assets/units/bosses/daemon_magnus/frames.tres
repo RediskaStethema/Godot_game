@@ -87,9 +87,8 @@
 
 [resource]
 metadata/hit_frame = 7
-metadata/muzzle = Vector2(26, -101)
 metadata/special_frame = 10
-metadata/figure_height = 146.0
+metadata/figure_height = 148.0
 animations = [{
 "frames": [{
 "duration": 1.0,

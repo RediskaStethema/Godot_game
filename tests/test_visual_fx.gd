@@ -160,7 +160,7 @@ func _main() -> void:
 	# выход врагов (09.11.2026): отряд проявляется (прозрачный в начале), у Хаоса — разлом варпа; знаки бонусов
 	var foes_in: Array = squads_reg.get_alive_squads_of_team(1)
 	var faded: bool = foes_in.all(func(sq): return sq.modulate.a < 1.0)
-	var rifts: int = _of_class(scene, "BuildingFx").filter(func(n): return n.kind == "rift").size()
+	var rifts: int = _of_class(scene, "Vfx").filter(func(n): return n.kind == "rift_back").size() 		+ _of_class(scene, "BuildingFx").filter(func(n): return n.kind == "rift").size()
 	var marks: int = _of_class(scene, "BuildingFx").filter(func(n): return n.kind == "bonus").size()
 	_check("выход врагов: %d отрядов проявляются, разломов %d; знаков бонусов над своими %d" % [foes_in.size(), rifts, marks],
 		faded and rifts == foes_in.size() and marks >= 1)

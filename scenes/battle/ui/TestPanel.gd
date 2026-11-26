@@ -12,6 +12,7 @@ signal wave_changed(wave: int)
 signal type_changed(battle_type: String)
 signal boss_changed(boss_id: String)
 signal clear_pressed
+signal shop_pressed
 
 const WIDTH: float = 236.0
 const MARGIN: float = 8.0
@@ -111,6 +112,10 @@ func setup(faction: String) -> void:
 		b.tooltip_text = "Как в забеге — от seed" if id == "" else EnemyWaves.BOSS_TITLES[id]
 		_boss_buttons[id] = b
 		grid.add_child(b)
+	var shop_button := UITheme.make_button("Магазин", "", func(): shop_pressed.emit())
+	shop_button.name = "ShopButton"
+	shop_button.tooltip_text = "Открыть магазин поверх поля: монет хватает на всё (тест), набор — новый при каждом входе, покупки — в руку"
+	col.add_child(shop_button)
 	col.add_child(UITheme.make_button("Очистить поле", "", func(): clear_pressed.emit()))
 
 	_refresh_controls()

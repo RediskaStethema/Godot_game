@@ -17,6 +17,9 @@ const SIDE_MARGIN: float = 12.0
 const VENDOR_WIDTH: float = 260.0
 const BATTLE_BUTTON_SIZE = Vector2(200, 52)
 const TOP_ICON_SIZE: float = 40.0
+# Правая цепь вывески «Обновить» проходила через кнопку «настройки» (25.11.2026, решение пользователя: «развести цепь и кнопку»):
+# значки шапки сдвинуты влево — между кнопкой и цепью зазор. Цепь вывески стоит на x ≈ 1120 при ширине окна 1152
+const TOP_ICON_RIGHT_GAP: float = 30.0
 const VENDOR_FEET_SINK: float = 3.0   # подошвы — на латунной кромке «В БОЙ»: она на 3 px ниже прямоугольника кнопки (решение
 									  # пользователя 12.11.2026: «не наезжать на ассет кнопки, а стоять на нём»; было 4 при росте 300)
 const VENDOR_FEET_X: float = 7.0      # ноги в кадре листа правее центра холста (x 258 из 480, ×0.4 на экране)
@@ -108,6 +111,12 @@ func _ready() -> void:
 	if ShopManager.catch_up_just_issued:
 		_open_catch_up()
 	vendor.react("greet")
+	# Обучение «Козёл учит»: первый магазин — продавец сам объясняет прилавок (после приветствия)
+	var tutorial_line := Tutorial.take_line("shop", RunManager.get_battle_wave())
+	if tutorial_line != "":
+		get_tree().create_timer(1.6, false).timeout.connect(func():
+			if is_instance_valid(vendor):
+				vendor.say(tutorial_line))
 
 # Новый набор после обновления — карты переворачиваются из рубашки по очереди (ShopSlot.reveal)
 const REVEAL_DELAY: float = 0.25
@@ -132,6 +141,11 @@ func _on_purchase_requested(slot_index: int) -> void:
 	if slot_index >= ShopManager.current_offers.size():
 		return
 
+	if Tutorial.shop_blocks(ShopManager.current_offers[slot_index]):   # обучение: пока только орудие
+		AudioManager.play("no_money")
+		_show_message("Сейчас нужно только орудие — светящаяся карта")
+		vendor.say("Не торопись: сначала орудие — светящуюся карту.", Tutorial.READ_TIME)
+		return
 	# Проверяем лимит руки ДО покупки — деньги не списываем вообще
 	if _is_hand_full():
 		AudioManager.play("no_money")
@@ -162,6 +176,11 @@ func _on_purchase_requested(slot_index: int) -> void:
 	_fly_to_hand(card, from_rect)
 	_populate_shop(ShopManager.current_offers)
 	SaveManager.save_run()
+	if Tutorial.shop_auto_leave(purchased_cards):   # обучение: орудие куплено — магазин уходит, обучение продолжается
+		get_tree().create_timer(Tutorial.READ_TIME * 0.5, false).timeout.connect(func():
+			if is_inside_tree() and Tutorial.shop_auto_leave(purchased_cards):
+				_empty_army_warned = true
+				_on_battle_pressed())
 
 # Лицо карты слота на экране (нет лица — весь слот); не найден — пусто
 func _slot_face_rect(slot_index: int) -> Rect2:
@@ -284,6 +303,10 @@ func _on_catch_up_reroll() -> void:
 # ОБНОВЛЕНИЕ НАБОРА
 # -------------------------------------------------------
 func _on_reroll_pressed() -> void:
+	if Tutorial.shop_reroll_blocked():   # обучение: ассортимент не меняем, берём орудие
+		AudioManager.play("no_money")
+		vendor.say("Обновим потом. Сейчас — орудие.", Tutorial.READ_TIME)
+		return
 	var cost = ShopManager.get_reroll_cost()
 	_reveal_next = true
 	if not ShopManager.try_reroll():
@@ -380,7 +403,10 @@ func _build_hud() -> void:
 	army_button = _make_top_icon(icons, "army", "Армия: свернуть магазин и посмотреть поле", _open_army)
 	army_button.toggle_mode = embedded   # нажата — магазин свёрнут
 	settings_button = _make_top_icon(icons, "gear", "Настройки и пауза (Esc)", _open_pause)
-	hud_row.add_child(Control.new())   # отступ справа
+	var right_gap := Control.new()   # отступ справа — шире, чтобы правая цепь вывески не задевала кнопки
+	right_gap.custom_minimum_size = Vector2(TOP_ICON_RIGHT_GAP, 0.0)
+	right_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_row.add_child(right_gap)
 
 func _make_top_icon(parent: Control, kind: String, tip: String, on_pressed: Callable) -> Button:
 	var b := TopIcon.new(kind, tip, TOP_ICON_SIZE)
@@ -398,15 +424,33 @@ class TopIcon extends Button:
 		tooltip_text = tip
 		custom_minimum_size = Vector2(side, side)
 		focus_mode = Control.FOCUS_NONE
-		var normal := ShopFrame.style(Palette.SHOP_BAR_VEIL, 0.0)
-		var hover := ShopFrame.style(Palette.SHOP_VEIL, 0.0)
-		hover.border_color = Palette.SHOP_FRAME_LIGHT
+		# Плиты кнопки — арт (25.11.2026, UI_NEEDED 10.3, вариант A): латунная рамка со срезанными углами 9-slice, normal / hover;
+		# нет файлов — прежние плоские стили кодом
+		var normal: StyleBox = _plate("icon_button_normal")
+		var hover: StyleBox = _plate("icon_button_hover")
+		if normal == null or hover == null:
+			var flat_normal := ShopFrame.style(Palette.SHOP_BAR_VEIL, 0.0)
+			var flat_hover := ShopFrame.style(Palette.SHOP_VEIL, 0.0)
+			flat_hover.border_color = Palette.SHOP_FRAME_LIGHT
+			normal = flat_normal
+			hover = flat_hover
 		for st in ["normal", "focus", "disabled"]:
 			add_theme_stylebox_override(st, normal)
 		for st in ["hover", "pressed", "hover_pressed"]:
 			add_theme_stylebox_override(st, hover)
 		mouse_entered.connect(queue_redraw)
 		mouse_exited.connect(queue_redraw)
+
+	const PLATE_MARGIN: float = 16.0   # поля 9-slice плиты, px текстуры
+	static func _plate(plate_name: String) -> StyleBox:
+		var path := "res://assets/ui/shop/%s.png" % plate_name
+		if not ResourceLoader.exists(path):
+			return null
+		var s := ScaledNinePatch.new()
+		s.texture = load(path)
+		s.margin = Vector4(PLATE_MARGIN, PLATE_MARGIN, PLATE_MARGIN, PLATE_MARGIN)
+		s.art_scale = UITheme.UI_ART_SCALE
+		return s
 
 	func _draw() -> void:
 		var c: Color = Palette.SHOP_ICON_HOVER if is_hovered() else Palette.SHOP_ICON
@@ -616,6 +660,9 @@ func _open_pause() -> void:
 # цепочки — бой. Без армии — предупреждение, со второго нажатия уходим всё
 # равно (иначе без денег и карт можно застрять в магазине).
 func _on_battle_pressed() -> void:
+	if Tutorial.shop_holds(purchased_cards):   # обучение: сначала купи орудие
+		_show_message("Сначала купи светящуюся карту — орудие")
+		return
 	if _count_units() == 0 and surviving_units.is_empty() and not _empty_army_warned:
 		_empty_army_warned = true
 		_show_message("Армии нет — купите отряд или нажмите ещё раз, чтобы уйти без неё")

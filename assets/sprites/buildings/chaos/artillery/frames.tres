@@ -1,9 +1,17 @@
-[gd_resource type="SpriteFrames" load_steps=53 format=3]
+[gd_resource type="SpriteFrames" load_steps=61 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/0.png" id="idle_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/1.png" id="idle_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/2.png" id="idle_2"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/3.png" id="idle_3"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/4.png" id="idle_4"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/5.png" id="idle_5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/6.png" id="idle_6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/7.png" id="idle_7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/8.png" id="idle_8"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/9.png" id="idle_9"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/10.png" id="idle_10"]
+[ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle/11.png" id="idle_11"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack/0.png" id="attack_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack/1.png" id="attack_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack/2.png" id="attack_2"]
@@ -12,17 +20,6 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack/5.png" id="attack_5"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack/6.png" id="attack_6"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack/7.png" id="attack_7"]
-
-
-
-
-
-
-
-
-
-
-
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/0.png" id="idle_2_0"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/1.png" id="idle_2_1"]
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/idle_2/2.png" id="idle_2_2"]
@@ -65,11 +62,13 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/buildings/chaos/artillery/attack_3/7.png" id="attack_3_7"]
 
 [resource]
-metadata/level_muzzle = {2: Vector2(29.0, -241.4), 3: Vector2(64.2, -250.5)}
-metadata/level_shift = {2: Vector2(-4, 1), 3: Vector2(-4, 4)}
-metadata/level_scale = {2: 1.000, 3: 0.977}
+metadata/code_flash = true
+metadata/level_muzzle = {2: Vector2(31, -231), 3: Vector2(40, -224)}
+metadata/level_barrel_dir = {1: Vector2(0.25, -0.97), 2: Vector2(0.6, -0.8), 3: Vector2(0.25, -0.97)}
+metadata/level_shift = {2: Vector2(2, 60), 3: Vector2(-14, 60)}
+metadata/level_scale = {2: 1.001, 3: 0.978}
 metadata/level_static = []
-metadata/muzzle = Vector2(18.0, -222.0)
+metadata/muzzle = Vector2(16, -188)
 metadata/shot_frame = 2
 metadata/muzzle_color = Color(1.000, 0.683, 0.028, 1)
 animations = [{
@@ -85,10 +84,34 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": ExtResource("idle_3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_9")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("idle_11")
 }],
 "loop": true,
 "name": &"idle",
-"speed": 5.0
+"speed": 8.0
 }, {
 "frames": [{
 "duration": 1.0,
@@ -117,7 +140,7 @@ animations = [{
 }],
 "loop": false,
 "name": &"attack",
-"speed": 16.0
+"speed": 20.0
 }, {
 "frames": [{
 "duration": 1.0,
@@ -158,7 +181,7 @@ animations = [{
 }],
 "loop": true,
 "name": &"idle_2",
-"speed": 5.0
+"speed": 8.0
 }, {
 "frames": [{
 "duration": 1.0,
@@ -187,7 +210,7 @@ animations = [{
 }],
 "loop": false,
 "name": &"attack_2",
-"speed": 16.0
+"speed": 20.0
 }, {
 "frames": [{
 "duration": 1.0,
@@ -228,7 +251,7 @@ animations = [{
 }],
 "loop": true,
 "name": &"idle_3",
-"speed": 5.0
+"speed": 8.0
 }, {
 "frames": [{
 "duration": 1.0,
@@ -257,5 +280,5 @@ animations = [{
 }],
 "loop": false,
 "name": &"attack_3",
-"speed": 16.0
+"speed": 20.0
 }]

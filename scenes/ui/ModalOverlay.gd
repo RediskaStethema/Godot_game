@@ -11,6 +11,7 @@ var content: VBoxContainer
 # Esc (ui_cancel) закрывает окно. Включают окна-вопросы (подтверждение, выбор расы,
 # настройки); меню паузы — нет, Esc там обрабатывает PauseMenu (снимает паузу)
 var close_on_cancel: bool = false
+var _bare: bool = false   # окно без рамки на фоне меню (build_bare): надписи — с обводкой, иначе тонут в мосте и кораблях
 
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -38,6 +39,7 @@ func build_frame(width: float) -> void:
 # мягкая тёмная полоса (Palette.TOKEN_BAND, радиальный градиент), чтобы текст читался на сцене; «◀ НАЗАД» —
 # add_back_button
 func build_bare(width: float) -> void:
+	_bare = true
 	color = Color(0, 0, 0, 0)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -138,10 +140,20 @@ func add_title(text: String, variation: String = "TitleLabel") -> Label:
 	var l = UITheme.make_label(text, variation)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if _bare:
+		outline_label(l, variation == "DimLabel")
 	content.add_child(l)
 	if variation == "TitleLabel":
 		_add_divider()
 	return l
+
+# Тёмная обводка надписи на фоне сцены (решение пользователя 24.11.2026: «шрифты и надписи в UI/UX» — подзаголовки выбора
+# расы / братства / бога почти не читались на мосте); dim — приглушённый цвет светлее на ступень
+static func outline_label(l: Label, dim: bool = false) -> void:
+	l.add_theme_color_override("font_outline_color", Color(0.03, 0.02, 0.03, 0.95))
+	l.add_theme_constant_override("outline_size", 4)
+	if dim:
+		l.add_theme_color_override("font_color", Palette.TEXT_DIM.lightened(0.5))
 
 # Разделитель с черепом (лист UI_assets.png) под заголовком окна — как в главном меню
 const DIVIDER_HEIGHT: float = 22.0

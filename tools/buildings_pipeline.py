@@ -25,6 +25,11 @@ GAME = ROOT / "assets/sprites/buildings"
 BUILDINGS = ["apothecarion", "artillery", "barracks", "generator", "tower", "wall", "codex_bastion", "fists_bastion",
              "vulkan_forge", "wolf_totem", "blood_chalice"]
 SHOOTERS = ["tower", "artillery", "fists_bastion"]
+# Хаос (20–21.11.2026): имя в смотре (staging) -> папка игры; стрелки — chaos/tower, chaos/artillery, warp_spire
+CHAOS = {"chaos_apothecarion": "chaos/apothecarion", "chaos_artillery": "chaos/artillery", "chaos_barracks": "chaos/barracks",
+         "chaos_generator": "chaos/generator", "chaos_tower": "chaos/tower", "skull_altar": "skull_altar",
+         "plague_cauldron": "plague_cauldron", "pleasure_shrine": "pleasure_shrine", "warp_spire": "warp_spire"}
+SHOOTERS += ["chaos/tower", "chaos/artillery", "warp_spire"]
 # Залп Bolter Turret вручную по жерлам кадра стойки (3 ствола на 3-м уровне — вспышки в листе слиты): muzzle-скрипт его затирает
 TOWER_BARRELS = ("metadata/level_barrels = {2: [Vector2(169.0, -180.0), Vector2(150.0, -148.0)], 3: [Vector2(172.0, -212.0), "
                  "Vector2(160.0, -176.0), Vector2(146.0, -141.0)]}")
@@ -43,8 +48,9 @@ def main(argv: list) -> None:
     skip_import = "--skip-import" in argv
     names = [a for a in argv if not a.startswith("--")] or BUILDINGS
     py = sys.executable
-    for b in names:
-        run(f"установка {b}", [py, STAGING / "install.py", b])
+    for st in names:
+        b = CHAOS.get(st, st)
+        run(f"установка {b}", [py, STAGING / "install.py", st])
         run(f"уровни {b}", [py, "tools/building_rows_lock.py", GAME / b, "--levels-only"])
         for stash in (ROOT / "assets/source_sheets/building_pixel_orig" / b, ROOT / "assets/source_sheets/building_edge_orig" / b):
             if stash.exists():
@@ -57,7 +63,7 @@ def main(argv: list) -> None:
                 shutil.rmtree(keep)
             run(f"выстрел {b}", [py, "tools/building_shot_impact.py", b])
             run(f"стволы {b}", [py, "tools/building_levels_muzzle.py", b])
-            if b == "tower":
+            if b == "tower":  # только Космодесант
                 tres = GAME / b / "frames.tres"
                 text = re.sub(r"metadata/level_barrels = [^\n]*", TOWER_BARRELS, tres.read_text(encoding="utf-8"))
                 tres.write_text(text, encoding="utf-8", newline="")

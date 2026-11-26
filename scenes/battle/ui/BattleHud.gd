@@ -14,6 +14,9 @@ var _citadel: Label
 var _shield_icon: Control           # щит цитадели в шапке — только пока щит есть
 var _artillery_icon: TextureRect    # орудие: готово / перезарядка
 var _speed_button: Button   # скорость боя ×1/×2 (GameSettings.battle_speed)
+var _pause_button: Button   # пауза в бою (решение пользователя 25.11.2026): то же, что пробел — PauseMenu.toggle_quick_pause
+var _paused: bool = false
+signal pause_toggled
 var _artillery: Label       # орудия игрока в бою: готово / перезарядка (только если есть)
 var _artillery_state: String = ""   # последняя надпись — метка меняется только при смене
 # Баннер итога боя по центру экрана (решение пользователя): появляется, держится, гаснет —
@@ -90,9 +93,19 @@ func _build_header(wave_text: String, message_label: Label, start_button: Button
 	if _artillery_icon:
 		_artillery_icon.visible = false
 	row.add_child(artillery_row)
+	_pause_button = UITheme.make_button("", "", func(): pause_toggled.emit())
+	_pause_button.custom_minimum_size = Vector2(36, 0)
+	_pause_button.tooltip_text = "Пауза (пробел)"
+	_pause_button.process_mode = Node.PROCESS_MODE_ALWAYS   # на паузе дерево стоит — кнопка должна нажиматься, чтобы снять её
+	_flatten_button(_pause_button)
+	_pause_button.draw.connect(_draw_pause_glyph)
+	_pause_button.mouse_entered.connect(_pause_button.queue_redraw)
+	_pause_button.mouse_exited.connect(_pause_button.queue_redraw)
+	row.add_child(_pause_button)
 	_speed_button = UITheme.make_button("", "", GameSettings.cycle_battle_speed)
-	_speed_button.custom_minimum_size = Vector2(84, 0)
+	_speed_button.custom_minimum_size = Vector2(60, 0)
 	_speed_button.tooltip_text = "Скорость боя"
+	_flatten_button(_speed_button)   # без рамки (решение пользователя 25.11.2026): значок и число на шапке
 	row.add_child(_speed_button)
 	GameSettings.changed.connect(_update_speed_button)
 	_update_speed_button()
@@ -308,8 +321,42 @@ static func synergy_lines() -> Array[String]:
 		GameConstants.coins(SynergyManager.income_bonus)])
 	return lines
 
+# Кнопка без рамки: пустые стили всех состояний, отклик — цветом текста и значка (шапка остаётся одной плашкой)
+static func _flatten_button(b: Button) -> void:
+	var empty := StyleBoxEmpty.new()
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		b.add_theme_stylebox_override(state, empty)
+	b.add_theme_color_override("font_hover_color", Palette.GOLD_BRIGHT)
+	b.add_theme_color_override("font_pressed_color", Palette.AMBER_LIGHT)
+	b.add_theme_color_override("icon_hover_color", Palette.AMBER_LIGHT)
+	b.add_theme_color_override("icon_pressed_color", Palette.GOLD_BRIGHT)
+	b.focus_mode = Control.FOCUS_NONE   # пробел — пауза (PauseMenu._input), не нажатие кнопки в фокусе
+
+# Значок паузы кодом: две полосы (идёт бой) или треугольник «играть» (стоит на паузе)
+func _draw_pause_glyph() -> void:
+	var b := _pause_button
+	var color := Palette.TEXT_DIM if b.disabled else (Palette.GOLD_BRIGHT if (b.is_hovered() or _paused) else Palette.TEXT)
+	var c := b.size / 2.0
+	var half := 7.0
+	if _paused:
+		b.draw_colored_polygon(PackedVector2Array([Vector2(c.x - 5.0, c.y - half), Vector2(c.x - 5.0, c.y + half),
+			Vector2(c.x + 7.0, c.y)]), color)
+	else:
+		b.draw_rect(Rect2(c.x - 6.0, c.y - half, 4.0, half * 2.0), color)
+		b.draw_rect(Rect2(c.x + 2.0, c.y - half, 4.0, half * 2.0), color)
+
+# Пауза включена / снята (PauseMenu.quick_pause_changed): значок меняется, подсказка — что нажатие сделает
+func set_paused(on: bool) -> void:
+	_paused = on
+	_pause_button.tooltip_text = "Продолжить (пробел)" if on else "Пауза (пробел)"
+	_pause_button.queue_redraw()
+
 # Орудия игрока: опрос раз в кадр — только надпись, на бой не влияет
 func _process(_delta: float) -> void:
+	var can_pause := BattleManager.is_battle_running()   # на расстановке и в итоге паузы нет
+	if _pause_button.disabled == can_pause:
+		_pause_button.disabled = not can_pause
+		_pause_button.queue_redraw()
 	var ready_count = 0
 	var wait = INF
 	var any = false

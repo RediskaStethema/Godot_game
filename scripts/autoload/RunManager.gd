@@ -307,6 +307,14 @@ func is_start_pick_active() -> bool:
 
 # Смена сцены со шторкой: всё, что меняет сцену забега, — через _go
 func _go(path: String) -> void:
+	# Первый вход в бой за запуск: экран загрузки прогревает кэши и сам меняет сцену (решение пользователя 25.11.2026).
+	# Скрипт — через load: автолоад не должен тянуть сцену интерфейса при компиляции
+	var loading: Script = load("res://scenes/ui/LoadingScreen.gd")
+	if loading.needed(path):
+		loading.run(get_tree(), path)
+		return
+	if loading.busy():   # экран уже ведёт смену сцены — вторую не начинаем
+		return
 	get_tree().change_scene_to_file(path)
 	if _fade == null:
 		_fade = CanvasLayer.new()

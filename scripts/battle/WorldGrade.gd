@@ -98,7 +98,7 @@ func _ready() -> void:
 	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var m := ShaderMaterial.new()
 	m.shader = SHADER
-	var grade: Dictionary = DEFAULT.merged(FactionTheme.current().get("grade", {}), true)
+	var grade: Dictionary = DEFAULT.merged(FactionTheme.grade(), true)
 	var mood := mood()
 	grade["saturation"] = float(grade["saturation"]) - MOOD_SATURATION * mood
 	grade["exposure"] = float(grade["exposure"]) - MOOD_EXPOSURE * mood

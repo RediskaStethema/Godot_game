@@ -22,9 +22,31 @@ const VOLUME_BUSES = {"master_volume": "Master", "battle_volume": "SFX", "ui_vol
 var atmosphere: bool = true        # цветокоррекция, частицы и свет на поле боя (WorldGrade, Atmosphere)
 var names_language: String = "ru"  # язык названий карт, отрядов, зданий (Names.of; решение пользователя 17.11.2026): "ru" / "en"
 
+# Обучение Козла (решение пользователя 23.11.2026): включено, пока не пройдено или пока игрок не выключил;
+# tutorial_seen — id уже показанных шагов (Tutorial.STEPS), включение заново их стирает
+var tutorial_enabled: bool = true
+var tutorial_seen: Array[String] = []
+var tutorial_stage: int = 0   # сценарий волн 1–2 (Tutorial.Stage): сохраняется, чтобы «Продолжить» не начинал заново
+
+func set_tutorial_stage(stage: int) -> void:
+	tutorial_stage = stage
+	_save()
+
 func _ready() -> void:
 	_load()
 	apply()
+
+func set_tutorial_enabled(value: bool) -> void:
+	tutorial_enabled = value
+	if value:
+		tutorial_seen.clear()   # включили снова — обучение с начала
+		tutorial_stage = 0
+	_commit()
+
+func mark_tutorial_seen(step_id: String) -> void:
+	if not tutorial_seen.has(step_id):
+		tutorial_seen.append(step_id)
+		_save()
 
 # Следующая скорость боя по кругу (кнопка в шапке боя)
 func cycle_battle_speed() -> void:
@@ -89,6 +111,9 @@ func _save() -> void:
 	cfg.set_value("video", "fullscreen", fullscreen)
 	cfg.set_value("video", "atmosphere", atmosphere)
 	cfg.set_value("interface", "names_language", names_language)
+	cfg.set_value("tutorial", "enabled", tutorial_enabled)
+	cfg.set_value("tutorial", "seen", tutorial_seen)
+	cfg.set_value("tutorial", "stage", tutorial_stage)
 	for key in VOLUME_BUSES:
 		cfg.set_value("audio", key, get(key))
 	cfg.save(config_path)
@@ -105,5 +130,10 @@ func _load() -> void:
 	names_language = str(cfg.get_value("interface", "names_language", names_language))
 	if not Names.LANGUAGES.has(names_language):
 		names_language = "ru"
+	tutorial_enabled = bool(cfg.get_value("tutorial", "enabled", true))
+	tutorial_stage = int(cfg.get_value("tutorial", "stage", 0))
+	tutorial_seen.clear()
+	for s in cfg.get_value("tutorial", "seen", []):
+		tutorial_seen.append(str(s))
 	for key in VOLUME_BUSES:
 		set(key, clampf(float(cfg.get_value("audio", key, 1.0)), 0.0, 1.0))

@@ -43,6 +43,10 @@ BLEED_GAP = 4          # пустая полоса (px) между обрывк�
 BLEED_MAX = 0.3        # обрывок не выше этой доли тела
 HALO = {"primarch_dorn": ["idle"]}
 SKIP = {"primarch_vulkan": ["appear"]}
+# Ряд целиком в фиксированном масштабе вокруг ног, без автоподгонки по росту (24.11.2026, «анимация появления Дорна больше самого Дорна»:
+# присевшая фигура кадров появления нарисована крупнее стойки — шлем в 1.5 раза шире, а подгонка SMALL_ROW по высоте рамки ещё
+# тянула ряд ×1.15; 0.70 — голова появления на глаз как в стойке; 0.77 была ещё на ~15% крупнее)
+ROW_K = {"primarch_dorn": {"appear": 0.70}}
 # Цветокор под палитру поля (решение пользователя 09.11.2026): все кадры босса — одной группой через sm_grade, как
 # бойцы своей расы (tools.md: Хаос --target 0.28 --hue 0.03, Космодесант --target 0.36; --pull 0.5 --blue-sat 1
 # --metal-sat 0.12): нейтральные тона — к стали грунта, средняя яркость — к цели наполовину, огни гаснут слабее
@@ -173,7 +177,7 @@ def load_boss(root):
         if anim == "idle":
             continue
         h, ground, boxes = standing_height(frames)
-        k = idle_h / h if h < idle_h * SMALL_ROW else 1.0
+        k = ROW_K.get(root.name, {}).get(anim) or (idle_h / h if h < idle_h * SMALL_ROW else 1.0)
         if k != 1.0:
             cx = float(np.median([(b[0] + b[2]) / 2 for b in boxes if b[3] >= ground - GROUND_TOL]))
             frames = [scale_about(f, k, (cx, ground)) for f in frames]

@@ -3,7 +3,9 @@ extends Control
 
 # Монеты летят к счётчику (решение пользователя 12.11.2026: «убери Req, оставь монеты и их число; с поля боя
 # прилетают сами монетки, анимированные, крутящиеся»). Монета — значок счётчика assets/ui/hud/requisition.png,
-# вращение кодом: ширина × |cos|, обратная сторона темнее, на ребре — латунная полоска. Вылет: монеты подскакивают
+# вращение — 8 кадров оборота (решение пользователя 25.11.2026: «монета в стиль»; аверс с черепом, ребро с толщиной, реверс
+# с фонарём — Layer + `tools/coin_spin_build.py`, assets/ui/hud/coin_spin), нет кадров — прежнее сжатие кодом: ширина × |cos|,
+# обратная сторона темнее, на ребре — латунная полоска. Вылет: монеты подскакивают
 # из точек поля веером, по очереди летят к счётчику, на каждой — on_coin(номер) (счётчик прибавляет), счётчик
 # вздрагивает. По реальному времени (стоп-кадр, замедление финала и ×3 не мешают). Только вид
 
@@ -22,6 +24,12 @@ const GLOW_SCALE: float = 1.7               # поперечник ореола 
 const EDGE := Color(0.66, 0.5, 0.26)
 const PULSE_SCALE: float = 1.18
 
+const SPIN_DIR := "res://assets/ui/hud/coin_spin/"
+const SPIN_FRAMES: int = 8
+const SPIN_FRAME_PX: float = 96.0   # кадр оборота
+const SPIN_COIN_PX: float = 78.0    # сама монета в кадре — размер на экране SIZE относится к ней
+static var _spin: Array[Texture2D] = []
+static var _spin_tried: bool = false
 static var _texture: Texture2D = null
 static var _glow: Texture2D = null
 
@@ -86,7 +94,15 @@ static func pulse(target: Control) -> void:
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	if _texture == null:
+	if not _spin_tried:
+		_spin_tried = true
+		for i in SPIN_FRAMES:
+			var path := "%s%d.png" % [SPIN_DIR, i]
+			if not ResourceLoader.exists(path):
+				_spin.clear()
+				break
+			_spin.append(load(path))
+	if _texture == null and _spin.is_empty():
 		_texture = _padded_coin()
 	if _glow == null:
 		_glow = _glow_texture()
@@ -116,6 +132,13 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	if not _spin.is_empty():   # кадры оборота: монета SIZE px, кадр с полями больше в SPIN_FRAME_PX / SPIN_COIN_PX
+		var side := SIZE * SPIN_FRAME_PX / SPIN_COIN_PX
+		var glow := SIZE * GLOW_SCALE
+		draw_texture_rect(_glow, Rect2(Vector2(-glow, -glow) / 2.0, Vector2(glow, glow)), false)
+		var frame := int(floorf(fposmod(_phase, TAU) / TAU * SPIN_FRAMES)) % SPIN_FRAMES
+		draw_texture_rect(_spin[frame], Rect2(Vector2(-side, -side) / 2.0, Vector2(side, side)), false)
+		return
 	var c := cos(_phase)
 	var w := maxf(absf(c), MIN_WIDTH) * SIZE
 	var pad_k := 1.0 + 2.0 * TEX_PAD / 96.0   # поля текстуры — рамка рисунка больше на их долю, монета того же размера
