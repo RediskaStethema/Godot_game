@@ -105,7 +105,7 @@ func _make_backdrop() -> TextureRect:
 	return rect
 
 # Сцена справа на всю высоту; левый край растворяется в фоне
-# (живая — слоями пакета assets/ui/menu/anim, MenuSceneArt; нет пакета — неподвижная menu_scene.png)
+# (живая — слоями пакета assets/ui/menu/anim, MenuSceneArt)
 # Затемнение под колонкой меню (эталон 16.11.2026: слева облака темнее): надписи шапки читаются поверх флагмана и облаков
 func _make_column_shade() -> TextureRect:
 	var g = Gradient.new()

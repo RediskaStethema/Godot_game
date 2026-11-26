@@ -284,14 +284,6 @@ func _veil(r: TextureRect, g: Dictionary) -> void:
 	r.material = m
 	_veiled.append({"node": r, "mat": m})
 
-func _frames(prefix: String, count: int) -> Array:
-	var out: Array = []
-	for i in count:
-		var path = DIR + "%s_%02d.png" % [prefix, i]
-		if ResourceLoader.exists(path):
-			out.append(load(path))
-	return out
-
 # Слой света поверх спрайта (на его холсте, ADD — гладкое сложение: прозрачность без ступеней дизеринга)
 func _add_glow(parent: TextureRect, file: String) -> TextureRect:
 	var path: String = DIR + file + ".png"
